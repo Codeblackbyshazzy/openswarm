@@ -37,8 +37,8 @@ const streamingCursorKeyframes = `
 // wave traveling through the letters.
 const thinkingShimmerKeyframes = `
 @keyframes thinking-shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 `;
 

@@ -7,6 +7,7 @@ import Button from '@mui/material/Button';
 import FormControl from '@mui/material/FormControl';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
+import ListSubheader from '@mui/material/ListSubheader';
 import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import ToggleButton from '@mui/material/ToggleButton';
@@ -56,6 +57,29 @@ import type { OpenSwarmPlan } from '@/shared/subscription/checkout';
 // endpoints that never existed on the backend. GitHub Copilot now flows
 // through 9Router's `github` OAuth under the generic SubscriptionCard path
 // below, so the dead component was removed.
+
+// Brand colors for provider group headers in the default-model picker.
+// Mirrors the set used by the in-session ChatInput picker.
+const PROVIDER_COLORS: Record<string, string> = {
+  anthropic: '#E8927A',
+  openai: '#74AA9C',
+  google: '#4285F4',
+  gemini: '#4285F4',
+  xai: '#8B949E',
+  meta: '#0866FF',
+  deepseek: '#4D6BFE',
+  mistral: '#FF7000',
+  qwen: '#A974FF',
+  cohere: '#FF7759',
+};
+const OPENSWARM_GRADIENT =
+  'linear-gradient(135deg, #8FB3FF 0%, #E56BC4 45%, #FFA85C 100%)';
+
+const DEFAULT_MODEL_FALLBACK = [
+  { value: 'sonnet', label: 'Claude Sonnet 4.6' },
+  { value: 'opus', label: 'Claude Opus 4.6' },
+  { value: 'haiku', label: 'Claude Haiku 4.5' },
+];
 
 // ── Subscription Provider Card ──
 const SUBSCRIPTION_PROVIDERS = [
@@ -1093,6 +1117,29 @@ const Settings: React.FC = () => {
 
   const modesList = useMemo(() => Object.values(modes), [modes]);
 
+  // Model picker source — same state as the in-session ChatInput picker, so
+  // Settings shows exactly the models gated-in by the user's connected
+  // providers / subscriptions (OpenSwarm Pro, Anthropic, OpenAI, Google, ...).
+  const modelsByProvider = useAppSelector((s) => s.models.byProvider);
+  const modelsLoaded = useAppSelector((s) => s.models.loaded);
+
+  const modelOptions = useMemo(() => {
+    if (!modelsLoaded || Object.keys(modelsByProvider).length === 0) {
+      const key = settings.connection_mode === 'openswarm-pro' ? 'OpenSwarm Pro' : 'Anthropic';
+      return {
+        grouped: { [key]: DEFAULT_MODEL_FALLBACK },
+        flat: DEFAULT_MODEL_FALLBACK.map((m) => ({ ...m, provider: key })),
+      };
+    }
+    const grouped: Record<string, Array<{ value: string; label: string }>> = {};
+    const flat: Array<{ value: string; label: string; provider: string }> = [];
+    for (const [prov, models] of Object.entries(modelsByProvider)) {
+      grouped[prov] = models.map((m) => ({ value: m.value, label: m.label }));
+      for (const m of models) flat.push({ value: m.value, label: m.label, provider: prov });
+    }
+    return { grouped, flat };
+  }, [modelsByProvider, modelsLoaded, settings.connection_mode]);
+
   const updateStatus = useAppSelector((s) => s.update.status);
   const appVersion = useAppSelector((s) => s.update.appVersion);
   const availableVersion = useAppSelector((s) => s.update.availableVersion);
@@ -1121,6 +1168,10 @@ const Settings: React.FC = () => {
   useEffect(() => {
     dispatch(fetchModes());
   }, [dispatch]);
+
+  useEffect(() => {
+    if (open) dispatch(fetchModels());
+  }, [open, dispatch]);
 
   useEffect(() => {
     // Reset to the General tab on open, but NOT when the caller has
@@ -1416,16 +1467,78 @@ const Settings: React.FC = () => {
             <Typography sx={labelSx}>Model</Typography>
             <Typography sx={descSx}>Default model for new sessions.</Typography>
           </Box>
-          <FormControl size="small" sx={{ minWidth: 170 }}>
+          <FormControl size="small" sx={{ minWidth: 220 }}>
             <Select
               value={form.default_model}
               onChange={(e) => setForm({ ...form, default_model: e.target.value })}
               sx={{ fontSize: '0.85rem' }}
               MenuProps={{ PaperProps: { sx: { bgcolor: c.bg.surface, color: c.text.primary } } }}
+              renderValue={(val) => {
+                const m = modelOptions.flat.find((x) => x.value === val);
+                if (!m) return String(val);
+                return (
+                  <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                    <span>{m.label}</span>
+                    <Typography component="span" sx={{ fontSize: '0.65rem', color: c.text.ghost }}>
+                      · {m.provider}
+                    </Typography>
+                  </Box>
+                );
+              }}
             >
-              <MenuItem value="sonnet">Sonnet 4.6</MenuItem>
-              <MenuItem value="opus">Opus 4.6</MenuItem>
-              <MenuItem value="haiku">Haiku 3.5</MenuItem>
+              {Object.entries(modelOptions.grouped).flatMap(([prov, models]) => {
+                const isOpenSwarmPro = prov === 'OpenSwarm Pro';
+                const brandColor = PROVIDER_COLORS[prov.toLowerCase()] ?? c.text.tertiary;
+                return [
+                  <ListSubheader
+                    key={`header-${prov}`}
+                    sx={{
+                      bgcolor: c.bg.surface,
+                      lineHeight: '1.8em',
+                      px: 1.5,
+                      py: 0.4,
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                      <Box
+                        sx={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          flexShrink: 0,
+                          background: isOpenSwarmPro ? OPENSWARM_GRADIENT : brandColor,
+                          boxShadow: isOpenSwarmPro
+                            ? '0 0 8px rgba(229, 107, 196, 0.6)'
+                            : `0 0 6px ${brandColor}80`,
+                        }}
+                      />
+                      <Typography
+                        sx={{
+                          fontSize: '0.68rem',
+                          fontWeight: 700,
+                          letterSpacing: '0.08em',
+                          textTransform: 'uppercase',
+                          ...(isOpenSwarmPro
+                            ? {
+                                background: OPENSWARM_GRADIENT,
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                                backgroundClip: 'text',
+                              }
+                            : { color: brandColor }),
+                        }}
+                      >
+                        {prov}
+                      </Typography>
+                    </Box>
+                  </ListSubheader>,
+                  ...models.map((m) => (
+                    <MenuItem key={m.value} value={m.value} sx={{ fontSize: '0.85rem', pl: 3 }}>
+                      {m.label}
+                    </MenuItem>
+                  )),
+                ];
+              })}
             </Select>
           </FormControl>
         </Box>
@@ -1445,6 +1558,27 @@ const Settings: React.FC = () => {
               {modesList.map((m) => (
                 <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
               ))}
+            </Select>
+          </FormControl>
+        </Box>
+
+        <Box sx={inlineRowSx}>
+          <Box sx={{ mr: 3 }}>
+            <Typography sx={labelSx}>Thinking</Typography>
+            <Typography sx={descSx}>Default thinking level for reasoning-capable models.</Typography>
+          </Box>
+          <FormControl size="small" sx={{ minWidth: 170 }}>
+            <Select
+              value={form.default_thinking_level}
+              onChange={(e) => setForm({ ...form, default_thinking_level: e.target.value as AppSettings['default_thinking_level'] })}
+              sx={{ fontSize: '0.85rem' }}
+              MenuProps={{ PaperProps: { sx: { bgcolor: c.bg.surface, color: c.text.primary } } }}
+            >
+              <MenuItem value="auto">Auto</MenuItem>
+              <MenuItem value="off">Off</MenuItem>
+              <MenuItem value="low">Low</MenuItem>
+              <MenuItem value="medium">Medium</MenuItem>
+              <MenuItem value="high">High</MenuItem>
             </Select>
           </FormControl>
         </Box>

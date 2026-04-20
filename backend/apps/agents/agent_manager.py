@@ -387,6 +387,7 @@ class AgentManager:
             max_turns=config.max_turns,
             cwd=effective_cwd,
             dashboard_id=config.dashboard_id,
+            thinking_level=getattr(global_settings, "default_thinking_level", "auto"),
         )
         self.sessions[session_id] = session
 

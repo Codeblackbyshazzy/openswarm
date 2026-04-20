@@ -31,7 +31,7 @@ export function claudeToOpenAIRequest(model, body, stream) {
       : body.system;
 
     systemContent = systemContent.replace(
-      /You are Claude Code, Anthropic's official CLI for Claude\.\s*/,
+      /^You are [^.]*?(?:Claude Code|Claude agent)[^.]*?\.\s*/,
       ""
     );
 

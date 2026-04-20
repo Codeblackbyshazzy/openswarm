@@ -154,11 +154,13 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
     }
     return false;
   });
+  const [newAgentBounce, setNewAgentBounce] = useState(false);
 
   const handleWalkthroughComplete = useCallback(() => {
     setShowWalkthrough(false);
     localStorage.removeItem('openswarm_walkthrough_pending');
     localStorage.setItem('openswarm_walkthrough_seen', 'true');
+    setNewAgentBounce(true);
   }, []);
 
   const handleHighlightCard = useCallback((cardId: string) => {
@@ -1657,11 +1659,23 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
               pointerEvents: 'none',
             }}
           >
+            <style>{`@keyframes empty-state-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
             <Typography sx={{ color: c.text.tertiary, fontSize: '1.1rem', mb: 1 }}>
               No agents running
             </Typography>
-            <Typography sx={{ color: c.text.ghost, fontSize: '0.9rem' }}>
-              Click &quot;New Agent&quot; to launch your first Claude Code instance
+            <Typography
+              sx={{
+                fontSize: '0.9rem',
+                background: `linear-gradient(90deg, ${c.text.ghost} 0%, ${c.text.ghost} 40%, ${c.text.primary} 50%, ${c.text.ghost} 60%, ${c.text.ghost} 100%)`,
+                backgroundSize: '200% 100%',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                color: 'transparent',
+                animation: 'empty-state-shimmer 6s linear infinite',
+              }}
+            >
+              Click the &quot;+&quot; button below to launch your first agent
             </Typography>
           </Box>
         ) : (
@@ -1956,6 +1970,8 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
           onHistoryResume={handleHistoryResume}
           onAddBrowser={handleAddBrowser}
           dashboardId={dashboardId}
+          newAgentBounce={newAgentBounce}
+          onNewAgentBounceEnd={() => setNewAgentBounce(false)}
         />
       </Box>
 

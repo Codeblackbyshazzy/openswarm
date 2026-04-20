@@ -1,10 +1,12 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState, useRef } from 'react';
 import { Provider } from 'react-redux';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider as MuiThemeProvider, createTheme, CssBaseline } from '@mui/material';
+import Snackbar from '@mui/material/Snackbar';
+import Alert from '@mui/material/Alert';
 import { store } from '../shared/state/store';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
-import { fetchSettings } from '@/shared/state/settingsSlice';
+import { fetchSettings, updateSettings } from '@/shared/state/settingsSlice';
 import { fetchModels } from '@/shared/state/modelsSlice';
 import { API_BASE } from '@/shared/config';
 import {
@@ -186,6 +188,106 @@ const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
+// Priority order for picking a default model when the user's stored
+// default_model is unreachable (no matching provider connected). The user's
+// preferred fallback ordering: direct provider keys first, then OpenSwarm
+// Pro, then Copilot-powered OpenSwarm free tier.
+const DEFAULT_MODEL_PRIORITY: string[] = [
+  'Anthropic',
+  'OpenAI',
+  'Google',
+  'OpenSwarm Pro',
+  'OpenSwarm',
+];
+
+// Preferred model pick inside each provider group. Ordered by the user's
+// stated preference: Sonnet mid-tier for Claude, GPT-5.4 Mini for OpenAI,
+// Flash for Gemini, and conservative picks for the shared tiers.
+const DEFAULT_MODEL_PICKS: Record<string, string[]> = {
+  Anthropic: ['sonnet-cc', 'sonnet'],
+  OpenAI: ['gpt-5.4-mini', 'gpt-5.4'],
+  Google: ['gemini-2.5-flash', 'gemini-3-flash', 'gemini-2.5-pro'],
+  'OpenSwarm Pro': ['sonnet', 'opus'],
+  OpenSwarm: ['gpt-5-mini', 'claude-haiku-4.5', 'gpt-4.1'],
+};
+
+function pickFallbackModel(
+  byProvider: Record<string, Array<{ value: string; label: string }>>,
+): { value: string; label: string; provider: string } | null {
+  for (const prov of DEFAULT_MODEL_PRIORITY) {
+    const models = byProvider[prov];
+    if (!models || models.length === 0) continue;
+    const available = new Map(models.map((m) => [m.value, m]));
+    const picks = DEFAULT_MODEL_PICKS[prov] || [];
+    for (const candidate of picks) {
+      const m = available.get(candidate);
+      if (m) return { value: m.value, label: m.label, provider: prov };
+    }
+    const first = models[0];
+    return { value: first.value, label: first.label, provider: prov };
+  }
+  return null;
+}
+
+// Reconciles the stored default_model against the set of models actually
+// reachable given the user's current connections. When the stored value is
+// unavailable, falls back per DEFAULT_MODEL_PRIORITY and shows a one-time
+// warning so the user knows why their default changed.
+const DefaultModelGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const dispatch = useAppDispatch();
+  const settings = useAppSelector((s) => s.settings.data);
+  const settingsLoaded = useAppSelector((s) => s.settings.loaded);
+  const byProvider = useAppSelector((s) => s.models.byProvider);
+  const modelsLoaded = useAppSelector((s) => s.models.loaded);
+
+  const [warning, setWarning] = useState<{ from: string; to: string; provider: string } | null>(null);
+  const pendingRef = useRef(false);
+
+  useEffect(() => {
+    if (!settingsLoaded || !modelsLoaded) return;
+    if (pendingRef.current) return;
+    if (Object.keys(byProvider).length === 0) return;
+
+    const flat = Object.values(byProvider).flat();
+    const currentExists = flat.some((m) => m.value === settings.default_model);
+    if (currentExists) return;
+
+    const fallback = pickFallbackModel(byProvider);
+    if (!fallback || fallback.value === settings.default_model) return;
+
+    const fromLabel = flat.find((m) => m.value === settings.default_model)?.label ?? settings.default_model;
+    pendingRef.current = true;
+    dispatch(updateSettings({ ...settings, default_model: fallback.value }))
+      .finally(() => {
+        pendingRef.current = false;
+      });
+    setWarning({ from: fromLabel, to: fallback.label, provider: fallback.provider });
+  }, [settingsLoaded, modelsLoaded, byProvider, settings, dispatch]);
+
+  return (
+    <>
+      {children}
+      <Snackbar
+        open={!!warning}
+        autoHideDuration={8000}
+        onClose={() => setWarning(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          severity="warning"
+          variant="filled"
+          onClose={() => setWarning(null)}
+          sx={{ fontSize: '0.8rem' }}
+        >
+          {warning && (
+            <>Default model <b>{warning.from}</b> is no longer available — switched to <b>{warning.to}</b> ({warning.provider}).</>
+          )}
+        </Alert>
+      </Snackbar>
+    </>
+  );
+};
+
 const UpdateListener: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const dispatch = useAppDispatch();
 
@@ -259,6 +361,7 @@ const ThemedApp: React.FC = () => {
       <HashRouter>
         <ShortcutsProvider>
           <SettingsLoader>
+            <DefaultModelGuard>
             <UpdateListener>
               <DeepLinkListener>
                 <Routes>
@@ -280,6 +383,7 @@ const ThemedApp: React.FC = () => {
                 <OnboardingModal />
               </DeepLinkListener>
             </UpdateListener>
+            </DefaultModelGuard>
           </SettingsLoader>
         </ShortcutsProvider>
       </HashRouter>

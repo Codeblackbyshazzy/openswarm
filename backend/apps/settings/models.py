@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Any
+from typing import Optional, Any, Literal
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a personal AI assistant running inside OpenSwarm.\n\n"
@@ -37,6 +37,7 @@ class AppSettings(BaseModel):
     default_model: str = "sonnet"
     default_mode: str = "agent"
     default_max_turns: Optional[int] = None
+    default_thinking_level: Literal["off", "low", "medium", "high", "auto"] = "auto"
     zoom_sensitivity: float = 50.0
     theme: str = "dark"
     new_agent_shortcut: str = "Meta+l"

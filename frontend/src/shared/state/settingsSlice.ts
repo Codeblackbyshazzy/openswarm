@@ -40,6 +40,7 @@ export interface AppSettings {
   default_model: string;
   default_mode: string;
   default_max_turns: number | null;
+  default_thinking_level: 'off' | 'low' | 'medium' | 'high' | 'auto';
   zoom_sensitivity: number;
   theme: 'light' | 'dark';
   new_agent_shortcut: string;
@@ -92,6 +93,7 @@ const initialState: SettingsState = {
     default_model: 'sonnet',
     default_mode: 'agent',
     default_max_turns: null,
+    default_thinking_level: 'auto',
     zoom_sensitivity: 50,
     theme: 'dark',
     new_agent_shortcut: 'Meta+l',

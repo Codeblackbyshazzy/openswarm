@@ -40,6 +40,8 @@ interface Props {
   onHistoryResume: (sessionId: string) => void;
   onAddBrowser: () => void;
   dashboardId?: string;
+  newAgentBounce?: boolean;
+  onNewAgentBounceEnd?: () => void;
 }
 
 const TOOLBAR_OWNER_ID = '__toolbar__';
@@ -83,7 +85,7 @@ function formatRelativeTime(dateStr: string | null): string {
 }
 
 const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
-  ({ inputOpen, onNewAgent, onCancel, onSend, onAddView, onHistoryResume, onAddBrowser, dashboardId }, ref) => {
+  ({ inputOpen, onNewAgent, onCancel, onSend, onAddView, onHistoryResume, onAddBrowser, dashboardId, newAgentBounce, onNewAgentBounceEnd }, ref) => {
     const c = useClaudeTokens();
     const dispatch = useAppDispatch();
     const elementSelection = useElementSelection();
@@ -93,17 +95,37 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
     const historyListRef = useRef<HTMLDivElement>(null);
     const defaultMode = useAppSelector((s) => s.settings.data.default_mode);
     const defaultModel = useAppSelector((s) => s.settings.data.default_model);
+    const defaultThinkingLevel = useAppSelector((s) => s.settings.data.default_thinking_level);
+    const settingsLoaded = useAppSelector((s) => s.settings.loaded);
     const [mode, setMode] = useState(defaultMode || 'agent');
     const [model, setModel] = useState(defaultModel || 'sonnet');
-    const [thinkingLevel, setThinkingLevel] = useState<'off' | 'low' | 'medium' | 'high' | 'auto'>('auto');
+    const [thinkingLevel, setThinkingLevel] = useState<'off' | 'low' | 'medium' | 'high' | 'auto'>(defaultThinkingLevel || 'auto');
+    // Snap to the persisted Settings defaults as soon as they arrive from the
+    // backend. Without the settingsLoaded guard, the effect fires against the
+    // Redux initialState ('sonnet') before the real default has loaded, and
+    // the settingsApplied flag then locks out the real default for the rest
+    // of the session — so new chats spawn under the stale value.
     const settingsApplied = useRef(false);
     useEffect(() => {
-      if (!settingsApplied.current) {
+      if (settingsLoaded && !settingsApplied.current) {
         setMode(defaultMode || 'agent');
         setModel(defaultModel || 'sonnet');
+        setThinkingLevel(defaultThinkingLevel || 'auto');
         settingsApplied.current = true;
       }
-    }, [defaultMode, defaultModel]);
+    }, [settingsLoaded, defaultMode, defaultModel, defaultThinkingLevel]);
+    // Reset to the current Settings defaults each time the toolbar reopens
+    // for a new compose session, so the user's in-session model/mode picks
+    // don't leak into the next new-chat draft.
+    const prevInputOpen = useRef(false);
+    useEffect(() => {
+      if (settingsLoaded && inputOpen && !prevInputOpen.current) {
+        setMode(defaultMode || 'agent');
+        setModel(defaultModel || 'sonnet');
+        setThinkingLevel(defaultThinkingLevel || 'auto');
+      }
+      prevInputOpen.current = inputOpen;
+    }, [inputOpen, settingsLoaded, defaultMode, defaultModel, defaultThinkingLevel]);
     const [viewPickerOpen, setViewPickerOpen] = useState(false);
     const [viewSearch, setViewSearch] = useState('');
     const [historyOpen, setHistoryOpen] = useState(false);
@@ -597,6 +619,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
                 data-onboarding="new-agent-button"
                 tabIndex={0}
                 onClick={onNewAgent}
+                onAnimationEnd={newAgentBounce ? onNewAgentBounceEnd : undefined}
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
@@ -610,6 +633,13 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
                   transition: 'background-color 0.15s',
                   '&:hover': { bgcolor: c.accent.hover },
                   '&:active': { bgcolor: c.accent.pressed },
+                  ...(newAgentBounce && {
+                    animation: 'new-agent-bounce 0.7s ease-in-out 4',
+                    '@keyframes new-agent-bounce': {
+                      '0%, 100%': { transform: 'translateY(0)' },
+                      '50%': { transform: 'translateY(-8px)' },
+                    },
+                  }),
                 }}
               >
                 <AddIcon sx={{ fontSize: 20 }} />
