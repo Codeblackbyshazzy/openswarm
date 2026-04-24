@@ -62,5 +62,16 @@ const { contextBridge, ipcRenderer } = require('electron');
       ipcRenderer.on('openswarm:auth-url', listener);
       return () => ipcRenderer.removeListener('openswarm:auth-url', listener);
     },
+
+    // OAuth popup callback. Fires when any child webContents navigates to
+    // localhost:20128/callback?code=... — main.js watches for this and
+    // forwards the parsed params here. Used as a belt-and-suspenders
+    // alongside window.opener.postMessage (which silently fails on some
+    // Anthropic flows that reset the opener chain during redirect).
+    onOauthCallback: (cb) => {
+      const listener = (_event, data) => cb(data);
+      ipcRenderer.on('openswarm:oauth-callback', listener);
+      return () => ipcRenderer.removeListener('openswarm:oauth-callback', listener);
+    },
   });
 })();

@@ -33,8 +33,8 @@ def validate_credentials(settings: AppSettings, provider: str = "anthropic") -> 
     """
     p = provider.lower().strip()
 
-    # 9Router or GitHub Copilot providers don't need traditional credentials
-    if p in ("9router", "github copilot", "copilot"):
+    # 9Router-backed providers don't need traditional credentials
+    if p == "9router":
         return
 
     # If 9Router is running, all providers are accessible
@@ -157,7 +157,7 @@ def get_anthropic_client(settings: AppSettings) -> anthropic.AsyncAnthropic:
 def get_anthropic_client_for_model(settings: AppSettings, api_model: str) -> anthropic.AsyncAnthropic:
     """Return a client configured for the given resolved model id.
 
-    When api_model carries a 9Router prefix (cc/, cx/, gc/, gh/), the client
+    When api_model carries a 9Router prefix (cc/, cx/, gc/), the client
     targets 9Router directly — even if connection_mode is openswarm-pro. This
     is what lets pinned-route models like "sonnet-cc" actually reach the
     user's own subscription instead of getting sent through the managed proxy
@@ -166,7 +166,7 @@ def get_anthropic_client_for_model(settings: AppSettings, api_model: str) -> ant
     routing.
     """
     import anthropic
-    if isinstance(api_model, str) and api_model.startswith(("cc/", "cx/", "gc/", "gh/")):
+    if isinstance(api_model, str) and api_model.startswith(("cc/", "cx/", "gc/")):
         return anthropic.AsyncAnthropic(
             api_key="9router",
             base_url="http://localhost:20128",

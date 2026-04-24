@@ -84,7 +84,12 @@ const DEFAULT_MODEL_FALLBACK = [
 // ── Subscription Provider Card ──
 const SUBSCRIPTION_PROVIDERS = [
   { id: 'claude', name: 'Claude Pro / Max', desc: 'Sonnet 4.6, Opus 4.6, Haiku 4.5', color: '#E8927A', preview: false },
-  { id: 'gemini-cli', name: 'Gemini Advanced', desc: 'Gemini 3 Pro, 3 Flash, 2.5 Pro, 2.5 Flash', color: '#4285F4', preview: false },
+  // We route "Gemini" through Antigravity OAuth — same Google sign-in,
+  // but a different backend lane with a much higher preview quota than
+  // Gemini CLI's Code Assist free tier (which 429s after ~5 req/min).
+  // Users with Google AI Pro/Ultra automatically get "priority" limits
+  // on the Antigravity side; no extra action required from them.
+  { id: 'antigravity', name: 'Gemini Advanced', desc: 'Gemini 3 Pro, 3 Flash, 2.5 Pro, 2.5 Flash', color: '#4285F4', preview: false },
   { id: 'codex', name: 'ChatGPT Plus / Pro', desc: 'GPT-5.4, GPT-5.4 Mini, GPT-5.3 Codex', color: '#74AA9C', preview: false },
 ];
 
@@ -708,32 +713,53 @@ const SubscriptionCards: React.FC = () => {
         }, 2000);
         setPollTimer(statusPoller);
 
-        // postMessage listener — only wired up for the Electron popup flow
-        // since the system-browser flow has no opener relationship.
+        // Shared exchange helper — called from whichever relay path
+        // (postMessage or Electron IPC) delivers the code first.
+        let exchanged = false;
+        const runExchange = async (code: string, state?: string) => {
+          if (exchanged) return;
+          exchanged = true;
+          window.removeEventListener('message', msgHandler);
+          if (ipcUnsub) ipcUnsub();
+          clearInterval(statusPoller);
+          setPollTimer(null);
+          if (popup && !popup.closed) popup.close();
+          try {
+            await fetch(`${API_BASE}/agents/subscriptions/exchange`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                provider: providerId, code,
+                redirect_uri: data.redirect_uri, code_verifier: data.code_verifier,
+                state: state || data.state,
+              }),
+            });
+          } catch {}
+          setConnecting(null);
+          fetchStatus();
+          refreshPickerModels();
+        };
+
+        // postMessage listener — works when the popup's /callback page can
+        // reach window.opener. Silently no-ops on Anthropic flows where the
+        // opener chain is severed by cross-origin redirects.
         const msgHandler = async (event: MessageEvent) => {
           const d = event.data;
           const callbackData = d?.type === 'oauth_callback' ? d.data : d;
-          if (callbackData?.code) {
-            window.removeEventListener('message', msgHandler);
-            clearInterval(statusPoller);
-            setPollTimer(null);
-            if (popup && !popup.closed) popup.close();
-            try {
-              await fetch(`${API_BASE}/agents/subscriptions/exchange`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  provider: providerId, code: callbackData.code,
-                  redirect_uri: data.redirect_uri, code_verifier: data.code_verifier,
-                  state: callbackData.state || data.state,
-                }),
-              });
-            } catch {}
-            setConnecting(null);
-            fetchStatus();
-            refreshPickerModels();
-          }
+          if (callbackData?.code) await runExchange(callbackData.code, callbackData.state);
         };
         if (!useExternal) window.addEventListener('message', msgHandler);
+
+        // Electron IPC fallback — main.js captures any child webContents
+        // navigating to localhost:20128/callback?code=... and forwards the
+        // parsed params here, so we exchange the code even when opener
+        // postMessage fails. No-op in non-Electron contexts.
+        let ipcUnsub: (() => void) | null = null;
+        const ow = (window as any).openswarm;
+        if (ow && typeof ow.onOauthCallback === 'function') {
+          ipcUnsub = ow.onOauthCallback(async (cb: { code?: string; state?: string; error?: string }) => {
+            if (cb?.code) await runExchange(cb.code, cb.state);
+          });
+        }
 
         // Timeout: 3 minutes for popup flow (was 30s — too short for 2FA /
         // slow networks, and on Windows postMessage from the callback popup
@@ -748,6 +774,7 @@ const SubscriptionCards: React.FC = () => {
           clearInterval(statusPoller);
           setPollTimer(null);
           if (!useExternal) window.removeEventListener('message', msgHandler);
+          if (ipcUnsub) ipcUnsub();
           setConnecting(null);
         }, timeoutMs);
 

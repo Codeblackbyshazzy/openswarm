@@ -57,10 +57,6 @@ class AppSettings(BaseModel):
     claude_subscription_token: Optional[str] = None
     openai_subscription_token: Optional[str] = None
     gemini_subscription_token: Optional[str] = None
-    # GitHub Copilot
-    copilot_github_token: Optional[str] = None
-    copilot_token: Optional[str] = None
-    copilot_token_expires: Optional[float] = None
     # User profile (collected during onboarding)
     user_name: Optional[str] = None
     user_email: Optional[str] = None

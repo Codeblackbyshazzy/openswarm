@@ -449,7 +449,7 @@ async def auto_run_output(body: AutoRunRequest):
     user_message = f"Schema:\n```json\n{schema_str}\n```\n\nGenerate data for: {body.prompt}"
 
     # Resolve body.model via the registry so non-Anthropic selections are
-    # routed through 9Router with the correct prefix (cx/, gc/, gh/).
+    # routed through 9Router with the correct prefix (cx/, gc/).
     # If body.model is unset or unknown, fall back to whichever aux model
     # is available (prefers Claude, else any connected subscription).
     from backend.apps.agents.providers.registry import (

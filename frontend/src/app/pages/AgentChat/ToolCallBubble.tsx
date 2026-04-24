@@ -1160,8 +1160,10 @@ const GenericMcpCard: React.FC<{ data: Record<string, any> }> = ({ data }) => {
 };
 
 const McpResultCard: React.FC<{ parsed: ParsedMcpResult; compact?: boolean }> = ({ parsed, compact }) => {
+  const c = useClaudeTokens();
   const tc = useTermColors();
-  const { service, action, data } = parsed;
+  const { TC_BODY } = useCardColors();
+  const { service, action, data, rawText } = parsed;
 
   if (data.error || data.is_error) {
     return (
@@ -1176,6 +1178,35 @@ const McpResultCard: React.FC<{ parsed: ParsedMcpResult; compact?: boolean }> = 
   if (service === 'gmail') return <GmailCard data={data} action={action} hideSubjectHeader={compact} />;
   if (service === 'calendar') return <CalendarCard data={data} hideHeader={compact} />;
   if (service === 'drive' || service === 'sheets') return <DriveCard data={data} />;
+
+  // Plain-text MCP results (our openswarm-web DDG search, fetch, etc.) arrive
+  // as `[{type:"text", text:"..."}]` which the parser extracts into `rawText`
+  // but leaves `data` empty. Render the rawText directly so users see the
+  // actual tool output instead of "(empty response)". Display is capped —
+  // the model still receives the full payload, only the UI preview is
+  // trimmed so a 250 KB fetch doesn't blow up the chat bubble.
+  const hasData = data && Object.keys(data).length > 0;
+  if (!hasData && rawText && rawText.trim()) {
+    const DISPLAY_CAP = 6000;
+    const preview = rawText.length > DISPLAY_CAP
+      ? rawText.slice(0, DISPLAY_CAP) + `\n… (${rawText.length - DISPLAY_CAP} more chars — model received full output)`
+      : rawText;
+    return (
+      <Box sx={{ px: 1.5, py: 1 }}>
+        <span style={{
+          color: TC_BODY,
+          fontSize: '0.72rem',
+          fontFamily: c.font.sans,
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          display: 'block',
+          lineHeight: 1.55,
+        }}>
+          {preview}
+        </span>
+      </Box>
+    );
+  }
 
   return <GenericMcpCard data={data} />;
 };

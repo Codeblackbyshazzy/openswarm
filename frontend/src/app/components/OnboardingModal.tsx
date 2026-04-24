@@ -49,7 +49,7 @@ function isValidEmail(email: string): boolean {
 const SUBSCRIPTION_PROVIDERS = [
   { id: 'openswarm-pro', name: 'OpenSwarm Pro', desc: 'One subscription — no setup, no Claude account needed', color: '#6366F1', preview: false, recommended: true },
   { id: 'claude', name: 'Claude', desc: 'Use your own Claude Pro/Max subscription', color: '#E8927A', preview: false },
-  { id: 'gemini-cli', name: 'Gemini', desc: 'Gemini 3 Pro, 3 Flash, 2.5 Pro & Flash', color: '#4285F4', preview: false },
+  { id: 'antigravity', name: 'Gemini', desc: 'Gemini 3 Pro, 3 Flash, 2.5 Pro & Flash', color: '#4285F4', preview: false },
   { id: 'codex', name: 'ChatGPT', desc: 'GPT-5.4, GPT-5.4 Mini, GPT-5.3 Codex', color: '#74AA9C', preview: false },
 ];
 
@@ -441,58 +441,91 @@ const OnboardingModal: React.FC = () => {
       } else if (data.flow === 'authorization_code') {
         const popup = window.open(data.auth_url, 'oauth_connect', 'width=600,height=700');
 
-        // Poll status as primary detection (works in Electron where postMessage may not)
+        // Centralized exchange + cleanup so all three detection paths
+        // (postMessage, Electron IPC, status polling) can trigger it.
+        let exchanged = false;
+        const runExchange = async (code: string, state?: string) => {
+          if (exchanged) return;
+          exchanged = true;
+          if (msgHandlerRef.current) {
+            window.removeEventListener('message', msgHandlerRef.current);
+            msgHandlerRef.current = null;
+          }
+          if (ipcUnsub) { ipcUnsub(); ipcUnsub = null; }
+          if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null; }
+          if (popup && !popup.closed) popup.close();
+          try {
+            await fetch(`${API_BASE}/agents/subscriptions/exchange`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                provider: providerId,
+                code,
+                redirect_uri: data.redirect_uri,
+                code_verifier: data.code_verifier,
+                state: state || data.state,
+              }),
+            });
+          } catch {}
+          trackEvent('onboarding.provider_connected', { provider: providerId });
+          dismiss();
+        };
+
+        // Poll status as one detection path (works when the connection
+        // gets created server-side without a client-side callback).
         const statusPoller = setInterval(async () => {
           try {
             const sr = await fetch(`${API_BASE}/agents/subscriptions/status`);
             const sd = await sr.json();
             const connections = sd.providers?.connections || [];
             if (connections.some((p: any) => p.provider === providerId && p.isActive)) {
-              clearInterval(statusPoller);
-              pollTimerRef.current = null;
-              if (msgHandlerRef.current) {
-                window.removeEventListener('message', msgHandlerRef.current);
-                msgHandlerRef.current = null;
+              if (!exchanged) {
+                exchanged = true;
+                if (msgHandlerRef.current) {
+                  window.removeEventListener('message', msgHandlerRef.current);
+                  msgHandlerRef.current = null;
+                }
+                if (ipcUnsub) { ipcUnsub(); ipcUnsub = null; }
+                clearInterval(statusPoller);
+                pollTimerRef.current = null;
+                trackEvent('onboarding.provider_connected', { provider: providerId });
+                dismiss();
               }
-              trackEvent('onboarding.provider_connected', { provider: providerId });
-              dismiss();
             }
           } catch {}
         }, 2000);
         pollTimerRef.current = statusPoller;
 
-        // Also listen for postMessage from callback page (faster when it works)
+        // postMessage from the popup's /callback page (faster when the
+        // popup isn't cross-origin).
         const msgHandler = async (event: MessageEvent) => {
           const d = event.data;
           const callbackData = d?.type === 'oauth_callback' ? d.data : d;
-          if (callbackData?.code) {
-            window.removeEventListener('message', msgHandler);
-            msgHandlerRef.current = null;
-            if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null; }
-            if (popup && !popup.closed) popup.close();
-            try {
-              await fetch(`${API_BASE}/agents/subscriptions/exchange`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  provider: providerId,
-                  code: callbackData.code,
-                  redirect_uri: data.redirect_uri,
-                  code_verifier: data.code_verifier,
-                  state: callbackData.state || data.state,
-                }),
-              });
-            } catch {}
-            trackEvent('onboarding.provider_connected', { provider: providerId });
-            dismiss();
-          }
+          if (callbackData?.code) await runExchange(callbackData.code, callbackData.state);
         };
         window.addEventListener('message', msgHandler);
         msgHandlerRef.current = msgHandler;
 
+        // Electron IPC fallback — main.js captures child webContents
+        // navigating to localhost:20128/callback?code=... and forwards
+        // the parsed params here. This is the REQUIRED path for Claude
+        // OAuth in Electron (cross-origin redirects sever opener chain,
+        // so postMessage can't fire). Without this listener, the
+        // onboarding flow would only see the connection via the
+        // 2-second status poll — but the code never gets exchanged
+        // because the CLI callback page in the popup never reaches us.
+        let ipcUnsub: (() => void) | null = null;
+        const ow = (window as any).openswarm;
+        if (ow && typeof ow.onOauthCallback === 'function') {
+          ipcUnsub = ow.onOauthCallback(async (cb: { code?: string; state?: string; error?: string }) => {
+            if (cb?.code) await runExchange(cb.code, cb.state);
+          });
+        }
+
         setTimeout(() => {
           if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null; }
           if (msgHandlerRef.current) { window.removeEventListener('message', msgHandlerRef.current); msgHandlerRef.current = null; }
+          if (ipcUnsub) { ipcUnsub(); ipcUnsub = null; }
           setConnecting(null);
         }, 180000);
 

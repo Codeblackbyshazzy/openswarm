@@ -114,8 +114,8 @@
         ]
       },
       {
-        "from": "build-staging/9router",
-        "to": "9router",
+        "from": "build-staging/router",
+        "to": "router",
         "filter": [
           "**/*"
         ]

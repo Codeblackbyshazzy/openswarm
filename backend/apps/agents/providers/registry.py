@@ -7,8 +7,8 @@ for a potential future native multi-provider loop.
 
 Multi-model subscription support routes non-Anthropic models through 9Router's
 `/v1/messages` endpoint by passing prefixed model IDs (e.g. `cx/gpt-5.4`,
-`gc/gemini-2.5-pro`, `gh/claude-sonnet-4`). 9Router's translator converts the
-Anthropic-format request into the provider's native format transparently.
+`gc/gemini-2.5-pro`). 9Router's translator converts the Anthropic-format
+request into the provider's native format transparently.
 """
 
 from __future__ import annotations
@@ -32,8 +32,8 @@ logger = logging.getLogger(__name__)
 #   label            — display name in the model picker
 #   context_window   — tokens
 #   model_id         — bare model string for direct API calls (Anthropic key path)
-#   router_model_id  — prefixed string for 9Router routing (cc/, cx/, gc/, gh/)
-#   api              — "anthropic" | "codex" | "gemini-cli" | "github-copilot"
+#   router_model_id  — prefixed string for 9Router routing (cc/, cx/, gc/)
+#   api              — "anthropic" | "codex" | "gemini-cli"
 #   subscription_only— True means hidden from picker unless 9Router has that
 #                      provider actively connected
 #   reasoning        — True for models that emit Anthropic `thinking` content
@@ -54,9 +54,6 @@ logger = logging.getLogger(__name__)
 #   - gc/  (Gemini CLI subscription) uses gemini-3-pro-preview / 3-flash-preview
 #          (thinking-capable) and gemini-2.5-pro / 2.5-flash (stable).
 #          Gemini 3 thought signatures handled via skip_thought_signature_validator.
-#   - gh/  (GitHub Copilot) uses dot-notation (claude-sonnet-4.6 not
-#          claude-sonnet-4-6) because Copilot has its own model catalog
-#          independent from Anthropic's API naming.
 
 BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
     # Anthropic: current-gen trio. Sonnet 4.6 (Feb 17 2026), Opus 4.6
@@ -123,47 +120,6 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
          "context_window": 1_000_000, "router_model_id": "gc/gemini-2.5-flash",
          "api": "gemini-cli", "subscription_only": True},
     ],
-    # GitHub Copilot — all plans (Free/Pro/Pro+) have access to the SAME
-    # models, just with different premium request quotas (50/300/1500).
-    # Model IDs MUST match 9Router's `gh:` pricing catalog at
-    # 9router/src/shared/constants/pricing.js — NOT the Codex CLI catalog.
-    # Copilot uses its own model IDs (dot-notation for Claude versions,
-    # different names from Codex CLI for some GPT models).
-    # See: https://github.com/features/copilot/plans
-    "OpenSwarm": [
-        # --- Free-tier friendly (low premium request cost) ---
-        {"value": "gpt-5-mini", "label": "GPT-5 Mini",
-         "context_window": 200_000, "router_model_id": "gh/gpt-5-mini",
-         "api": "github-copilot", "subscription_only": True},
-        {"value": "claude-haiku-4.5", "label": "Claude Haiku 4.5",
-         "context_window": 200_000, "router_model_id": "gh/claude-haiku-4.5",
-         "api": "github-copilot", "subscription_only": True},
-        {"value": "grok-code-fast-1", "label": "Grok Code Fast 1",
-         "context_window": 128_000, "router_model_id": "gh/grok-code-fast-1",
-         "api": "github-copilot", "subscription_only": True},
-        {"value": "gpt-4.1", "label": "GPT-4.1",
-         "context_window": 128_000, "router_model_id": "gh/gpt-4.1",
-         "api": "github-copilot", "subscription_only": True},
-        # --- Premium models (consume more premium requests) ---
-        {"value": "claude-sonnet-4.6", "label": "Claude Sonnet 4.6",
-         "context_window": 200_000, "router_model_id": "gh/claude-sonnet-4.6",
-         "api": "github-copilot", "subscription_only": True},
-        {"value": "claude-opus-4.6", "label": "Claude Opus 4.6",
-         "context_window": 200_000, "router_model_id": "gh/claude-opus-4.6",
-         "api": "github-copilot", "subscription_only": True},
-        {"value": "gpt-5.3-codex", "label": "GPT-5.3 Codex",
-         "context_window": 400_000, "router_model_id": "gh/gpt-5.3-codex",
-         "api": "github-copilot", "subscription_only": True, "reasoning": True},
-        {"value": "gemini-3-pro", "label": "Gemini 3 Pro",
-         "context_window": 1_000_000, "router_model_id": "gh/gemini-3-pro-preview",
-         "api": "github-copilot", "subscription_only": True, "reasoning": True},
-        {"value": "gemini-3-flash", "label": "Gemini 3 Flash",
-         "context_window": 1_000_000, "router_model_id": "gh/gemini-3-flash-preview",
-         "api": "github-copilot", "subscription_only": True, "reasoning": True},
-        {"value": "gemini-2.5-pro", "label": "Gemini 2.5 Pro",
-         "context_window": 1_000_000, "router_model_id": "gh/gemini-2.5-pro",
-         "api": "github-copilot", "subscription_only": True},
-    ],
 }
 
 # ---------------------------------------------------------------------------
@@ -180,7 +136,7 @@ def thinking_params_for(api: str, level: str, model_id: str = "") -> dict | None
     """Translate a provider-agnostic thinking level to per-provider API params.
 
     Args:
-        api: "anthropic" | "codex" | "gemini-cli" | "github-copilot"
+        api: "anthropic" | "codex" | "gemini-cli"
         level: "off" | "low" | "medium" | "high" | "auto"
         model_id: optional, used to pick adaptive vs legacy for Claude
 
@@ -216,8 +172,6 @@ def thinking_params_for(api: str, level: str, model_id: str = "") -> dict | None
         level_map = {"low": "LOW", "medium": "MEDIUM", "high": "HIGH"}
         return {"thinkingConfig": {"thinkingLevel": level_map[level]}}
 
-    # github-copilot goes through 9Router and doesn't expose a thinking
-    # param in its Copilot catalog — leave untouched.
     return None
 
 
@@ -263,7 +217,7 @@ def _find_builtin_model(short_name: str) -> dict | None:
 def get_api_type(short_name: str) -> str:
     """Return the api type for a short model name.
 
-    Returns one of: "anthropic", "codex", "gemini-cli", "github-copilot".
+    Returns one of: "anthropic", "codex", "gemini-cli".
     Defaults to "anthropic" for unknown names so existing behavior is preserved.
     """
     entry = _find_builtin_model(short_name)
@@ -276,7 +230,7 @@ def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
     Priority:
     - Anthropic model + openswarm-pro mode → bare `model_id` (our cloud proxy)
     - Anthropic model with an API key set → bare `model_id` (real Anthropic API)
-    - Everything else → `router_model_id` (9Router with cc/ cx/ gc/ gh/ prefix)
+    - Everything else → `router_model_id` (9Router with cc/ cx/ gc/ prefix)
     - Unknown names pass through unchanged
     """
     entry = _find_builtin_model(short_name)
@@ -293,6 +247,46 @@ def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
             return entry.get("model_id", short_name)
         if getattr(settings, "anthropic_api_key", None):
             return entry.get("model_id", short_name)
+    # Gemini: prefer lanes with higher quota in order —
+    #   1. AI Studio apikey (free 1K/day, separate from any OAuth limit)
+    #   2. Antigravity OAuth (preview, 5-10× the Gemini CLI free tier)
+    #   3. Gemini CLI OAuth (free tier, ~5 RPM — last resort)
+    #
+    # Antigravity exposes differently-named Gemini models than Gemini CLI:
+    #   gc/gemini-3-pro-preview  →  ag/gemini-3.1-pro-high
+    #   gc/gemini-3-flash-preview →  ag/gemini-3-flash
+    #   gc/gemini-2.5-pro         →  (not available on Antigravity)
+    #   gc/gemini-2.5-flash       →  (not available on Antigravity)
+    # When Antigravity lacks a model we fall back to gc/.
+    _ANTIGRAVITY_MAP = {
+        "gemini-3-pro-preview": "gemini-3.1-pro-high",
+        "gemini-3-flash-preview": "gemini-3-flash",
+    }
+    if entry.get("api") == "gemini-cli":
+        rid = entry.get("router_model_id", "")
+        if isinstance(rid, str) and rid.startswith("gc/"):
+            suffix = rid[len("gc/"):]
+            if getattr(settings, "google_api_key", None):
+                return "gemini/" + suffix
+            ag_suffix = _ANTIGRAVITY_MAP.get(suffix)
+            if ag_suffix:
+                # Check 9Router for an Antigravity connection.
+                try:
+                    import httpx as _httpx
+                    r = _httpx.get("http://localhost:20128/api/providers", timeout=2.0)
+                    if r.status_code == 200:
+                        data = r.json()
+                        conns = data.get("connections", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+                        has_ag = any(
+                            isinstance(c, dict)
+                            and c.get("provider") == "antigravity"
+                            and c.get("isActive")
+                            for c in conns
+                        )
+                        if has_ag:
+                            return "ag/" + ag_suffix
+                except Exception:
+                    pass
     return entry.get("router_model_id", entry.get("model_id", short_name))
 
 
@@ -312,8 +306,7 @@ async def resolve_aux_model(settings: AppSettings, preferred_tier: str = "haiku"
     2. 9Router + Claude subscription connected → cc/<model>
     3. 9Router + Codex connected → cx/gpt-5.4-mini
     4. 9Router + Gemini connected → gc/gemini-2.5-flash
-    5. 9Router + Copilot connected → gh/gpt-5
-    6. Nothing available → raise ValueError
+    5. Nothing available → raise ValueError
     """
     haiku_bare = "claude-haiku-4-5-20251001"
     sonnet_bare = "claude-sonnet-4-20250514"
@@ -337,8 +330,7 @@ async def resolve_aux_model(settings: AppSettings, preferred_tier: str = "haiku"
             "Set an Anthropic API key or connect a subscription."
         )
 
-    providers_data = await _9r_providers()
-    connections = providers_data.get("connections", []) if isinstance(providers_data, dict) else []
+    connections = await _9r_providers()
     connected = {c.get("provider") for c in connections if c.get("isActive")}
 
     base_url = "http://localhost:20128"
@@ -348,8 +340,6 @@ async def resolve_aux_model(settings: AppSettings, preferred_tier: str = "haiku"
         return ("cx/gpt-5.4-mini", base_url)
     if "gemini-cli" in connected:
         return ("gc/gemini-2.5-flash", base_url)
-    if "github" in connected:
-        return ("gh/gpt-5", base_url)
 
     raise ValueError(
         "No AI provider connected for auxiliary LLM call. "
@@ -381,13 +371,6 @@ def create_provider(
     if provider_name in ("9Router", "9router"):
         from backend.apps.agents.providers.openai_compat import OpenAICompatProvider
         return OpenAICompatProvider(api_key="9router", base_url="http://localhost:20128/v1")
-
-    # NOTE: GitHub Copilot previously branched to a CopilotProvider imported
-    # from backend.apps.agents.providers.copilot, but that module does not
-    # exist (the file was never checked in). The branch was unreachable dead
-    # code. Copilot subscription support now routes through 9Router's `gh/`
-    # prefix via the main claude_agent_sdk path — see BUILTIN_MODELS and
-    # resolve_model_id_for_sdk above.
 
     if api_type == "anthropic":
         from backend.apps.agents.providers.anthropic import AnthropicProvider
@@ -595,17 +578,6 @@ COST_PER_1M_TOKENS: dict[tuple[str, str], tuple[float, float]] = {
     ("Qwen", "qwen/qwen3-coder"): (0.0, 0.0),
     ("Qwen", "qwen/qwen3-235b-a22b"): (0.20, 0.70),
     ("Cohere", "cohere/command-a-03-2025"): (2.50, 10.0),
-    # GitHub Copilot (subscription-routed; no per-token cost)
-    ("OpenSwarm", "claude-sonnet-4.6"): (0.0, 0.0),
-    ("OpenSwarm", "claude-opus-4.6"): (0.0, 0.0),
-    ("OpenSwarm", "claude-haiku-4.5"): (0.0, 0.0),
-    ("OpenSwarm", "gpt-5.3-codex"): (0.0, 0.0),
-    ("OpenSwarm", "gpt-5-mini"): (0.0, 0.0),
-    ("OpenSwarm", "gpt-4.1"): (0.0, 0.0),
-    ("OpenSwarm", "grok-code-fast-1"): (0.0, 0.0),
-    ("OpenSwarm", "gemini-3-pro"): (0.0, 0.0),
-    ("OpenSwarm", "gemini-3-flash"): (0.0, 0.0),
-    ("OpenSwarm", "gemini-2.5-pro"): (0.0, 0.0),
 }
 
 

@@ -15,10 +15,8 @@ electron/build-staging/
 electron/node_modules/
 electron/package-lock.json
 
-# 9Router build artifacts
-9router/node_modules/
-9router/.next/
-9router/package-lock.json
+# Router is fetched from npm at build time into electron/build-staging/router.
+# No local router/ directory is tracked.
 
 # Pre-installed MCP server dependencies
 backend/npm-servers/*/node_modules/

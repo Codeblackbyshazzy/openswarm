@@ -140,33 +140,26 @@ fi
 echo "Python environment ready."
 echo ""
 
-# Step 3: Build 9Router
-echo "[3/5] Building 9Router..."
-cd "$PROJECT_ROOT/9router"
-npm install
-npm run build
-
-if [[ ! -d "$PROJECT_ROOT/9router/.next/standalone" ]]; then
-    echo "ERROR: 9Router build failed — .next/standalone not found"
-    exit 1
-fi
-
-# Copy static assets into standalone (required by Next.js standalone mode)
-if [[ -d "$PROJECT_ROOT/9router/.next/static" ]]; then
-    cp -r "$PROJECT_ROOT/9router/.next/static" "$PROJECT_ROOT/9router/.next/standalone/.next/static"
-fi
-if [[ -d "$PROJECT_ROOT/9router/public" ]]; then
-    cp -r "$PROJECT_ROOT/9router/public" "$PROJECT_ROOT/9router/.next/standalone/public"
-fi
-
-echo "9Router build complete."
-echo ""
-
-# Step 4: Snapshot source directories for packaging
-echo "[4/5] Snapshotting source directories..."
+# Step 3: Fetch Router from npm
+# The 9router Next.js server is published as an npm package with a pre-built
+# standalone output. We install it into a scratch dir and stage it directly
+# rather than vendoring the source + rebuilding here.
+echo "[3/5] Fetching Router from npm..."
 STAGING_DIR="$PROJECT_ROOT/electron/build-staging"
 rm -rf "$STAGING_DIR"
 mkdir -p "$STAGING_DIR"
+bash "$PROJECT_ROOT/scripts/fetch-router.sh" "$STAGING_DIR/router"
+
+if [[ ! -f "$STAGING_DIR/router/server.js" ]]; then
+    echo "ERROR: Router fetch failed — server.js not found in staged dir"
+    exit 1
+fi
+echo "Router staged."
+echo ""
+
+# Step 4: Snapshot source directories for packaging
+# (Router was already staged in step 3; do not touch STAGING_DIR/router/ here.)
+echo "[4/5] Snapshotting source directories..."
 
 rsync -a \
     --exclude='__pycache__' --exclude='**/__pycache__' \
@@ -184,15 +177,6 @@ rsync -a \
     "$PROJECT_ROOT/debugger/" "$STAGING_DIR/debugger/"
 
 rsync -a "$PROJECT_ROOT/frontend/dist/" "$STAGING_DIR/frontend/"
-
-# 9Router — copy the pre-built standalone directory
-rsync -a \
-    "$PROJECT_ROOT/9router/.next/standalone/" "$STAGING_DIR/9router/"
-# Copy the .next directory structure needed by standalone
-mkdir -p "$STAGING_DIR/9router/.next"
-if [[ -d "$PROJECT_ROOT/9router/.next/static" ]]; then
-    rsync -a "$PROJECT_ROOT/9router/.next/static/" "$STAGING_DIR/9router/.next/static/"
-fi
 
 echo ""
 printf '\033[1;42;97m%s\033[0m\n' "========================================"

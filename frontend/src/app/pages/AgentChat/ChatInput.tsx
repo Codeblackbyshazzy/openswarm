@@ -1201,6 +1201,22 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
                     Thinking Level
                   </Typography>
                 </MenuItem>
+                {/* Gemini 3 preview models conflict with web search when
+                    thinking is on — Gemini's API rejects with "thought
+                    signature is not valid" the next turn after a tool call.
+                    Surface a note here so users hit on search issues know
+                    which toggle to flip. */}
+                {(() => {
+                  const isGemini3 = typeof model === 'string' && (model.includes('gemini-3') || (allModelOptions.flat.find((m: any) => m.value === model)?.label || '').toLowerCase().includes('gemini 3'));
+                  if (!isGemini3 || thinkingLevel === 'off') return null;
+                  return (
+                    <MenuItem disabled sx={{ opacity: '1 !important', py: 0.6, px: 1.5, minHeight: 'auto', pointerEvents: 'none', mx: 0.5, my: 0.25, borderRadius: 1, bgcolor: 'rgba(245, 158, 11, 0.06)', border: '1px solid rgba(245, 158, 11, 0.18)' }}>
+                      <Typography sx={{ fontSize: '0.66rem', color: c.text.muted, lineHeight: 1.4, whiteSpace: 'normal', maxWidth: 240 }}>
+                        Web search breaks on Gemini 3 preview while thinking is on. Set to <strong>Off</strong> if you need search.
+                      </Typography>
+                    </MenuItem>
+                  );
+                })()}
                 {levels.map((lvl) => (
                   <MenuItem
                     key={lvl.value}

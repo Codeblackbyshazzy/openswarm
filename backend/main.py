@@ -39,11 +39,13 @@ from backend.apps.outputs.outputs import outputs
 from backend.apps.dashboards.dashboards import dashboards
 from backend.apps.analytics.analytics import analytics
 from backend.apps.subscription.router import subscription
+from backend.apps.web.web import web
+from backend.apps.agents.anthropic_proxy import anthropic_proxy
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import WebSocket, WebSocketDisconnect
 import json
 
-main_app = MainApp([health, agents, skills, tools_lib, modes, settings, mcp_registry, skill_registry, outputs, dashboards, analytics, subscription])
+main_app = MainApp([health, agents, skills, tools_lib, modes, settings, mcp_registry, skill_registry, outputs, dashboards, analytics, subscription, web, anthropic_proxy])
 app = main_app.app
 
 app.add_middleware(

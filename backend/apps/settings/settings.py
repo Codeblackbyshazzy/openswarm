@@ -24,6 +24,19 @@ SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
 @asynccontextmanager
 async def settings_lifespan():
     os.makedirs(DATA_DIR, exist_ok=True)
+    try:
+        from backend.apps.nine_router import sync_gemini_api_key, sync_openswarm_pro_as_claude
+        s = load_settings()
+        import asyncio as _asyncio
+        if getattr(s, "google_api_key", None):
+            _asyncio.create_task(sync_gemini_api_key(s.google_api_key))
+        if getattr(s, "connection_mode", None) == "openswarm-pro":
+            bearer = getattr(s, "openswarm_bearer_token", None)
+            proxy = getattr(s, "openswarm_proxy_url", None) or "https://api.openswarm.com"
+            if bearer:
+                _asyncio.create_task(sync_openswarm_pro_as_claude(bearer, proxy))
+    except Exception as e:
+        logger.warning(f"9Router sync startup failed: {e}")
     yield
 
 
@@ -148,7 +161,7 @@ async def update_settings(body: AppSettings):
     new_dict = body.model_dump()
     secret_keys = {"anthropic_api_key", "openai_api_key", "google_api_key", "openrouter_api_key",
                    "claude_subscription_token", "openai_subscription_token", "gemini_subscription_token",
-                   "copilot_github_token", "copilot_token", "installation_id"}
+                   "installation_id"}
     safe_changed = [
         k for k in new_dict
         if k in old_dict and new_dict[k] != old_dict[k] and k not in secret_keys
@@ -173,6 +186,39 @@ async def update_settings(body: AppSettings):
             _identify(id_props)
 
     await save_settings_async(body)
+
+    # When the user changes their Gemini AI Studio API key, mirror it into
+    # 9Router as a priority-0 apikey connection. This bypasses the Gemini
+    # CLI OAuth 429 quota (Code Assist free tier) by routing through the
+    # independent generativelanguage.googleapis.com quota instead.
+    if getattr(body, "google_api_key", None) != getattr(old, "google_api_key", None):
+        try:
+            from backend.apps.nine_router import sync_gemini_api_key
+            await sync_gemini_api_key(body.google_api_key or None)
+        except Exception as e:
+            logger.warning(f"Gemini API-key sync failed: {e}")
+
+    # When openswarm-pro mode or bearer token changes, register a `claude`
+    # apikey connection in 9Router that proxies through our cloud. This
+    # makes the CLI's built-in WebSearch work on non-Claude primaries for
+    # Pro users — the CLI's Anthropic delegation path now has a working
+    # Claude route via 9Router, instead of hitting "no credentials for
+    # provider: claude".
+    pro_mode_old = getattr(old, "connection_mode", None) == "openswarm-pro"
+    pro_mode_new = getattr(body, "connection_mode", None) == "openswarm-pro"
+    bearer_old = getattr(old, "openswarm_bearer_token", None)
+    bearer_new = getattr(body, "openswarm_bearer_token", None)
+    if pro_mode_old != pro_mode_new or bearer_old != bearer_new:
+        try:
+            from backend.apps.nine_router import sync_openswarm_pro_as_claude
+            proxy_url = getattr(body, "openswarm_proxy_url", None) or "https://api.openswarm.com"
+            await sync_openswarm_pro_as_claude(
+                bearer_new if pro_mode_new else None,
+                proxy_url if pro_mode_new else None,
+            )
+        except Exception as e:
+            logger.warning(f"OpenSwarm-Pro → Claude sync failed: {e}")
+
     return {"ok": True, "settings": body.model_dump()}
 
 

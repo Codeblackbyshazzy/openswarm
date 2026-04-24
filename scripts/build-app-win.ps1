@@ -163,35 +163,26 @@ if (-not (Test-Path (Join-Path $ProjectRoot 'electron\python-env'))) {
 Write-Host "Python environment ready."
 Write-Host ""
 
-# --- Step 3: 9Router build ---
-Write-Host "[3/5] Building 9Router..."
-Push-Location (Join-Path $ProjectRoot '9router')
-try {
-    & npm install
-    if ($LASTEXITCODE -ne 0) { throw "npm install (9router) failed" }
-    & npm run build
-    if ($LASTEXITCODE -ne 0) { throw "9router build failed" }
-} finally { Pop-Location }
-$Standalone = Join-Path $ProjectRoot '9router\.next\standalone'
-if (-not (Test-Path $Standalone)) { throw "9Router build failed - .next\standalone not found" }
-$NextStatic = Join-Path $ProjectRoot '9router\.next\static'
-if (Test-Path $NextStatic) {
-    $StandaloneStatic = Join-Path $Standalone '.next\static'
-    New-Item -ItemType Directory -Force -Path (Split-Path $StandaloneStatic -Parent) | Out-Null
-    Copy-Item -Recurse -Force $NextStatic $StandaloneStatic
-}
-$NextPublic = Join-Path $ProjectRoot '9router\public'
-if (Test-Path $NextPublic) {
-    Copy-Item -Recurse -Force $NextPublic (Join-Path $Standalone 'public')
-}
-Write-Host "9Router build complete."
-Write-Host ""
-
-# --- Step 4: Snapshot source dirs into electron\build-staging\ ---
-Write-Host "[4/5] Snapshotting source directories..."
+# --- Step 3: Fetch Router from npm ---
+# The 9router Next.js server is published as an npm package with a pre-built
+# standalone output. Stage it directly from npm instead of vendoring + rebuilding.
+Write-Host "[3/5] Fetching Router from npm..."
 $Staging = Join-Path $ProjectRoot 'electron\build-staging'
 if (Test-Path $Staging) { Remove-Item -Recurse -Force $Staging }
 New-Item -ItemType Directory -Force -Path $Staging | Out-Null
+
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ProjectRoot 'scripts\fetch-router.ps1') -Dest (Join-Path $Staging 'router')
+if ($LASTEXITCODE -ne 0) { throw "fetch-router.ps1 failed" }
+
+if (-not (Test-Path (Join-Path $Staging 'router\server.js'))) {
+    throw "Router fetch failed - server.js not found in staging"
+}
+Write-Host "Router staged."
+Write-Host ""
+
+# --- Step 4: Snapshot source dirs into electron\build-staging\ ---
+# (Router was already staged in step 3; do not wipe or re-copy it here.)
+Write-Host "[4/5] Snapshotting source directories..."
 
 function Copy-Excluded($Source, $Dest, $Exclude) {
     # robocopy: built-in, fast, handles long paths.
@@ -214,14 +205,6 @@ Copy-Excluded `
     @{ Dirs = @('__pycache__','.venv','node_modules'); Files = @('*.pyc') }
 
 Copy-Item -Recurse -Force (Join-Path $ProjectRoot 'frontend\dist\*') (New-Item -ItemType Directory -Force -Path (Join-Path $Staging 'frontend')).FullName
-
-# 9Router standalone -> staging\9router
-Copy-Excluded $Standalone (Join-Path $Staging '9router') @{ Dirs = @(); Files = @() }
-if (Test-Path $NextStatic) {
-    $TargetStatic = Join-Path $Staging '9router\.next\static'
-    New-Item -ItemType Directory -Force -Path (Split-Path $TargetStatic -Parent) | Out-Null
-    Copy-Item -Recurse -Force $NextStatic $TargetStatic
-}
 
 Write-Host ""
 Write-Host "========================================" -BackgroundColor Green -ForegroundColor White

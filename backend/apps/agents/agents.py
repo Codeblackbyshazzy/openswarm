@@ -189,9 +189,11 @@ async def subscriptions_status():
     from backend.apps.nine_router import is_running, get_providers, get_models
     if not is_running():
         return {"running": False, "providers": [], "models": []}
-    providers = await get_providers()
+    connections = await get_providers()
     models = await get_models()
-    return {"running": True, "providers": providers, "models": models}
+    # Frontend consumers (OnboardingModal, Settings) read
+    # `data.providers.connections` — preserve that envelope here.
+    return {"running": True, "providers": {"connections": connections}, "models": models}
 
 
 @agents.router.post("/subscriptions/connect")
@@ -306,18 +308,20 @@ async def list_models():
     connected: set[str] = set()
     if nine_router_up:
         try:
-            providers_data = await _9r_providers()
-            conns = providers_data.get("connections", []) if isinstance(providers_data, dict) else []
+            conns = await _9r_providers()
+            # `get_providers` now unwraps 9Router's {"connections":[...]} envelope
+            # into a plain list of connection dicts.
             raw_providers = {c.get("provider", "") for c in conns if c.get("isActive") or c.get("testStatus") == "active"}
             # Map 9Router's provider names to our BUILTIN_MODELS api field names.
-            # 9Router stores "github" but our models use api="github-copilot",
-            # 9Router stores "codex" but our models use api="codex" (matches),
             # 9Router stores "claude" but our models use api="anthropic", etc.
             _9R_TO_API = {
-                "github": "github-copilot",
                 "claude": "anthropic",
                 "codex": "codex",
                 "gemini-cli": "gemini-cli",
+                # Antigravity is a separate OAuth lane to the same
+                # underlying Gemini models — treat it as the Google-
+                # subscription provider for model-visibility purposes.
+                "antigravity": "gemini-cli",
             }
             connected = raw_providers | {_9R_TO_API.get(p, p) for p in raw_providers}
         except Exception as e:
@@ -360,7 +364,7 @@ async def list_models():
     elif has_api_key or has_claude_sub:
         result["Anthropic"] = _serialize(adaptive)
 
-    # Non-Anthropic providers (OpenAI, Google, OpenSwarm/Copilot, etc.) —
+    # Non-Anthropic providers (OpenAI, Google, etc.) —
     # visibility is gated by 9Router's connected providers set.
     for provider_name, models in BUILTIN_MODELS.items():
         if provider_name == "Anthropic":
@@ -368,10 +372,6 @@ async def list_models():
         visible = []
         for m in models:
             api = m.get("api", "")
-            if api == "github-copilot":
-                # Hidden from end users for now — `gh/` path lives in the
-                # registry but the Copilot subscription card is "Coming soon".
-                continue
             if m.get("subscription_only"):
                 if not nine_router_up or api not in connected:
                     continue
@@ -397,8 +397,7 @@ async def subscriptions_disconnect(body: dict):
 
     try:
         from backend.apps.nine_router import NINE_ROUTER_API, get_providers
-        providers_data = await get_providers()
-        connections = providers_data.get("connections", []) if isinstance(providers_data, dict) else []
+        connections = await get_providers()
         conn = next((c for c in connections if c.get("provider") == provider), None)
         if conn and conn.get("id"):
             async with httpx.AsyncClient(timeout=10.0) as client:

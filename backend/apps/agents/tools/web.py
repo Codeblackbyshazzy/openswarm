@@ -10,8 +10,8 @@ import httpx
 
 from backend.apps.agents.tools.base import BaseTool, ToolContext
 
-_MAX_OUTPUT_BYTES = 100 * 1024  # ~100 KB
 _HTTP_TIMEOUT = 30  # seconds
+_MAX_OUTPUT_BYTES = 250 * 1024  # ~250 KB — covers ~95% of articles/wikis/docs
 _USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -161,7 +161,7 @@ class WebFetchTool(BaseTool):
     name = "WebFetch"
     description = (
         "Fetch the contents of a URL and return the extracted text. "
-        "HTML is stripped to plain text. Output is truncated to ~100 KB."
+        "HTML is stripped to plain text. Output capped at ~250 KB."
     )
 
     def get_schema(self) -> dict:
@@ -199,9 +199,26 @@ class WebFetchTool(BaseTool):
             return [{"type": "text", "text": f"Error fetching {url}: {exc}"}]
 
         content_type = resp.headers.get("content-type", "")
+        is_html = "html" in content_type or resp.text.strip().startswith("<!")
 
-        if "html" in content_type or resp.text.strip().startswith("<!"):
-            text = _strip_html(resp.text)
+        if is_html:
+            # Prefer trafilatura for article/main-content extraction — strips
+            # nav, footer, ads, sidebars and returns the primary text. Falls
+            # back to regex HTML-strip if trafilatura can't extract (rare
+            # pages: pure apps, login walls, heavily JS-rendered content).
+            text: str | None = None
+            try:
+                import trafilatura  # type: ignore
+                text = trafilatura.extract(
+                    resp.text,
+                    include_comments=False,
+                    include_tables=True,
+                    favor_precision=True,
+                )
+            except Exception:
+                text = None
+            if not text:
+                text = _strip_html(resp.text)
         else:
             text = resp.text
 

@@ -174,6 +174,86 @@ def get_all_tool_names() -> list[str]:
     return builtin_tools + mcp_names
 
 
+def _ensure_cwd_git_repo(cwd: str, home: str | None = None) -> None:
+    """Idempotently make `cwd` into a git repo with a valid HEAD.
+
+    The CLI's built-in Agent tool uses `isolation: "worktree"` to spawn
+    subagents, which runs `git rev-parse HEAD` + `git worktree add`. If
+    cwd isn't a git repo, or is a repo with no commits yet, that fails
+    with "worktree/base-branch metadata is broken for isolation" or
+    "repo doesn't have a valid HEAD yet". We silently init a minimal
+    repo with one empty commit so worktree add always has something to
+    anchor on.
+
+    Safe to call on every request — does nothing if cwd is already a
+    valid repo (real project, previous init, or inside a parent repo).
+    """
+    try:
+        home = home or os.path.expanduser("~")
+        cwd_abs = os.path.abspath(cwd)
+        risky_roots = {
+            os.path.abspath(home),
+            "/",
+            os.path.abspath(os.path.dirname(home)),  # e.g. /Users
+        }
+        if cwd_abs in risky_roots:
+            return
+        if not os.path.isdir(cwd):
+            return
+
+        import subprocess as _sp_git
+        # Case A: cwd is inside some git repo (possibly parent). Verify
+        # HEAD resolves. If the enclosing repo is broken (e.g. a stray
+        # `.git` in $HOME with no commits — which makes workspaces
+        # under ~/.openswarm/workspaces/ inherit a broken HEAD), we
+        # need to init a fresh repo AT cwd so it shadows the parent.
+        _inside = _sp_git.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            cwd=cwd,
+            stdout=_sp_git.PIPE, stderr=_sp_git.DEVNULL, timeout=5,
+        )
+        if _inside.returncode == 0 and b"true" in _inside.stdout:
+            # Check HEAD resolves (has at least one commit).
+            _head = _sp_git.run(
+                ["git", "rev-parse", "--verify", "HEAD"],
+                cwd=cwd,
+                stdout=_sp_git.DEVNULL, stderr=_sp_git.DEVNULL, timeout=5,
+            )
+            if _head.returncode == 0:
+                return  # parent repo is healthy, leave it alone
+            # Parent repo exists but HEAD is broken.
+            if os.path.isdir(os.path.join(cwd, ".git")):
+                # .git is directly here — commit to fix it.
+                _sp_git.run(
+                    ["git", "-c", "user.email=openswarm@local",
+                     "-c", "user.name=OpenSwarm",
+                     "commit", "--allow-empty", "-q", "-m", "openswarm init"],
+                    cwd=cwd,
+                    stdout=_sp_git.DEVNULL, stderr=_sp_git.DEVNULL, timeout=10,
+                )
+                return
+            # .git is in a parent dir (broken home-dir repo, etc.).
+            # Init our own repo at cwd so it shadows the broken parent.
+            # Fall through to Case B.
+
+        # Case B: cwd is not a git repo at all (or parent is broken) —
+        # init + empty commit here.
+        _sp_git.run(
+            ["git", "init", "-q", "-b", "main"],
+            cwd=cwd,
+            stdout=_sp_git.DEVNULL, stderr=_sp_git.DEVNULL, timeout=10,
+        )
+        _sp_git.run(
+            ["git", "-c", "user.email=openswarm@local",
+             "-c", "user.name=OpenSwarm",
+             "commit", "--allow-empty", "-q", "-m", "openswarm init"],
+            cwd=cwd,
+            stdout=_sp_git.DEVNULL, stderr=_sp_git.DEVNULL, timeout=10,
+        )
+    except Exception as _e:
+        logger.info(f"[agent-cwd] git init skipped: {_e}")
+
+
 class AgentManager:
     def __init__(self):
         self.sessions: dict[str, AgentSession] = {}
@@ -427,6 +507,20 @@ class AgentManager:
             effective_cwd = os.path.join(effective_cwd, session_id)
 
         os.makedirs(effective_cwd, exist_ok=True)
+
+        # If the fallback chain landed on the user's home directory (no
+        # project dir, no default_folder set), re-route to a dedicated
+        # scratch workspace under ~/.openswarm/workspaces/<session_id>.
+        # This prevents us from writing .git/ (or anything else) into
+        # the user's $HOME and gives the CLI's Agent tool a clean repo
+        # to do worktree isolation inside. Users with a default_folder
+        # or target_directory set keep whatever they configured.
+        _home = os.path.expanduser("~")
+        if os.path.abspath(effective_cwd) == os.path.abspath(_home):
+            effective_cwd = os.path.join(_home, ".openswarm", "workspaces", session_id)
+            os.makedirs(effective_cwd, exist_ok=True)
+
+        _ensure_cwd_git_repo(effective_cwd, _home)
 
         session = AgentSession(
             id=session_id,
@@ -1016,6 +1110,107 @@ class AgentManager:
                     "type": "stdio",
                 }
 
+            # -----------------------------------------------------------------
+            # openswarm-web MCP — DDG search + trafilatura fetch
+            # -----------------------------------------------------------------
+            # The CLI's built-in WebSearch/WebFetch wrap Anthropic's server-
+            # side web_search_20250305. Verified against 9Router 0.3.60's
+            # full chunk tree (grep returned zero hits for web_search,
+            # googleSearch, grounding, retrieval — 9Router does NOT translate
+            # WebSearch to any provider's native search tool). So for every
+            # non-Anthropic primary, the CLI delegates WebSearch execution
+            # back to Anthropic via ANTHROPIC_SMALL_FAST_MODEL. That path
+            # needs a Claude credential; without one it fails with "no
+            # credentials for provider: claude". When it succeeds it can
+            # still break on Gemini 3 thinking-mode thought-signature
+            # validation in subsequent turns.
+            #
+            # To sidestep all of that: register our own DDG-backed MCP for
+            # every primary whose native Anthropic delegation is unreliable
+            # or unreachable. Claude primaries (cc/ and openswarm-pro's
+            # Anthropic adaptive path) keep the built-in Anthropic search
+            # because it IS high-quality and works end-to-end for them.
+            #
+            # Free: DuckDuckGo HTML + trafilatura extraction run locally on
+            # each user's machine. No API keys, no subscriptions, no rate
+            # limits at per-user scale.
+            _m = _router_model_id if isinstance(_router_model_id, str) else ""
+            # Decide whether to register our DDG/Gemini-grounded MCP.
+            #
+            # The CLI's built-in WebSearch/WebFetch wrap Anthropic's
+            # server-side web_search_20250305 tool. For Claude primaries
+            # it runs inline. For non-Claude primaries the CLI delegates
+            # the search execution back to Anthropic via a small model
+            # (ANTHROPIC_SMALL_FAST_MODEL → haiku). That delegation path
+            # needs *some* Anthropic credential to reach Anthropic.
+            #
+            # So: if the user has ANY Anthropic path available (Claude
+            # subscription via 9Router, openswarm-pro cloud proxy, or a
+            # direct Anthropic API key), we prefer the built-in. It's
+            # bundled into what they're already paying for and gives
+            # real Anthropic-curated search results — strictly higher
+            # quality than our DDG scrape. We only fall back to our MCP
+            # for users with ZERO Anthropic access.
+            _has_anthropic_path = (
+                getattr(global_settings, "connection_mode", "own_key") == "openswarm-pro"
+                or bool(getattr(global_settings, "anthropic_api_key", None))
+            )
+            # Check 9Router for any active connection that can serve
+            # Anthropic-format requests. Both the subscription id
+            # `claude` (OAuth'd Claude Code subscription) and the
+            # direct-API id `anthropic` (apikey connection — which is
+            # how we register OpenSwarm Pro as a Claude-compatible
+            # route) satisfy this.
+            _9r_has_anthropic = False
+            try:
+                from backend.apps.nine_router import get_providers as _9r_providers
+                _conns = await _9r_providers()
+                _9r_has_anthropic = any(
+                    isinstance(c, dict)
+                    and c.get("provider") in ("claude", "claude-code", "anthropic")
+                    and c.get("isActive")
+                    for c in _conns
+                )
+            except Exception:
+                pass
+
+            # For Pro users WITHOUT a 9Router Claude/Anthropic connection
+            # yet (sync not complete, or first run), the CLI's built-in
+            # WebSearch delegation through 9Router would fail. Only
+            # consider Anthropic reachable if 9Router can actually serve
+            # the Anthropic-format request.
+            _has_anthropic_path = (
+                bool(getattr(global_settings, "anthropic_api_key", None))  # direct env bypass
+                or _9r_has_anthropic
+            )
+
+            _need_web_mcp = not _has_anthropic_path
+            if _need_web_mcp:
+                web_mcp_server_path = os.path.join(
+                    os.path.dirname(__file__), "web_mcp_server.py"
+                )
+                # Tell the MCP which primary the session is using so it
+                # can route to that provider's native search tool.
+                if _m.startswith(("gc/", "gemini/", "ag/")):
+                    _primary_hint = "gemini"
+                elif _m.startswith("cx/"):
+                    _primary_hint = "openai"
+                else:
+                    _primary_hint = ""
+                mcp_servers["openswarm-web"] = {
+                    "command": sys.executable,
+                    "args": [web_mcp_server_path],
+                    "env": {
+                        "OPENSWARM_PORT": backend_port,
+                        "OPENSWARM_PRIMARY_API": _primary_hint,
+                    },
+                    "type": "stdio",
+                }
+                logger.info(
+                    f"[MCP-DEBUG] Primary {_m} has no reliable native web search — "
+                    f"registering openswarm-web (DDG search + trafilatura fetch, free)"
+                )
+
             effective_allowed = [
                 t for t in session.allowed_tools
                 if t in FULL_TOOLS and _builtin_perms.get(t, "always_allow") == "always_allow"
@@ -1047,6 +1242,19 @@ class AgentManager:
                                 effective_disallowed.append(f"mcp__openswarm-invoke-agent__{it}")
                         continue
 
+                    if name == "openswarm-web":
+                        # Expose our DDG-backed web tools under an MCP prefix.
+                        # Honor existing WebSearch/WebFetch permission policy
+                        # — if the user disabled them in Settings, don't offer
+                        # the MCP variants either.
+                        for wt in ("WebSearch", "WebFetch"):
+                            policy = _builtin_perms.get(wt, "always_allow")
+                            if policy == "always_allow":
+                                effective_allowed.append(f"mcp__openswarm-web__{wt}")
+                            elif policy == "deny":
+                                effective_disallowed.append(f"mcp__openswarm-web__{wt}")
+                        continue
+
                     tool_def = next(
                         (t for t in all_tools_list
                          if t.mcp_config and t.enabled and _sanitize_server_name(t.name) == name),
@@ -1063,6 +1271,16 @@ class AgentManager:
                             effective_disallowed.append(f"mcp__{name}__{tn}")
                     else:
                         effective_allowed.append(f"mcp__{name}__*")
+
+            # If the openswarm-web MCP was registered, the CLI's built-in
+            # WebSearch/WebFetch are guaranteed to fail (no Anthropic
+            # backend). Suppress them so the model picks our MCP variants
+            # and doesn't waste a turn on a broken tool.
+            if _need_web_mcp:
+                effective_allowed = [t for t in effective_allowed if t not in ("WebSearch", "WebFetch")]
+                for _bt in ("WebSearch", "WebFetch"):
+                    if _bt not in effective_disallowed:
+                        effective_disallowed.append(_bt)
 
             # Log effective tool lists
             google_allowed = [t for t in effective_allowed if "google-workspace" in t]
@@ -1112,29 +1330,71 @@ class AgentManager:
             }
             # Priority: openswarm-pro mode → Anthropic API key → 9Router.
             # Non-Anthropic api_types always route through 9Router regardless.
-            # A resolved_model carrying a 9Router prefix (cc/cx/gc/gh/) also
+            # A resolved_model carrying a 9Router prefix (cc/cx/gc/) also
             # forces the 9Router branch — this is what makes pinned-route
             # Anthropic values ("sonnet-cc" etc.) bypass the OpenSwarm Pro
             # proxy and land on the user's own Claude subscription even while
             # connection_mode is openswarm-pro.
             from backend.apps.nine_router import is_running as _9r_running
-            resolved_is_9router = isinstance(resolved_model, str) and resolved_model.startswith(("cc/", "cx/", "gc/", "gh/"))
+            resolved_is_9router = isinstance(resolved_model, str) and resolved_model.startswith(("cc/", "cx/", "gc/", "ag/", "gemini/"))
             if api_type == "anthropic" and not resolved_is_9router and getattr(global_settings, "connection_mode", "own_key") == "openswarm-pro":
                 proxy_url = getattr(global_settings, "openswarm_proxy_url", None) or "https://api.openswarm.com"
                 bearer = getattr(global_settings, "openswarm_bearer_token", "") or ""
                 options_kwargs["env"] = {
                     "ANTHROPIC_AUTH_TOKEN": bearer,
                     "ANTHROPIC_BASE_URL": proxy_url,
+                    # Pin subagent + small-fast model to IDs that OpenSwarm
+                    # Pro's Anthropic surface accepts. Without these, the
+                    # CLI defaults to `claude-haiku-4-5-20251001` for sub-
+                    # agents and WebSearch delegation, which the Pro cloud
+                    # rejects with "No credentials for provider: anthropic".
+                    # Using claude-sonnet-4-6 (same family as typical Pro
+                    # primary selection) guarantees the Pro route accepts
+                    # the request. Subagents get Sonnet-level quality; the
+                    # small-fast model stays on Haiku-4-5 since the cheap
+                    # tier is what matters for delegated tool execution.
+                    "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+                    "ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+                    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
                 }
                 logger.info(f"[MCP-DEBUG] Using OpenSwarm Pro proxy at {proxy_url}")
             elif api_type == "anthropic" and not resolved_is_9router and global_settings.anthropic_api_key:
                 options_kwargs["env"] = {"ANTHROPIC_API_KEY": global_settings.anthropic_api_key}
                 logger.info("[MCP-DEBUG] Using direct Anthropic API key")
             elif _9r_running():
-                env = {
-                    "ANTHROPIC_API_KEY": "9router",
-                    "ANTHROPIC_BASE_URL": "http://localhost:20128",
-                }
+                # For Pro users on non-Claude primaries, route ALL
+                # Anthropic-format traffic through our own backend proxy
+                # (backend/apps/agents/anthropic_proxy.py). That proxy
+                # sniffs the `model` field: Claude-like models go to the
+                # OpenSwarm Pro cloud; everything else forwards to
+                # 9Router. This makes subagents (default Haiku) and
+                # CLI's WebSearch delegation actually reach Anthropic
+                # without requiring 9Router-level provider-node wiring.
+                #
+                # Non-Claude primary = api_type != "anthropic". For
+                # `cc/*` pinned-Claude routes (user has a real Claude
+                # sub via 9Router) we stay on 9Router directly so that
+                # sub quota is used — no need to proxy through Pro.
+                _is_pro = getattr(global_settings, "connection_mode", "own_key") == "openswarm-pro"
+                _has_bearer = bool(getattr(global_settings, "openswarm_bearer_token", None))
+                _use_proxy = _is_pro and _has_bearer and api_type != "anthropic"
+                if _use_proxy:
+                    env = {
+                        "ANTHROPIC_API_KEY": "anthropic-proxy",
+                        "ANTHROPIC_BASE_URL": f"http://127.0.0.1:{backend_port}/api/anthropic-proxy",
+                        # See claude-sonnet branch above. Pinning these
+                        # ensures subagents and CLI's WebSearch
+                        # delegation use model IDs the Pro cloud accepts.
+                        "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
+                        "ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
+                        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
+                    }
+                    logger.info(f"[MCP-DEBUG] Using anthropic-proxy (Pro bearer + non-Claude primary)")
+                else:
+                    env = {
+                        "ANTHROPIC_API_KEY": "9router",
+                        "ANTHROPIC_BASE_URL": "http://localhost:20128",
+                    }
                 # ENABLE_TOOL_SEARCH=auto is Claude-specific. It keeps the
                 # deferred-tool pool (WebSearch, NotebookEdit, TodoWrite,
                 # EnterPlanMode, Cron*, Task*, etc.) reachable via the
@@ -1246,6 +1506,11 @@ class AgentManager:
                 options_kwargs["max_turns"] = session.max_turns
 
             if session.cwd:
+                # Pre-existing sessions may have workspaces that predate
+                # the git-init block in launch_agent, leaving them
+                # without a valid HEAD. Ensure it here so subagent
+                # worktree-add always works.
+                _ensure_cwd_git_repo(session.cwd)
                 options_kwargs["cwd"] = session.cwd
 
             # Apply the session's thinking_level. Claude SDK accepts both a

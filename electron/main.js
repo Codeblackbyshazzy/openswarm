@@ -385,7 +385,7 @@ function killBackend() {
     console.log('Killing backend process...');
     if (process.platform === 'win32') {
       // Windows: Node's child.kill() only terminates the direct child, leaving
-      // grandchildren (e.g. the 9router node process the Python backend
+      // grandchildren (e.g. the router node process the Python backend
       // spawned) as orphans. Use `taskkill /T /F` to walk the process tree.
       try {
         require('child_process').execFileSync(
@@ -577,6 +577,33 @@ app.on('web-contents-created', (_event, contents) => {
       if (childWindow.isFullScreen()) childWindow.setFullScreen(false);
     }
   });
+
+  // OAuth callback URL interception. The npm `9router` package's /callback
+  // page relays the code back via window.opener.postMessage — which
+  // silently no-ops on some flows (e.g. Anthropic's Claude Code auth pages
+  // that reset the opener chain across cross-origin redirects). Capturing
+  // the URL at the navigation layer is format-agnostic and works regardless
+  // of whether the relay via postMessage/BroadcastChannel/localStorage made
+  // it back to the renderer. Same code+state then gets forwarded to the
+  // main window via IPC, where Settings.tsx picks it up and calls
+  // /api/agents/subscriptions/exchange.
+  const forwardOauthCallback = (url) => {
+    try {
+      const u = new URL(url);
+      const onRouter = (u.hostname === 'localhost' || u.hostname === '127.0.0.1') &&
+                       u.port === '20128' && u.pathname === '/callback';
+      if (!onRouter) return;
+      const code = u.searchParams.get('code');
+      const state = u.searchParams.get('state');
+      const error = u.searchParams.get('error');
+      if (!code && !error) return;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('openswarm:oauth-callback', { code, state, error });
+      }
+    } catch { /* not a URL we care about */ }
+  };
+  contents.on('did-navigate', (_e, url) => forwardOauthCallback(url));
+  contents.on('did-redirect-navigation', (_e, url) => forwardOauthCallback(url));
 
   if (contents.getType() === 'webview') {
     contents.on('console-message', (_e, level, message, line, sourceId) => {

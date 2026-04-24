@@ -23,6 +23,17 @@ NINE_ROUTER_URL = f"http://localhost:{NINE_ROUTER_PORT}"
 NINE_ROUTER_API = f"{NINE_ROUTER_URL}/api"
 NINE_ROUTER_V1 = f"{NINE_ROUTER_URL}/v1"
 
+# Pinned 9router npm package version. Using 0.3.60 to match exactly what
+# openswarm-ai v1.0.25 (last known-good production release) vendored via
+# `9router/package.json`. Versions between 0.3.60 and 0.3.96 regressed
+# cross-provider WebSearch: the CLI's WebSearch call from Codex/Gemini
+# primaries used to route cleanly through 9Router's translator and hit
+# Anthropic's server-side web_search (returning real results), but later
+# translator changes broke that path — non-Claude primaries now see
+# "claude-haiku-4-5-20251001 unavailable" or hallucinated output.
+# Pinning to 0.3.60 restores v1.0.25 behavior.
+NINE_ROUTER_NPM_VERSION = "0.3.60"
+
 _process: subprocess.Popen | None = None
 
 # Short TTL cache for positive is_running() results. The probe is a sync
@@ -57,19 +68,19 @@ def _find_9router_dir() -> str | None:
     _is_packaged = os.environ.get("OPENSWARM_PACKAGED") == "1"
 
     if _is_packaged:
-        # Packaged Electron app — 9router is in extraResources
+        # Packaged Electron app — router is in extraResources
         import sys
         # In packaged mode, backend is at <resources>/backend/
-        # So 9router is at <resources>/9router/
+        # So router is at <resources>/router/
         _resources = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        _candidate = os.path.join(_resources, "9router")
+        _candidate = os.path.join(_resources, "router")
         if os.path.isdir(_candidate):
             return _candidate
     else:
-        # Dev mode — 9router is at project root
+        # Dev mode — router is at project root
         _backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         _project_root = os.path.dirname(_backend_dir)
-        _candidate = os.path.join(_project_root, "9router")
+        _candidate = os.path.join(_project_root, "router")
         if os.path.isdir(_candidate):
             return _candidate
 
@@ -89,6 +100,70 @@ def _find_node() -> str | None:
         return electron_path
 
     return None
+
+
+def _dev_router_cache_dir() -> str:
+    """Cache dir for the npm 9router package used in dev mode.
+
+    Pinned per version so bumping NINE_ROUTER_NPM_VERSION triggers a fresh
+    install instead of reusing a stale cache.
+    """
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(
+        os.path.expanduser("~"), ".cache"
+    )
+    return os.path.join(base, "openswarm-router", NINE_ROUTER_NPM_VERSION)
+
+
+def _ensure_router_cached() -> str | None:
+    """Ensure the npm 9router package is installed in the dev cache.
+
+    Returns the absolute path to `app/server.js` on success, or None if
+    npm isn't available or the install fails. Idempotent — returns
+    immediately when the server file already exists.
+
+    Running `node app/server.js` directly (instead of `npx 9router`)
+    skips the CLI wrapper, which means no systray menu-bar icon,
+    no update-check spinner, and no accidental-quit foot-gun when a
+    non-developer right-clicks the "9" tray icon and picks Quit.
+    """
+    cache_dir = _dev_router_cache_dir()
+    server_js = os.path.join(cache_dir, "node_modules", "9router", "app", "server.js")
+    if os.path.exists(server_js):
+        return server_js
+
+    npm = shutil.which("npm")
+    if not npm:
+        logger.warning("npm not found — install Node.js to auto-start 9Router in dev.")
+        return None
+
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+        pkg_json = os.path.join(cache_dir, "package.json")
+        if not os.path.exists(pkg_json):
+            with open(pkg_json, "w") as f:
+                f.write('{"name":"_openswarm_router_cache","version":"0.0.0","private":true}\n')
+
+        logger.info(
+            "Installing 9router@%s into %s (one-time, ~30s)...",
+            NINE_ROUTER_NPM_VERSION, cache_dir,
+        )
+        # Note: we do NOT pass --ignore-scripts. The package's postinstall
+        # rebuilds better-sqlite3 for the host platform; skipping it leaves
+        # the server unable to load its native addon.
+        subprocess.run(
+            [npm, "install", f"9router@{NINE_ROUTER_NPM_VERSION}",
+             "--no-save", "--no-audit", "--no-fund", "--silent"],
+            cwd=cache_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=300,
+            check=False,
+        )
+    except Exception as e:
+        logger.warning("Failed to install 9router into %s: %s", cache_dir, e)
+        return None
+
+    return server_js if os.path.exists(server_js) else None
 
 
 async def ensure_running():
@@ -122,12 +197,10 @@ async def ensure_running():
     _9router_dir = _find_9router_dir()
 
     if _is_packaged and _9router_dir:
-        # Production mode — use pre-built standalone server
-        # In packaged app, build-staging copies .next/standalone/ contents to 9router/
-        # So server.js is at 9router/server.js (not 9router/.next/standalone/server.js)
+        # Packaged mode — run the pre-built standalone server staged at
+        # <resources>/router/server.js by scripts/fetch-router.sh at build time.
         standalone_server = os.path.join(_9router_dir, "server.js")
         if not os.path.exists(standalone_server):
-            # Fallback: check nested path in case build layout changes
             standalone_server = os.path.join(_9router_dir, ".next", "standalone", "server.js")
         if not os.path.exists(standalone_server):
             logger.warning("9Router standalone build not found in %s", _9router_dir)
@@ -142,40 +215,32 @@ async def ensure_running():
         cmd = [node, standalone_server]
         cwd = os.path.dirname(standalone_server)
         env = {**os.environ, "PORT": str(NINE_ROUTER_PORT), "NODE_ENV": "production"}
-        # If using Electron binary as node, enable ELECTRON_RUN_AS_NODE
         if node == os.environ.get("OPENSWARM_ELECTRON_PATH"):
             env["ELECTRON_RUN_AS_NODE"] = "1"
 
-    elif _9router_dir:
-        # Dev mode with bundled 9Router — use next dev
-        npx = shutil.which("npx")
-        if not npx:
-            logger.warning("npx not found — cannot auto-start 9Router.")
-            return
-
-        # Install deps if needed
-        if not os.path.isdir(os.path.join(_9router_dir, "node_modules")):
-            logger.info("Installing 9Router dependencies...")
-            npm = shutil.which("npm")
-            if npm:
-                subprocess.run([npm, "install"], cwd=_9router_dir,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
-
-        logger.info("Starting 9Router (dev) on port %d...", NINE_ROUTER_PORT)
-        cmd = [npx, "next", "dev", "--webpack", "-p", str(NINE_ROUTER_PORT)]
-        cwd = _9router_dir
-        env = {**os.environ, "PORT": str(NINE_ROUTER_PORT)}
-
     else:
-        # No bundled 9Router — try npx 9router as last resort
-        npx = shutil.which("npx")
-        if not npx:
-            logger.warning("npx not found and no bundled 9Router — cannot start.")
+        # Dev mode — install the pinned 9router npm package into a local
+        # cache the first time run.sh boots, then spawn `node app/server.js`
+        # directly on subsequent launches. Bypassing the package's cli.js
+        # avoids its menu-bar tray icon (which users confusingly quit,
+        # silently killing their subscription routing), its update-check
+        # spinner, and the interactive TUI.
+        cached_server = _ensure_router_cached()
+        if not cached_server:
             return
-        logger.info("Starting 9Router (npx) on port %d...", NINE_ROUTER_PORT)
-        cmd = [npx, "9router"]
-        cwd = None
-        env = {**os.environ, "PORT": str(NINE_ROUTER_PORT)}
+
+        node = _find_node()
+        if not node:
+            logger.warning("Node.js not found — cannot start 9Router in dev mode.")
+            return
+
+        logger.info(
+            "Starting 9Router (dev cache, 9router@%s) on port %d...",
+            NINE_ROUTER_NPM_VERSION, NINE_ROUTER_PORT,
+        )
+        cmd = [node, cached_server]
+        cwd = os.path.dirname(cached_server)
+        env = {**os.environ, "PORT": str(NINE_ROUTER_PORT), "NODE_ENV": "production"}
 
     # By default, 9Router's stdout/stderr go to /dev/null (Next.js dev mode
     # is extremely chatty and floods the openswarm console otherwise). When
@@ -251,15 +316,160 @@ async def get_usage_stats(period: str = "all") -> dict | None:
 
 
 async def get_providers() -> list[dict]:
-    """Get all providers and their connection status from 9Router."""
+    """Get all providers and their connection status from 9Router.
+
+    9Router's GET /api/providers returns `{"connections": [...]}` — we
+    unwrap so callers always see a plain list of connection dicts.
+    """
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             r = await client.get(f"{NINE_ROUTER_API}/providers")
             if r.status_code == 200:
-                return r.json()
+                data = r.json()
+                if isinstance(data, dict):
+                    return data.get("connections") or []
+                if isinstance(data, list):
+                    return data
     except Exception as e:
         logger.debug(f"9Router providers fetch failed: {e}")
     return []
+
+
+# ---------------------------------------------------------------------------
+# API-key connection sync (Gemini AI Studio, etc.)
+# ---------------------------------------------------------------------------
+#
+# 9Router supports both OAuth (e.g. gemini-cli) and direct API-key auth
+# (provider="gemini", authType="apikey"). The two hit different Google
+# quotas — OAuth uses the Code Assist free tier which is aggressively
+# rate-limited (429s on Gemini 3 Pro/Flash even for paid-subscription
+# users), while an AI Studio API key uses the generativelanguage.googleapis.com
+# quota which is independent and far higher.
+#
+# We expose `google_api_key` in settings; this helper mirrors it into
+# 9Router's provider-connections list so the API-key path is preferred
+# when a key is set. On removal, we delete the key-based connection so
+# 9Router falls back to whatever OAuth connection the user still has.
+
+NINE_ROUTER_KEYED_NAME = "AI Studio (OpenSwarm-managed)"
+NINE_ROUTER_CLAUDE_PRO_NAME = "OpenSwarm Pro (OpenSwarm-managed)"
+
+
+async def _find_keyed_connection(provider: str, name: str) -> dict | None:
+    """Return the 9Router connection we manage for this provider, if any."""
+    conns = await get_providers()
+    if not isinstance(conns, list):
+        return None
+    for c in conns:
+        if (
+            isinstance(c, dict)
+            and c.get("provider") == provider
+            and c.get("authType") == "apikey"
+            and c.get("name") == name
+        ):
+            return c
+    return None
+
+
+async def sync_gemini_api_key(api_key: str | None) -> None:
+    """Create, update, or delete the Gemini API-key connection in 9Router
+    to match the user's `google_api_key` setting. Silent on 9Router-down
+    (will retry on next settings change or backend restart)."""
+    if not is_running():
+        return
+
+    existing = await _find_keyed_connection("gemini", NINE_ROUTER_KEYED_NAME)
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            if api_key:
+                payload = {
+                    "provider": "gemini",
+                    "authType": "apikey",
+                    "name": NINE_ROUTER_KEYED_NAME,
+                    "apiKey": api_key,
+                    # Priority 0 = highest. OAuth connections default to 1,
+                    # so keyed connection is preferred when both exist.
+                    "priority": 0,
+                }
+                if existing:
+                    await client.patch(
+                        f"{NINE_ROUTER_API}/providers/{existing['id']}",
+                        json=payload,
+                    )
+                    logger.info("9Router: updated Gemini API-key connection")
+                else:
+                    r = await client.post(f"{NINE_ROUTER_API}/providers", json=payload)
+                    if r.status_code < 300:
+                        logger.info("9Router: created Gemini API-key connection")
+                    else:
+                        logger.warning(
+                            f"9Router: failed to create Gemini API-key connection: {r.status_code} {r.text[:200]}"
+                        )
+            else:
+                if existing:
+                    await client.delete(f"{NINE_ROUTER_API}/providers/{existing['id']}")
+                    logger.info("9Router: removed Gemini API-key connection")
+    except Exception as e:
+        logger.warning(f"9Router Gemini API-key sync failed: {e}")
+
+
+async def sync_openswarm_pro_as_claude(bearer_token: str | None, proxy_url: str | None) -> None:
+    """Register OpenSwarm Pro as a `claude` apikey connection in 9Router,
+    pointing at our cloud proxy via `providerSpecificData.baseUrl`.
+
+    This is what makes the CLI's built-in WebSearch work on non-Claude
+    primaries for Pro users: the CLI delegates the search execution to
+    Anthropic via ANTHROPIC_SMALL_FAST_MODEL (claude-haiku). That small-
+    model call hits `ANTHROPIC_BASE_URL` which we've already set to
+    localhost:20128 (9Router). Without this sync, 9Router has no Claude
+    path for openswarm-pro users, so the search fails with
+    "no credentials for provider: claude". With this sync, 9Router sees
+    the OpenSwarm-Pro-backed Claude connection and routes the search
+    call through our cloud — same quota the user's Pro subscription
+    already covers, no extra cost."""
+    if not is_running():
+        return
+
+    # 9Router's POST /api/providers only accepts direct-API provider ids
+    # for apikey auth — `claude` is the subscription/IDE id, `anthropic`
+    # is the direct-API id. Use `anthropic`.
+    existing = await _find_keyed_connection("anthropic", NINE_ROUTER_CLAUDE_PRO_NAME)
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            if bearer_token and proxy_url:
+                payload = {
+                    "provider": "anthropic",
+                    "authType": "apikey",
+                    "name": NINE_ROUTER_CLAUDE_PRO_NAME,
+                    "apiKey": bearer_token,
+                    # Priority 1 so a real user-owned Claude subscription
+                    # (priority 0) still takes precedence if they have one.
+                    # Pro is the fallback, not the default.
+                    "priority": 1,
+                    "providerSpecificData": {
+                        "baseUrl": proxy_url.rstrip("/") + "/v1",
+                    },
+                }
+                if existing:
+                    await client.patch(
+                        f"{NINE_ROUTER_API}/providers/{existing['id']}",
+                        json=payload,
+                    )
+                    logger.info("9Router: updated OpenSwarm Pro → Claude connection")
+                else:
+                    r = await client.post(f"{NINE_ROUTER_API}/providers", json=payload)
+                    if r.status_code < 300:
+                        logger.info("9Router: created OpenSwarm Pro → Claude connection")
+                    else:
+                        logger.warning(
+                            f"9Router: failed to create OpenSwarm Pro → Claude connection: {r.status_code} {r.text[:200]}"
+                        )
+            else:
+                if existing:
+                    await client.delete(f"{NINE_ROUTER_API}/providers/{existing['id']}")
+                    logger.info("9Router: removed OpenSwarm Pro → Claude connection")
+    except Exception as e:
+        logger.warning(f"9Router OpenSwarm-Pro Claude sync failed: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -491,7 +701,10 @@ async def _start_codex_callback_listener(timeout: float = 300.0) -> asyncio.base
 # exchanges the code and serves a "Connected!" page. Detection on the
 # OpenSwarm side happens via the existing status poller on the
 # Settings page.
-_EXTERNAL_BROWSER_PROVIDERS: set[str] = {"gemini-cli"}
+# Both gemini-cli and antigravity use Google's OAuth, which blocks
+# embedded-browser sign-ins ("Your browser is not supported anymore"),
+# so we must hand off to the user's real default browser.
+_EXTERNAL_BROWSER_PROVIDERS: set[str] = {"gemini-cli", "antigravity"}
 
 
 def _should_use_external_browser(provider: str) -> bool:
