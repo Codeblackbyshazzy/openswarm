@@ -66,7 +66,7 @@ const StreamingCursor: React.FC = () => {
 const ELEMENT_SEPARATOR = '\n\n---\nSelected UI Elements:\n';
 
 interface OpenSwarmErrorInfo {
-  kind: 'cap' | 'capacity' | 'auth' | 'network';
+  kind: 'cap' | 'auth' | 'network';
   title: string;
   detail: string;
   ctaLabel?: string;
@@ -91,14 +91,19 @@ function parseOpenSwarmError(text: string): OpenSwarmErrorInfo | null {
       ctaAction: 'upgrade',
     };
   }
-  // Upstream capacity / 503
+  // Upstream capacity / 503 / transient. The backend already retries these
+  // for ~5.5 minutes (5/15/45/90/180s) before bubbling up, so by the time a
+  // user sees this the system has genuinely struggled — but it's almost
+  // always recoverable on the next send, not a plan/billing issue. Show a
+  // soft "connection hiccup" card instead of the waitlist/"servers maxed"
+  // copy, which misleads Pro/Pro+/Ultra subscribers into thinking their
+  // paid plan is out of capacity. The only real hard cap a user should see
+  // is their own per-plan 5h limit (matched above as `kind: 'cap'`).
   if (/at capacity|Try again shortly|503|service unavailable/i.test(text)) {
     return {
-      kind: 'capacity',
-      title: 'OpenSwarm servers maxed',
-      detail: "We're at full capacity right now. Thanks for your patience — we'll get you back in as soon as we can. Join our Discord and we'll let you know the moment things open up.",
-      ctaLabel: 'Join waitlist',
-      ctaAction: 'waitlist',
+      kind: 'network',
+      title: 'Connection hiccup',
+      detail: 'That request timed out after a few retries. Send the message again to continue.',
     };
   }
   // Auth / subscription problems
