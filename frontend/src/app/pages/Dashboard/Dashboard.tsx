@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import DashboardHeader from './DashboardHeader';
-import { trackEvent } from '@/shared/analytics';
+import { report } from '@/shared/serviceClient';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { store } from '@/shared/state/store';
 import {
@@ -301,7 +301,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
   }, [tickEdgePan]);
 
   const handleCardDragEnd = useCallback((dx: number, dy: number, didDrag: boolean) => {
-    if (didDrag) trackEvent('dashboard.card_dragged');
+    if (didDrag) report('dashboard', 'card_dragged');
     stopEdgePan();
     if (isMultiDragRef.current && didDrag) {
       const items = selection.selectedArray()
@@ -343,7 +343,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleCardSelect = useCallback((id: string, type: CardType, shiftKey: boolean) => {
-    trackEvent('dashboard.card_clicked', { card_type: type, shift: shiftKey });
+    report('dashboard', 'card_clicked', { card_type: type, shift: shiftKey });
     if (shiftKey) {
       selection.selectCard(id, type, true);
       return;
@@ -433,13 +433,13 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
   const handleViewportDoubleClick = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return;
     if (isCardTarget(e.target, e.currentTarget)) return;
-    trackEvent('dashboard.canvas_double_clicked');
+    report('dashboard', 'canvas_double_clicked');
     canvas.actions.fitToView();
   }, [canvas.actions]);
 
   // Double-click a card → always expand + center + zoom (cancels pending collapse from single-click)
   const handleCardDoubleClick = useCallback((id: string, type: CardType) => {
-    trackEvent('dashboard.card_double_clicked', { card_type: type });
+    report('dashboard', 'card_double_clicked', { card_type: type });
     if (clickTimerRef.current) {
       clearTimeout(clickTimerRef.current);
       clickTimerRef.current = null;
@@ -460,9 +460,9 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
   useEffect(() => {
     if (!dashboardId) return;
     const startTime = Date.now();
-    trackEvent('dashboard.opened', { dashboard_id: dashboardId });
+    report('dashboard', 'opened', { dashboard_id: dashboardId });
     return () => {
-      trackEvent('dashboard.closed', {
+      report('dashboard', 'closed', {
         dashboard_id: dashboardId,
         time_spent_seconds: Math.round((Date.now() - startTime) / 1000),
       });
@@ -877,7 +877,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
       if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
       e.preventDefault();
       setSearchPaletteOpen(true);
-      trackEvent('dashboard.search_opened');
+      report('dashboard', 'search_opened');
     };
     window.addEventListener('keydown', handleSearch);
     return () => window.removeEventListener('keydown', handleSearch);
@@ -1135,7 +1135,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
       }
 
       // Expand + navigate to target + bring to front
-      trackEvent('dashboard.arrow_navigated', { direction, from_card: currentFocused, to_card: target.id });
+      report('dashboard', 'arrow_navigated', { direction, from_card: currentFocused, to_card: target.id });
       if (target.type === 'agent') {
         dispatch(expandSession(target.id));
       }
@@ -1217,7 +1217,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
       selectedBrowserIds?: string[],
     ) => {
       setToolbarOpen(false);
-      trackEvent('dashboard.agent_created', { mode, model, has_images: !!images?.length, has_context: !!contextPaths?.length, has_browser: !!selectedBrowserIds?.length });
+      report('dashboard', 'agent_created', { mode, model, has_images: !!images?.length, has_context: !!contextPaths?.length, has_browser: !!selectedBrowserIds?.length });
 
       const draftId = `draft-${Date.now().toString(36)}`;
 
@@ -1321,7 +1321,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
   }, [dispatch, expandedSessionIds, canvas.actions, handleHighlightCard]);
 
   const handleAddBrowser = useCallback(() => {
-    trackEvent('dashboard.browser_added');
+    report('dashboard', 'browser_added');
     const prevIds = new Set(Object.keys(store.getState().dashboardLayout.browserCards));
     dispatch(addBrowserCard({ url: browserHomepage, expandedSessionIds }));
     setTimeout(() => {
@@ -1336,7 +1336,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
   }, [dispatch, browserHomepage, expandedSessionIds, canvas.actions, handleHighlightCard]);
 
   const handleAddNote = useCallback(() => {
-    trackEvent('dashboard.note_added');
+    report('dashboard', 'note_added');
     const prevIds = new Set(Object.keys(store.getState().dashboardLayout.notes));
     dispatch(addNote({ expandedSessionIds }));
     setTimeout(() => {
@@ -1375,7 +1375,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
 
   // Context-aware fit: if a card is selected, zoom to it; otherwise fit all
   const handleFitToView = useCallback(() => {
-    trackEvent('dashboard.fit_to_view', { has_selection: selection.selectedIds.size > 0 });
+    report('dashboard', 'fit_to_view', { has_selection: selection.selectedIds.size > 0 });
     if (selection.selectedIds.size === 1) {
       const [[id, type]] = selection.selectedIds;
       const rect = getCardRect(id, type);
@@ -1388,7 +1388,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
   }, [selection.selectedIds, getCardRect, canvas.actions]);
 
   const handleTidy = useCallback(() => {
-    trackEvent('dashboard.tidy_layout');
+    report('dashboard', 'tidy_layout');
     const currentExpanded = store.getState().agents.expandedSessionIds;
     dispatch(tidyLayout({ expandedSessionIds: currentExpanded }));
 

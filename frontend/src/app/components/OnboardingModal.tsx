@@ -5,7 +5,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useAppSelector } from '@/shared/hooks';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { API_BASE } from '@/shared/config';
-import { trackEvent } from '@/shared/analytics';
+import { report } from '@/shared/serviceClient';
 import PlanPicker from '@/app/components/PlanPicker';
 
 // Email validation: format check + typo correction for common domains.
@@ -204,7 +204,7 @@ const OnboardingModal: React.FC = () => {
     if (nineRouterReady === null) return; // still checking
 
     setOpen(true);
-    trackEvent('onboarding.started', { step: 'profile' });
+    report('onboarding', 'started', { step: 'profile' });
   }, [nineRouterReady]);
 
   // Cleanup timers on unmount
@@ -231,7 +231,7 @@ const OnboardingModal: React.FC = () => {
       return;
     }
     if (!initialProActiveRef.current && isActive) {
-      trackEvent('onboarding.openswarm_pro_activated');
+      report('onboarding', 'openswarm_pro_activated');
       dismiss();
     }
     // dismiss is stable enough — don't include in deps
@@ -256,7 +256,7 @@ const OnboardingModal: React.FC = () => {
         if (dashboard?.id) {
           const seedRes = await fetch(`${API_BASE}/dashboards/${dashboard.id}/seed-demo`, { method: 'POST' });
           if (seedRes.ok) {
-            trackEvent('onboarding.completed', { dashboard_id: dashboard.id });
+            report('onboarding', 'completed', { dashboard_id: dashboard.id });
             localStorage.setItem('openswarm_walkthrough_pending', 'true');
             setOpen(false);
             // Force full page load to ensure dashboard mounts fresh with walkthrough
@@ -298,7 +298,7 @@ const OnboardingModal: React.FC = () => {
         }),
       });
     } catch {}
-    trackEvent('onboarding.profile_submitted', {
+    report('onboarding', 'profile_submitted', {
       has_name: !!userName.trim(),
       has_email: !!userEmail.trim(),
       use_cases: useCases,
@@ -309,7 +309,7 @@ const OnboardingModal: React.FC = () => {
     });
     setStep('walkthrough');
     setWalkthroughIdx(0);
-    trackEvent('onboarding.education_started');
+    report('onboarding', 'education_started');
   };
 
   // 500ms debounce on Next/Back during the video walkthrough. The video
@@ -326,12 +326,12 @@ const OnboardingModal: React.FC = () => {
     const next = walkthroughIdx + 1;
     const currentTitle = EDUCATION_STEPS[walkthroughIdx]?.title;
     if (next >= EDUCATION_STEPS.length) {
-      trackEvent('onboarding.education_completed');
+      report('onboarding', 'education_completed');
       setStep('connect');
-      trackEvent('onboarding.connect_started', { nine_router_ready: nineRouterReady });
+      report('onboarding', 'connect_started', { nine_router_ready: nineRouterReady });
       return;
     }
-    trackEvent('onboarding.education_step_advanced', { from: walkthroughIdx, title: currentTitle });
+    report('onboarding', 'education_step_advanced', { from: walkthroughIdx, title: currentTitle });
     setWalkthroughIdx(next);
   };
 
@@ -361,7 +361,7 @@ const OnboardingModal: React.FC = () => {
     // Invalid format with non-empty value — refuse and force error state.
     if (trimmed && !isValidEmail(trimmed)) {
       setEmailBlurred(true);
-      trackEvent('onboarding.email_invalid_blocked', { value_length: trimmed.length });
+      report('onboarding', 'email_invalid_blocked', { value_length: trimmed.length });
       return;
     }
     if (!isProfileComplete) return;
@@ -370,7 +370,7 @@ const OnboardingModal: React.FC = () => {
 
   const handleApplySuggestion = (suggested: string) => {
     setUserEmail(suggested);
-    trackEvent('onboarding.email_suggestion_applied');
+    report('onboarding', 'email_suggestion_applied');
   };
 
   // Mirrors Settings/SubscriptionCards `handleConnect` so the Gemini
@@ -388,7 +388,7 @@ const OnboardingModal: React.FC = () => {
     if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null; }
     if (msgHandlerRef.current) { window.removeEventListener('message', msgHandlerRef.current); msgHandlerRef.current = null; }
     setConnecting(providerId);
-    trackEvent('onboarding.provider_selected', { provider: providerId });
+    report('onboarding', 'provider_selected', { provider: providerId });
 
     // OpenSwarm Pro: switch to the dedicated pricing step so the user can
     // pick a tier + billing interval before heading to Stripe. The
@@ -428,7 +428,7 @@ const OnboardingModal: React.FC = () => {
           clearInterval(devicePollTimer);
           clearInterval(statusPollTimer);
           pollTimerRef.current = null;
-          trackEvent('onboarding.provider_connected', { provider: providerId });
+          report('onboarding', 'provider_connected', { provider: providerId });
           // Auto-close the popup 2s after success so the user briefly
           // sees the "Connected!" page then it goes away on its own.
           setTimeout(() => {
@@ -523,7 +523,7 @@ const OnboardingModal: React.FC = () => {
               body: JSON.stringify({ provider: providerId, code, redirect_uri: data.redirect_uri, code_verifier: data.code_verifier, state: state || data.state }),
             });
           } catch {}
-          trackEvent('onboarding.provider_connected', { provider: providerId });
+          report('onboarding', 'provider_connected', { provider: providerId });
           dismiss();
         };
 
@@ -542,7 +542,7 @@ const OnboardingModal: React.FC = () => {
                 if (ipcUnsub) ipcUnsub();
                 clearInterval(statusPoller);
                 pollTimerRef.current = null;
-                trackEvent('onboarding.provider_connected', { provider: providerId });
+                report('onboarding', 'provider_connected', { provider: providerId });
                 dismiss();
               }
             }
@@ -597,9 +597,9 @@ const OnboardingModal: React.FC = () => {
     } catch { setConnecting(null); }
   };
 
-  const handleApiKey = () => { trackEvent('onboarding.api_key_chosen'); dismiss(); };
+  const handleApiKey = () => { report('onboarding', 'api_key_chosen'); dismiss(); };
   const handleSkip = () => {
-    trackEvent(step === 'profile' ? 'onboarding.profile_skipped' : 'onboarding.connect_skipped');
+    report('onboarding', step === 'profile' ? 'profile_skipped' : 'connect_skipped');
     dismiss();
   };
 
@@ -941,7 +941,7 @@ const OnboardingModal: React.FC = () => {
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
               <Button
-                onClick={() => { setStep('connect'); trackEvent('onboarding.pricing_back'); }}
+                onClick={() => { setStep('connect'); report('onboarding', 'pricing_back'); }}
                 startIcon={<ArrowBackIcon sx={{ fontSize: 14 }} />}
                 sx={{
                   textTransform: 'none', fontSize: '0.85rem', fontWeight: 500,

@@ -41,26 +41,33 @@ export function sync(data: Record<string, unknown> = {}, opts: { immediate?: boo
   }
 }
 
-/** Backwards-compat shim — maps legacy trackEvent calls to sync(). */
-export function trackEvent(
-  eventType: string,
-  properties?: Record<string, unknown>,
-  useBeacon = false,
+/**
+ * Compact ship-an-event helper. Produces the same wire shape as `sync()`
+ * — `{ s: surface, a: action, p: props }` — but reads as a "report a UI
+ * surface event" verb in caller code rather than a free-form state dump.
+ *
+ * The cloud reads (surface, action) tuples from the opaque payload and
+ * decides what they mean. The desktop never names what it's reporting.
+ */
+export function report(
+  surface: string,
+  action: string,
+  props?: Record<string, unknown>,
+  opts: { immediate?: boolean } = {},
 ): void {
-  const dot = eventType.indexOf('.');
-  const surface = dot > 0 ? eventType.slice(0, dot) : eventType;
-  const action = dot > 0 ? eventType.slice(dot + 1) : 'fired';
-  sync(
-    { s: surface, a: action, p: properties || {} },
-    { immediate: useBeacon },
-  );
+  sync({ s: surface, a: action, p: props || {} }, opts);
 }
 
 export function getSessionTraceState(): {
   appStartTs: number;
   lastTs: number;
+  currentPage: string;
 } {
-  return { appStartTs: _appStart, lastTs: _lastTs };
+  return {
+    appStartTs: _appStart,
+    lastTs: _lastTs,
+    currentPage: typeof window === 'undefined' ? '' : (window.location.hash || window.location.pathname),
+  };
 }
 
 export function _resetForTest(): void {
@@ -73,14 +80,5 @@ export function _resetForTest(): void {
   _lastTs = _appStart;
 }
 
-export function getLastAction(): string { return ''; }
-export function getLastPage(): string {
-  if (typeof window === 'undefined') return '';
-  return window.location.hash || window.location.pathname;
-}
-export function getTimeSpent(): number {
-  return Math.round((Date.now() - _appStart) / 1000);
-}
-
-const serviceClient = { sync, trackEvent, getSessionTraceState };
+const serviceClient = { sync, report, getSessionTraceState };
 export default serviceClient;

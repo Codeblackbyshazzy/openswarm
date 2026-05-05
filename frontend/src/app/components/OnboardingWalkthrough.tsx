@@ -3,7 +3,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-import { trackEvent } from '@/shared/analytics';
+import { report } from '@/shared/serviceClient';
 
 export interface WalkthroughStep {
   target: string;                               // data-onboarding="<value>" selector
@@ -93,13 +93,13 @@ const OnboardingWalkthrough: React.FC<Props> = ({ onComplete }) => {
 
   // Track walkthrough start on mount
   useEffect(() => {
-    trackEvent('walkthrough.started');
+    report('walkthrough', 'started');
   }, []);
 
   // Track each step viewed
   useEffect(() => {
     if (step) {
-      trackEvent('walkthrough.step_viewed', { step: currentStep, step_name: step.target || 'done' });
+      report('walkthrough', 'step_viewed', { step: currentStep, step_name: step.target || 'done' });
     }
   }, [currentStep, step]);
 
@@ -194,7 +194,7 @@ const OnboardingWalkthrough: React.FC<Props> = ({ onComplete }) => {
 
   const handleNext = useCallback(() => {
     if (isLastStep) {
-      trackEvent('walkthrough.completed', { steps_viewed: currentStep + 1 });
+      report('walkthrough', 'completed', { steps_viewed: currentStep + 1 });
       onComplete();
     } else {
       setCurrentStep((s) => s + 1);
@@ -216,7 +216,7 @@ const OnboardingWalkthrough: React.FC<Props> = ({ onComplete }) => {
     if (!el) return;
 
     const handler = () => {
-      trackEvent('walkthrough.step_action', { step: currentStep, step_name: step.target });
+      report('walkthrough', 'step_action', { step: currentStep, step_name: step.target });
       setTimeout(() => handleNext(), 300);
     };
     el.addEventListener('click', handler, { once: true });

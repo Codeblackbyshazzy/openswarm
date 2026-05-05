@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { trackEvent } from '@/shared/analytics';
+import { report } from '@/shared/serviceClient';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
@@ -841,7 +841,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
   // fire once per cap card. (message.id, kind) keeps it from re-firing on edits.
   React.useEffect(() => {
     if (openswarmError?.kind === 'cap') {
-      trackEvent('subscription.rate_limit_hit', { message_id: message.id });
+      report('subscription', 'rate_limit_hit', { message_id: message.id });
     }
   }, [message.id, openswarmError?.kind]);
 

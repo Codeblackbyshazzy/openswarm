@@ -438,12 +438,35 @@ async function startBackend() {
 
   const shellPath = getShellPath();
 
+  // Identifies how this build was packaged. Read by the backend service
+  // client so the cloud can split installer-using customers from
+  // run-from-source developers in dashboards. Honors a build-time override
+  // (set in CI when producing platform installers) before falling back to
+  // OS-derived defaults.
+  let installMethod = process.env.OPENSWARM_INSTALL_METHOD;
+  if (!installMethod) {
+    if (!isPackaged) {
+      installMethod = 'dev';
+    } else if (process.platform === 'darwin') {
+      installMethod = 'dmg';
+    } else if (process.platform === 'win32') {
+      installMethod = 'windows-setup';
+    } else if (process.platform === 'linux') {
+      // electron-builder produces AppImage by default for linux targets.
+      // Override at packaging time when building .deb / .rpm.
+      installMethod = 'appimage';
+    } else {
+      installMethod = 'unknown';
+    }
+  }
+
   const env = {
     ...process.env,
     PATH: shellPath,
     OPENSWARM_PACKAGED: isPackaged ? '1' : '0',
     OPENSWARM_PORT: String(backendPort),
     OPENSWARM_ELECTRON_PATH: process.execPath,
+    OPENSWARM_INSTALL_METHOD: installMethod,
     PYTHONDONTWRITEBYTECODE: '1',
     // PEP 540 UTF-8 mode: makes open() default to UTF-8 on Windows where
     // the locale is otherwise cp1252. Many backend modules read UTF-8

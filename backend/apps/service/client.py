@@ -143,6 +143,10 @@ def _envelope() -> dict:
         env["app_version"] = APP_VERSION
     except Exception:
         pass
+    # How this build was packaged. Set by the platform-specific build script
+    # (electron-builder afterPack hooks for dmg / exe / appimage / deb / rpm).
+    # Defaults to "dev" when running from `bash run.sh` in a checked-out repo.
+    env["install_method"] = os.environ.get("OPENSWARM_INSTALL_METHOD", "dev")
     return env
 
 

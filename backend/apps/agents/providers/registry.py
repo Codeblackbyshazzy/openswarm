@@ -510,8 +510,8 @@ def get_context_window(provider: str, model: str, settings: AppSettings | None =
 COST_PER_1M_TOKENS: dict[tuple[str, str], tuple[float, float]] = {
     # (provider, model): (input_cost_per_1M, output_cost_per_1M)
     # NOTE: `calculate_cost` is currently unused in the live path — real
-    # cost tracking comes from 9Router's usage stats (analytics.py:270+).
-    # These entries are kept so the table matches BUILTIN_MODELS and can
+    # cost numbers come from 9Router's usage stats. These entries are kept
+    # so the table matches BUILTIN_MODELS and can
     # be used by any future native-loop path. Subscription-routed models
     # are zero-cost to the user, but API rates are recorded here for
     # reference where they exist.

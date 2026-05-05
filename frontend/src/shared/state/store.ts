@@ -11,7 +11,6 @@ import outputsReducer from './outputsSlice';
 import dashboardLayoutReducer from './dashboardLayoutSlice';
 import dashboardsReducer from './dashboardsSlice';
 import updateReducer from './updateSlice';
-import analyticsReducer from './analyticsSlice';
 import modelsReducer from './modelsSlice';
 import interactionReducer from './interactionSlice';
 
@@ -29,7 +28,6 @@ export const store = configureStore({
     dashboardLayout: dashboardLayoutReducer,
     dashboards: dashboardsReducer,
     update: updateReducer,
-    analytics: analyticsReducer,
     models: modelsReducer,
     interaction: interactionReducer,
   },

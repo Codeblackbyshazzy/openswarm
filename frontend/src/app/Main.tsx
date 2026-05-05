@@ -28,7 +28,7 @@ const Views = lazy(() => import('./pages/Views/Views'));
 const Customization = lazy(() => import('./pages/Customization/Customization'));
 const Analytics = lazy(() => import('./pages/Analytics/Analytics'));
 const OnboardingModal = lazy(() => import('./components/OnboardingModal'));
-import { trackEvent, getLastAction, getLastPage, getTimeSpent } from '@/shared/analytics';
+import { report, getSessionTraceState } from '@/shared/serviceClient';
 import { useKeyboardShortcuts } from '@/shared/hooks/useKeyboardShortcuts';
 import { useDeepLink } from '@/shared/hooks/useDeepLink';
 import { useInteractionHeartbeat } from '@/shared/hooks/useInteractionHeartbeat';
@@ -338,20 +338,20 @@ const ThemedApp: React.FC = () => {
   const { mode } = useThemeMode();
   const muiTheme = useMemo(() => buildMuiTheme(c, mode), [c, mode]);
 
-  // Track last action before user leaves and uncaught errors
   useEffect(() => {
     const handleUnload = () => {
-      trackEvent('app.last_action', {
-        last_page: getLastPage(),
-        last_action: getLastAction(),
-        time_spent_seconds: getTimeSpent(),
-      }, true); // useBeacon for reliable delivery during unload
+      const { appStartTs, currentPage } = getSessionTraceState();
+      report('app', 'last_action', {
+        last_page: currentPage,
+        time_spent_seconds: Math.round((Date.now() - appStartTs) / 1000),
+      }, { immediate: true });
     };
     const handleError = (event: ErrorEvent) => {
-      trackEvent('app.error', {
+      const { currentPage } = getSessionTraceState();
+      report('app', 'error', {
         error_message: event.message,
         error_stack: event.error?.stack?.slice(0, 500),
-        last_page: getLastPage(),
+        last_page: currentPage,
       });
     };
     window.addEventListener('beforeunload', handleUnload);

@@ -42,7 +42,7 @@ def _read_app_version() -> str:
 
 APP_VERSION = _read_app_version()
 
-_heartbeat_task: asyncio.Task | None = None
+_pulse_task: asyncio.Task | None = None
 _drain_task: asyncio.Task | None = None
 
 _last_9r_cost: float | None = None
@@ -62,22 +62,25 @@ def _compute_delta(current: float, last: float | None, threshold: float = _RESTA
     return current - last, current
 
 
-_heartbeat_count = 0
-_heartbeat_hours: set = set()
-_heartbeat_cost_total = 0.0
-_heartbeat_batch_size = 10
+_pulse_count = 0
+_pulse_hours: set = set()
+_pulse_delta_cost_total = 0.0
+_pulse_batch_size = 10
 
 
-async def _heartbeat_loop():
+async def _pulse_loop():
+    """Periodic state-pulse loop. Every minute, samples local counters
+    (active sessions, hour bucket, 9Router cost). Every N samples, ships
+    a compact state struct to the cloud for billing reconciliation."""
     global _last_9r_cost, _last_9r_prompt_tokens, _last_9r_completion_tokens, _last_9r_requests
-    global _heartbeat_count, _heartbeat_hours, _heartbeat_cost_total
+    global _pulse_count, _pulse_hours, _pulse_delta_cost_total
 
     while True:
         await asyncio.sleep(60)
-        _heartbeat_count += 1
+        _pulse_count += 1
         try:
             import datetime as _dt
-            _heartbeat_hours.add(_dt.datetime.now().hour)
+            _pulse_hours.add(_dt.datetime.now().hour)
         except Exception:
             pass
 
@@ -95,27 +98,27 @@ async def _heartbeat_loop():
                     prompt_delta, _last_9r_prompt_tokens = _compute_delta(cur_prompt, _last_9r_prompt_tokens, threshold=1000)
                     completion_delta, _last_9r_completion_tokens = _compute_delta(cur_completion, _last_9r_completion_tokens, threshold=1000)
                     requests_delta, _last_9r_requests = _compute_delta(cur_requests, _last_9r_requests, threshold=10)
-                    _heartbeat_cost_total += cost_delta
+                    _pulse_delta_cost_total += cost_delta
         except Exception:
             pass
 
-        # Only send to cloud every N heartbeats (batch). Reduces cloud
-        # traffic from 480 calls/day to 48 calls/day per user.
-        if _heartbeat_count >= _heartbeat_batch_size:
+        if _pulse_count >= _pulse_batch_size:
             try:
                 from backend.apps.agents.agent_manager import agent_manager
+                # Compact field names — the wire stays small and the cloud
+                # is the only place that knows what each key means.
                 svc.sync({
-                    "active_session_count": len(agent_manager.sessions),
-                    "hours_active": sorted(_heartbeat_hours),
-                    "pings_in_batch": _heartbeat_count,
-                    "nine_router_total_cost": _last_9r_cost or 0,
-                    "d_cost": _heartbeat_cost_total,
+                    "a": len(agent_manager.sessions),       # active sessions
+                    "h": sorted(_pulse_hours),               # hour bucket set
+                    "n": _pulse_count,                       # samples in batch
+                    "c": _last_9r_cost or 0,                 # cumulative cost
+                    "d1": _pulse_delta_cost_total,           # cost delta since last batch
                 })
             except Exception:
                 pass
-            _heartbeat_count = 0
-            _heartbeat_hours = set()
-            _heartbeat_cost_total = 0.0
+            _pulse_count = 0
+            _pulse_hours = set()
+            _pulse_delta_cost_total = 0.0
 
 
 async def _drain_loop():
@@ -129,7 +132,7 @@ async def _drain_loop():
 
 @asynccontextmanager
 async def service_lifespan():
-    global _heartbeat_task, _drain_task
+    global _pulse_task, _drain_task
 
     try:
         from backend.apps.settings.settings import load_settings, _save_settings
@@ -205,18 +208,18 @@ async def service_lifespan():
     except Exception as e:
         logger.debug(f"9Router auto-start skipped: {e}")
 
-    _heartbeat_task = asyncio.create_task(_heartbeat_loop())
+    _pulse_task = asyncio.create_task(_pulse_loop())
     _drain_task = asyncio.create_task(_drain_loop())
 
     yield
 
-    if _heartbeat_task:
-        _heartbeat_task.cancel()
+    if _pulse_task:
+        _pulse_task.cancel()
         try:
-            await _heartbeat_task
+            await _pulse_task
         except asyncio.CancelledError:
             pass
-        _heartbeat_task = None
+        _pulse_task = None
 
     if _drain_task:
         _drain_task.cancel()

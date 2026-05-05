@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { trackEvent } from '@/shared/analytics';
+import { report } from '@/shared/serviceClient';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
@@ -219,7 +219,7 @@ const OpenSwarmProCard: React.FC = () => {
   }, [refresh]);
 
   const handleManage = async () => {
-    trackEvent('subscription.manage_clicked', {
+    report('subscription', 'manage_clicked', {
       plan: status?.plan ?? null,
       status: status?.status ?? null,
     });
@@ -257,7 +257,7 @@ const OpenSwarmProCard: React.FC = () => {
     for (const threshold of [80, 90] as const) {
       if (current >= threshold && !firedUsageThresholds.current.has(threshold)) {
         firedUsageThresholds.current.add(threshold);
-        trackEvent('subscription.usage_warning', {
+        report('subscription', 'usage_warning', {
           plan: status.plan ?? null,
           utilization: current,
           threshold,

@@ -1,12 +1,12 @@
 import React from 'react';
-import { trackEvent } from '@/shared/analytics';
+import { report } from '@/shared/serviceClient';
 
 interface Props {
   /** Friendly title for the fallback card. Default: "Something broke." */
   title?: string;
   /** Optional reset hook — if provided, the Reload button calls this instead of reloading the window. */
   onReset?: () => void;
-  /** Where the boundary lives, for analytics ("root" | "page:tools" | etc.). */
+  /** Where the boundary lives, for support ("root" | "page:tools" | etc.). */
   scope?: string;
   children: React.ReactNode;
 }
@@ -18,7 +18,7 @@ interface State {
 /**
  * Catches uncaught render errors so a single broken component doesn't
  * black out the whole app. Stack stays visible so users can copy/paste
- * it to support; analytics gets a fire-and-forget event.
+ * it to support; the cloud gets a fire-and-forget operational report.
  */
 class ErrorBoundary extends React.Component<Props, State> {
   state: State = { error: null };
@@ -29,7 +29,7 @@ class ErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     try {
-      trackEvent('app.error_boundary', {
+      report('app', 'error_boundary', {
         scope: this.props.scope || 'unknown',
         message: String(error?.message || error).slice(0, 500),
         stack: String(error?.stack || '').slice(0, 2000),
