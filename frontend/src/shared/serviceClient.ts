@@ -6,6 +6,19 @@
 
 import { API_BASE } from './config';
 
+/** Generate an id per submit() call. Used so retries (network blip,
+ *  page reload mid-flush, etc.) are deduplicated downstream rather than
+ *  inserted as separate rows. Falls back to a Math.random() id on
+ *  ancient browsers without crypto.randomUUID. */
+function _newSubmissionId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch { /* fall through */ }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 let _lastTs = Date.now();
 let _appStart = Date.now();
 
@@ -51,12 +64,20 @@ function _flush(): void {
 
 export function sync(data: Record<string, unknown> = {}, opts: { immediate?: boolean } = {}): void {
   _lastTs = Date.now();
+  // Stamp a submission id + client timestamp so the cloud can deduplicate
+  // retries and order events by the moment they happened, not by the
+  // moment they landed.
+  const stamped: Record<string, unknown> = {
+    ...data,
+    submission_id: typeof data.submission_id === 'string' ? data.submission_id : _newSubmissionId(),
+    t: typeof data.t === 'number' ? data.t : Date.now(),
+  };
   if (opts.immediate) {
-    _queue.push(data);
+    _queue.push(stamped);
     _flush();
     return;
   }
-  _queue.push(data);
+  _queue.push(stamped);
   if (_flushTimer == null) {
     _flushTimer = setTimeout(() => {
       _flushTimer = null;

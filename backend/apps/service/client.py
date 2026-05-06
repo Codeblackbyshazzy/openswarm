@@ -233,6 +233,12 @@ def sync(data: dict | None = None) -> None:
     Accepts any dict — the cloud determines what it is from the shape.
     The desktop has no knowledge of event types, schemas, or routing.
 
+    Each call carries:
+      - `t`: client-side timestamp at submit time (unix seconds, float).
+      - `submission_id`: uuid generated per call. The cloud uses
+        (install_id, submission_id) as an idempotency key, so a retry
+        from the offline spool is a no-op rather than a double-write.
+
     Fire-and-forget; never raises.
     """
     payload = data or {}
@@ -242,6 +248,7 @@ def sync(data: dict | None = None) -> None:
         "client_state": _envelope(),
         "d": payload,
         "t": time.time(),
+        "submission_id": uuid4().hex,
     }
     _log("s", payload)
     if _test_sink is not None:
