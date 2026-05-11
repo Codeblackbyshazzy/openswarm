@@ -3,7 +3,21 @@ import { toJpeg } from 'html-to-image';
 const CAPTURE_WIDTH = 1280;
 const CAPTURE_HEIGHT = 800;
 const JPEG_QUALITY = 0.7;
-const LOAD_TIMEOUT_MS = 3000;
+const LOAD_TIMEOUT_MS = 4000;
+
+// Workspace file keys are stored relative to the workspace root with no
+// leading `./` or `/` — but agent-written HTML routinely references its
+// siblings as `./style.css` or `/style.css`. Without normalizing here,
+// `files[href]` lookup misses and the iframe renders unstyled, producing
+// the broken thumbnails (text-only Markdown Editor, layoutless Calculator,
+// etc.) you'd otherwise see on the Apps page.
+function lookupFile(href: string, files: Record<string, string>): string | null {
+  const candidates = [href, href.replace(/^\.\//, ''), href.replace(/^\//, '')];
+  for (const k of candidates) {
+    if (k in files) return files[k];
+  }
+  return null;
+}
 
 /**
  * Inline local CSS/JS references so multi-file views render in a single srcdoc.
@@ -19,7 +33,7 @@ function inlineResources(html: string, files: Record<string, string>): string {
       if (!hrefMatch) return match;
       const href = hrefMatch[1];
       if (/^(https?:)?\/\//.test(href)) return match;
-      const content = files[href];
+      const content = lookupFile(href, files);
       if (content == null) return match;
       return `<style>\n${content}\n</style>`;
     },
@@ -32,7 +46,7 @@ function inlineResources(html: string, files: Record<string, string>): string {
       if (!srcMatch) return match;
       const src = srcMatch[1];
       if (/^(https?:)?\/\//.test(src)) return match;
-      const content = files[src];
+      const content = lookupFile(src, files);
       if (content == null) return match;
       const typeMatch = attrs.match(/type=["']([^"']+)["']/);
       const typeAttr = typeMatch ? ` type="${typeMatch[1]}"` : '';

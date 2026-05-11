@@ -15,6 +15,7 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import CheckIcon from '@mui/icons-material/Check';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { openSettingsModal } from '@/shared/state/settingsSlice';
 import { API_BASE, getAuthToken } from '@/shared/config';
@@ -35,6 +36,7 @@ import {
   updateThinkingLevel,
   fetchSession,
   AgentMessage,
+  clearSessionMessages,
 } from '@/shared/state/agentsSlice';
 import { fetchModes } from '@/shared/state/modesSlice';
 import { createSessionWs } from '@/shared/ws/WebSocketManager';
@@ -48,7 +50,6 @@ import ChatInput, { ChatInputHandle } from './ChatInput';
 import ContextDrawer from './ContextDrawer';
 import { ErrorSlime } from '@/app/components/ErrorSlime';
 import { ContextPath } from '@/app/components/DirectoryBrowser';
-import DiffViewer from './DiffViewer';
 import { setGlowingBrowserCards, fadeGlowingBrowserCards, clearGlowingBrowserCards } from '@/shared/state/dashboardLayoutSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 
@@ -911,7 +912,26 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                 </Box>
               )}
             </Box>
-            {!isDraft && id && <DiffViewer sessionId={id} />}
+            {!isDraft && id && (
+              <Tooltip title="Reset history">
+                <IconButton
+                  size="small"
+                  onClick={async () => {
+                    const sid = id;
+                    try {
+                      const tok = (() => { try { return getAuthToken(); } catch { return ''; } })();
+                      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                      if (tok) headers['Authorization'] = `Bearer ${tok}`;
+                      await fetch(`${API_BASE}/agents/sessions/${sid}/clear`, { method: 'POST', headers });
+                    } catch { /* surfaced via context_status */ }
+                    dispatch(clearSessionMessages(sid));
+                  }}
+                  sx={{ color: c.text.tertiary, '&:hover': { color: c.text.primary } }}
+                >
+                  <RestartAltIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
             {onClose && (
               <IconButton onClick={onClose} size="small" sx={{ color: c.text.tertiary, '&:hover': { color: c.text.primary } }}>
                 <CloseIcon fontSize="small" />
