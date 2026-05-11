@@ -23,6 +23,10 @@ interface Props {
   inputData: Record<string, any>;
   backendResult?: Record<string, any> | null;
   style?: React.CSSProperties;
+  /** Forwarded for each `console.{log,warn,error,info,debug}` inside the
+   *  running app (captured by webview-preload.js → ipc-message). Only
+   *  fires in the webview path — iframes have no comparable channel. */
+  onConsoleMessage?: (level: string, text: string) => void;
 }
 
 function buildSrcdoc(
@@ -58,6 +62,7 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
   inputData,
   backendResult = null,
   style,
+  onConsoleMessage,
 }, ref) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const webviewRef = useRef<any>(null);
@@ -143,6 +148,26 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
       iframeRef.current.srcdoc = srcdoc;
     }
   }, [srcdoc, useWebview]);
+
+  // Subscribe to the webview's ipc-message channel so the App Builder can
+  // surface [FRONTEND] logs from inside the running app. The preload
+  // script wraps console.* and emits 'webview-console' events; we forward
+  // each one up via `onConsoleMessage`. Iframe path doesn't use this.
+  useEffect(() => {
+    if (!useWebview || !onConsoleMessage) return;
+    const wv = webviewRef.current;
+    if (!wv) return;
+    const handler = (e: any) => {
+      if (e?.channel !== 'webview-console') return;
+      const arg = Array.isArray(e.args) ? e.args[0] : undefined;
+      if (!arg) return;
+      onConsoleMessage(arg.level || 'log', arg.text || '');
+    };
+    wv.addEventListener?.('ipc-message', handler);
+    return () => {
+      try { wv.removeEventListener?.('ipc-message', handler); } catch (_e) {}
+    };
+  }, [useWebview, onConsoleMessage, iframeSrc]);
 
   const hasContent = !!(serveUrl || frontendCode?.trim());
 

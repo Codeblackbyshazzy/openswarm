@@ -62,18 +62,25 @@ def _validate_against_schema(data: dict, schema: dict) -> str | None:
 from backend.config.paths import OUTPUTS_DIR as DATA_DIR, OUTPUTS_WORKSPACE_DIR as WORKSPACE_DIR
 
 
-def _build_data_injection(input_json: str, result_json: str) -> str:
-    """Build a <script> tag that sets OUTPUT_INPUT / OUTPUT_BACKEND_RESULT
-    and listens for postMessage updates."""
+def _build_data_injection(input_json: str, result_json: str, backend_url_json: str = "null") -> str:
+    """Build a <script> tag that sets OUTPUT_INPUT / OUTPUT_BACKEND_RESULT /
+    OUTPUT_BACKEND_URL and listens for postMessage updates.
+
+    OUTPUT_BACKEND_URL is `null` when the app has no live `backend.py`
+    process; otherwise it's `http://localhost:<port>` and app code can
+    `fetch(window.OUTPUT_BACKEND_URL + '/route')` to hit the persistent
+    backend's endpoints."""
     return (
         "<script>\n"
         "(function() {\n"
         "  window.OUTPUT_INPUT = " + input_json + ";\n"
         "  window.OUTPUT_BACKEND_RESULT = " + result_json + ";\n"
+        "  window.OUTPUT_BACKEND_URL = " + backend_url_json + ";\n"
         "  window.addEventListener('message', function(e) {\n"
         "    if (e.data && e.data.type === 'OUTPUT_DATA') {\n"
         "      window.OUTPUT_INPUT = e.data.input || {};\n"
         "      window.OUTPUT_BACKEND_RESULT = e.data.backendResult || null;\n"
+        "      if (e.data.backendUrl !== undefined) window.OUTPUT_BACKEND_URL = e.data.backendUrl;\n"
         "      window.dispatchEvent(new CustomEvent('output-data-ready'));\n"
         "    }\n"
         "  });\n"
@@ -82,13 +89,27 @@ def _build_data_injection(input_json: str, result_json: str) -> str:
     )
 
 
-def _inject_data_into_html(html: str, input_json: str = "{}", result_json: str = "null") -> str:
-    injection = _build_data_injection(input_json, result_json)
+def _inject_data_into_html(html: str, input_json: str = "{}", result_json: str = "null", backend_url_json: str = "null") -> str:
+    injection = _build_data_injection(input_json, result_json, backend_url_json)
     if "</head>" in html:
         return html.replace("</head>", f"{injection}\n</head>", 1)
     if "<body" in html:
         return html.replace("<body", f"{injection}\n<body", 1)
     return f"{injection}\n{html}"
+
+
+def _backend_url_for_workspace(workspace_id: str) -> str:
+    """Return the JSON-encoded backend URL for the given workspace, or
+    "null" if no runtime is active. Cheap inline lookup so serve_workspace_file
+    doesn't have to think about it."""
+    try:
+        from backend.apps.outputs.runtime import manager as runtime_manager
+        rt = runtime_manager.get(workspace_id)
+        if rt and rt.running and rt.port:
+            return json.dumps(f"http://127.0.0.1:{rt.port}")
+    except Exception:
+        logger.exception("backend url lookup failed for %s", workspace_id)
+    return "null"
 
 
 # URL schemes / prefixes that must NOT have ?token= appended. These are either
@@ -228,7 +249,8 @@ async def serve_workspace_file(workspace_id: str, filepath: str, _d: str = ""):
 
     if filepath == "index.html":
         input_json, result_json = _decode_data_param(_d) if _d else ("{}", "null")
-        content = _inject_data_into_html(content, input_json, result_json)
+        backend_url_json = _backend_url_for_workspace(workspace_id)
+        content = _inject_data_into_html(content, input_json, result_json, backend_url_json)
         # Iframe sub-resource fetches (<link>, <script src>, <img>) drop the
         # parent's ?token= query string, so rewrite the HTML to put the token
         # back on every relative URL — otherwise sub-resources 401.
@@ -248,7 +270,8 @@ async def serve_output_file(output_id: str, filepath: str, _d: str = ""):
 
     if filepath == "index.html":
         input_json, result_json = _decode_data_param(_d) if _d else ("{}", "null")
-        content = _inject_data_into_html(content, input_json, result_json)
+        backend_url_json = _backend_url_for_workspace(output.workspace_id) if output.workspace_id else "null"
+        content = _inject_data_into_html(content, input_json, result_json, backend_url_json)
         content = _inject_token_into_relative_urls(content, get_auth_token())
 
     mime, _ = mimetypes.guess_type(filepath)
@@ -314,6 +337,63 @@ async def seed_workspace(body: WorkspaceSeedRequest):
             json.dump(body.meta, f, indent=2)
 
     return {"path": os.path.abspath(folder)}
+
+
+# ---------------------------------------------------------------------------
+# Persistent app-backend runtime control. backend.py runs as a long-lived
+# subprocess for the lifetime of the App being open; auto-allocated port,
+# log streaming via WebSocket. See runtime.py for the manager.
+# ---------------------------------------------------------------------------
+
+
+def _runtime_status_payload(workspace_id: str) -> dict:
+    from backend.apps.outputs.runtime import manager as runtime_manager
+    rt = runtime_manager.get(workspace_id)
+    if not rt:
+        return {"running": False, "port": None, "has_backend_file": False, "backend_url": None}
+    return {
+        "running": rt.running,
+        "port": rt.port,
+        "has_backend_file": rt.has_backend_file,
+        "backend_url": f"http://127.0.0.1:{rt.port}" if rt.running and rt.port else None,
+    }
+
+
+@outputs.router.post("/workspace/{workspace_id}/runtime/start")
+async def runtime_start(workspace_id: str):
+    folder = os.path.join(WORKSPACE_DIR, workspace_id)
+    if not os.path.isdir(folder):
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    from backend.apps.outputs.runtime import manager as runtime_manager
+    await runtime_manager.attach(workspace_id, os.path.abspath(folder))
+    return _runtime_status_payload(workspace_id)
+
+
+@outputs.router.post("/workspace/{workspace_id}/runtime/stop")
+async def runtime_stop(workspace_id: str):
+    from backend.apps.outputs.runtime import manager as runtime_manager
+    await runtime_manager.detach(workspace_id)
+    return _runtime_status_payload(workspace_id)
+
+
+@outputs.router.post("/workspace/{workspace_id}/runtime/restart")
+async def runtime_restart(workspace_id: str):
+    folder = os.path.join(WORKSPACE_DIR, workspace_id)
+    if not os.path.isdir(folder):
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    from backend.apps.outputs.runtime import manager as runtime_manager
+    # Restart only if something's attached; otherwise this is a no-op
+    # silently (a hard-reload click while the runtime was already torn
+    # down — we'd rather not silently respawn an orphan).
+    rt = runtime_manager.get(workspace_id)
+    if rt:
+        await runtime_manager.restart(workspace_id, os.path.abspath(folder))
+    return _runtime_status_payload(workspace_id)
+
+
+@outputs.router.get("/workspace/{workspace_id}/runtime/status")
+async def runtime_get_status(workspace_id: str):
+    return _runtime_status_payload(workspace_id)
 
 
 @outputs.router.put("/workspace/{workspace_id}/file/{filepath:path}")

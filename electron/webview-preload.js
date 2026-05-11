@@ -176,4 +176,42 @@ try {
   // to call preventDefault on a wheel event.
   window.addEventListener('wheel', onWheelCapture, { capture: true, passive: false });
   document.addEventListener('wheel', onWheelCapture, { capture: true, passive: false });
+
+  // ---------------------------------------------------------------------------
+  // [FRONTEND] console capture for the App Builder Terminal pane.
+  //
+  // Wrap window.console.{log,warn,error,info,debug} so each call also goes
+  // out via ipcRenderer.sendToHost('webview-console', {level, text}). The
+  // embedding <webview> element's ipc-message listener in ViewPreview
+  // forwards these to ViewEditor, which interleaves them with [BACKEND]
+  // lines coming over the runtime WS.
+  //
+  // Stringify args defensively — most console.log calls pass primitives or
+  // objects, but a thrown Error has a stack we want, and circular objects
+  // would blow up JSON.stringify. Fall back to String() for everything
+  // that won't serialize cleanly.
+  const _stringifyArg = (a) => {
+    if (a === null) return 'null';
+    if (a === undefined) return 'undefined';
+    if (typeof a === 'string') return a;
+    if (typeof a === 'number' || typeof a === 'boolean') return String(a);
+    if (a instanceof Error) return a.stack || `${a.name}: ${a.message}`;
+    try {
+      return JSON.stringify(a);
+    } catch (_) {
+      try { return String(a); } catch (__) { return '[unserializable]'; }
+    }
+  };
+  const _consoleLevels = ['log', 'warn', 'error', 'info', 'debug'];
+  for (const level of _consoleLevels) {
+    const orig = window.console[level];
+    if (typeof orig !== 'function') continue;
+    window.console[level] = function (...args) {
+      try {
+        const text = args.map(_stringifyArg).join(' ');
+        ipcRenderer.sendToHost('webview-console', { level, text });
+      } catch (_) { /* never break the page's own logging */ }
+      try { return orig.apply(this, args); } catch (_) {}
+    };
+  }
 } catch (_) {}

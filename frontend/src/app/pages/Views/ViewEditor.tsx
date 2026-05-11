@@ -7,8 +7,6 @@ import TextField from '@mui/material/TextField';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import Tooltip from '@mui/material/Tooltip';
-import CircularProgress from '@mui/material/CircularProgress';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import HtmlIcon from '@mui/icons-material/Code';
 import PythonIcon from '@mui/icons-material/Terminal';
 import SchemaIcon from '@mui/icons-material/DataObject';
@@ -19,20 +17,20 @@ import FolderIcon from '@mui/icons-material/Folder';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import Collapse from '@mui/material/Collapse';
-import Chip from '@mui/material/Chip';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { createDraftSession, removeDraftSession, fetchSession } from '@/shared/state/agentsSlice';
-import { createOutput, updateOutput, Output, executeOutput, OutputExecuteResult, SERVE_BASE } from '@/shared/state/outputsSlice';
+import { createOutput, updateOutput, Output, SERVE_BASE } from '@/shared/state/outputsSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import AgentChat from '../AgentChat/AgentChat';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ViewPreview, { ViewPreviewHandle } from './ViewPreview';
+import TerminalPanel, { TerminalLine } from './TerminalPanel';
 import { getDefault } from './InputSchemaForm';
 import CodeEditor from './CodeEditor';
 import { ElementSelectionProvider } from '@/app/components/ElementSelectionContext';
 import { captureViewThumbnail } from './captureViewThumbnail';
-import { API_BASE } from '@/shared/config';
+import { API_BASE, getAuthToken } from '@/shared/config';
 import { onboardingBus } from '@/app/components/Onboarding/eventBus';
 
 const WORKSPACE_API = `${API_BASE}/outputs/workspace`;
@@ -98,113 +96,6 @@ function buildFileTree(filePaths: string[]): FileTreeNode[] {
 
   return root;
 }
-
-interface ConsoleEntry {
-  timestamp: number;
-  inputData: Record<string, any>;
-  stdout: string | null;
-  stderr: string | null;
-  backendResult: Record<string, any> | null;
-  error: string | null;
-  source: string;
-  running?: boolean;
-}
-
-interface ConsolePanelProps {
-  entry: ConsoleEntry | null;
-  c: ReturnType<typeof useClaudeTokens>;
-}
-
-const ConsolePanel: React.FC<ConsolePanelProps> = ({ entry, c }) => {
-  const sectionSx = { mb: 2 };
-  const labelBase = { fontSize: '0.7rem' as const, fontWeight: 600, fontFamily: c.font.mono, mb: 0.5 };
-  const codeBoxSx = { bgcolor: '#161b22', borderRadius: 1, p: 1.5, border: '1px solid #21262d' };
-  const preStyle = { fontSize: '0.72rem', fontFamily: c.font.mono, color: '#c9d1d9', whiteSpace: 'pre-wrap' as const, wordBreak: 'break-all' as const, m: 0 };
-
-  if (!entry) {
-    return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 1, bgcolor: '#0d1117' }}>
-        <Typography sx={{ fontFamily: c.font.mono, fontSize: '2rem', color: '#21262d', fontWeight: 700 }}>{'>_'}</Typography>
-        <Typography sx={{ color: '#8b949e', fontSize: '0.82rem' }}>No execution output yet</Typography>
-        <Typography sx={{ color: '#484f58', fontSize: '0.75rem' }}>Run the backend to see results here</Typography>
-      </Box>
-    );
-  }
-
-  if (entry.running) {
-    return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 1.5, bgcolor: '#0d1117' }}>
-        <CircularProgress size={24} sx={{ color: '#58a6ff' }} />
-        <Typography sx={{ color: '#8b949e', fontSize: '0.82rem', fontFamily: c.font.mono }}>Executing backend…</Typography>
-      </Box>
-    );
-  }
-
-  return (
-    <Box sx={{ height: '100%', bgcolor: '#0d1117', overflow: 'auto' }}>
-      <Box sx={{ p: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, pb: 1.5, borderBottom: '1px solid #21262d' }}>
-          <Typography sx={{ fontSize: '0.72rem', fontFamily: c.font.mono, color: '#8b949e' }}>
-            {new Date(entry.timestamp).toLocaleTimeString()}
-          </Typography>
-          <Chip label={entry.source} size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600, bgcolor: '#1f6feb20', color: '#58a6ff', fontFamily: c.font.mono }} />
-          {entry.error && (
-            <Chip label="ERROR" size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 700, bgcolor: '#f8717120', color: '#f87171', fontFamily: c.font.mono }} />
-          )}
-        </Box>
-
-        <Box sx={sectionSx}>
-          <Typography sx={{ ...labelBase, color: '#60a5fa' }}>▸ Input Data</Typography>
-          <Box sx={codeBoxSx}>
-            <Typography component="pre" sx={preStyle}>{JSON.stringify(entry.inputData, null, 2)}</Typography>
-          </Box>
-        </Box>
-
-        {entry.stdout && (
-          <Box sx={sectionSx}>
-            <Typography sx={{ ...labelBase, color: '#4ade80' }}>▸ stdout</Typography>
-            <Box sx={codeBoxSx}>
-              <Typography component="pre" sx={preStyle}>{entry.stdout}</Typography>
-            </Box>
-          </Box>
-        )}
-
-        {entry.stderr && (
-          <Box sx={sectionSx}>
-            <Typography sx={{ ...labelBase, color: '#fbbf24' }}>▸ stderr</Typography>
-            <Box sx={codeBoxSx}>
-              <Typography component="pre" sx={preStyle}>{entry.stderr}</Typography>
-            </Box>
-          </Box>
-        )}
-
-        {entry.backendResult && (
-          <Box sx={sectionSx}>
-            <Typography sx={{ ...labelBase, color: '#a78bfa' }}>▸ Result</Typography>
-            <Box sx={codeBoxSx}>
-              <Typography component="pre" sx={preStyle}>{JSON.stringify(entry.backendResult, null, 2)}</Typography>
-            </Box>
-          </Box>
-        )}
-
-        {entry.error && (
-          <Box sx={sectionSx}>
-            <Typography sx={{ ...labelBase, color: '#f87171' }}>✗ Error</Typography>
-            <Box sx={{ bgcolor: '#f8717110', borderRadius: 1, p: 1.5, border: '1px solid #f8717130' }}>
-              <Typography component="pre" sx={{ ...preStyle, color: '#fca5a5' }}>{entry.error}</Typography>
-            </Box>
-          </Box>
-        )}
-
-        {!entry.stdout && !entry.stderr && !entry.backendResult && !entry.error && (
-          <Typography sx={{ fontSize: '0.75rem', color: '#8b949e', fontFamily: c.font.mono }}>
-            No backend code to execute. Only input data was sent to the app.
-          </Typography>
-        )}
-      </Box>
-    </Box>
-  );
-};
 
 interface FileTreeItemProps {
   node: FileTreeNode;
@@ -332,7 +223,7 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
 
   const TAB_PREVIEW = 0;
   const TAB_CODE = 1;
-  const TAB_CONSOLE = 4;
+  const TAB_TERMINAL = 2;
 
   const [activeTab, setActiveTab] = useState(TAB_PREVIEW);
   const [activeFile, setActiveFile] = useState('index.html');
@@ -350,10 +241,14 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
   const lastReloadedIndexHtmlRef = useRef<string>(initialFiles['index.html'] ?? '');
   const PREVIEW_RELOAD_DEBOUNCE_MS = 600;
   const savingRef = useRef(false);
-  const [executeResult, setExecuteResult] = useState<OutputExecuteResult | null>(null);
-  const [showConsole, setShowConsole] = useState(false);
-  const [consoleEntry, setConsoleEntry] = useState<ConsoleEntry | null>(null);
-  const [hasNewConsoleOutput, setHasNewConsoleOutput] = useState(false);
+  // Terminal pane state. Persistent app-backend stdout/stderr arrives via
+  // the runtime WS; the running app's console.log/warn/error arrives via
+  // ipc-message from the webview-preload bridge. Both feed into a single
+  // chronological buffer here so the user sees interleaved [FRONTEND] /
+  // [BACKEND] / [RUNTIME] lines.
+  const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([]);
+  const terminalLineIdRef = useRef(0);
+  const TERMINAL_BUFFER_CAP = 5000; // trim FIFO past this so we don't grow unbounded
 
   const previewRef = useRef<ViewPreviewHandle>(null);
 
@@ -717,24 +612,86 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
     }
   };
 
-  const handleRunPreview = async () => {
-    const eid = output?.id ?? createdIdRef.current;
-    if (!eid) {
-      setExecuteResult(null);
-      return;
-    }
-    setConsoleEntry({ timestamp: Date.now(), inputData: testInput, stdout: null, stderr: null, backendResult: null, error: null, source: 'execute', running: true });
-    setHasNewConsoleOutput(true);
-    try {
-      const res = await dispatch(
-        executeOutput({ output_id: eid, input_data: testInput })
-      ).unwrap();
-      setExecuteResult(res);
-      setConsoleEntry({ timestamp: Date.now(), inputData: res.input_data, stdout: res.stdout ?? null, stderr: res.stderr ?? null, backendResult: res.backend_result, error: res.error, source: 'execute' });
-    } catch (e: any) {
-      setConsoleEntry({ timestamp: Date.now(), inputData: testInput, stdout: null, stderr: null, backendResult: null, error: e?.message || 'Execution failed', source: 'execute' });
-    }
-  };
+  const appendTerminalLine = useCallback((source: TerminalLine['source'], level: string, text: string) => {
+    setTerminalLines((prev) => {
+      const next = prev.concat({
+        id: ++terminalLineIdRef.current,
+        source,
+        level,
+        text,
+      });
+      // FIFO trim — keep the tail. Past TERMINAL_BUFFER_CAP, the head is
+      // ancient and not what the user is reading.
+      if (next.length > TERMINAL_BUFFER_CAP) {
+        return next.slice(next.length - TERMINAL_BUFFER_CAP);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleWebviewConsole = useCallback((level: string, text: string) => {
+    appendTerminalLine('frontend', level, text);
+  }, [appendTerminalLine]);
+
+  // Persistent backend lifecycle. Once we know the workspaceId:
+  //   1. POST /runtime/start so the workspace's backend.py (if present)
+  //      gets spawned and an `OUTPUT_BACKEND_URL` lands in the preview's
+  //      injected script.
+  //   2. Open the runtime WS to stream [BACKEND] stdout/stderr into the
+  //      Terminal pane.
+  //   3. On unmount, POST /runtime/stop. Multiple editors on the same
+  //      workspace share the runtime (ref-counted server-side); detach
+  //      is a no-op until the last subscriber leaves.
+  const runtimeWsRef = useRef<WebSocket | null>(null);
+  useEffect(() => {
+    if (!workspaceId) return;
+    let cancelled = false;
+    let ws: WebSocket | null = null;
+
+    const auth = getAuthToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (auth) headers.Authorization = `Bearer ${auth}`;
+
+    (async () => {
+      try {
+        await fetch(`${API_BASE}/outputs/workspace/${workspaceId}/runtime/start`, {
+          method: 'POST',
+          headers,
+        });
+      } catch (_) { /* the runtime endpoints surface errors via the log WS */ }
+      if (cancelled) return;
+      try {
+        const wsBase = API_BASE.replace(/^http/, 'ws').replace(/\/api$/, '');
+        const url = `${wsBase}/ws/outputs/runtime/${workspaceId}/logs?token=${encodeURIComponent(auth || '')}`;
+        ws = new WebSocket(url);
+        runtimeWsRef.current = ws;
+        ws.onmessage = (ev) => {
+          try {
+            const msg = JSON.parse(ev.data);
+            if (msg.event === 'runtime:log') {
+              const stream = msg.data?.stream || 'stdout';
+              const text = msg.data?.text || '';
+              if (stream === 'runtime') {
+                appendTerminalLine('runtime', 'info', text);
+              } else {
+                appendTerminalLine('backend', stream, text);
+              }
+            }
+          } catch (_) {}
+        };
+      } catch (_) {}
+    })();
+
+    return () => {
+      cancelled = true;
+      try { ws?.close(); } catch (_) {}
+      runtimeWsRef.current = null;
+      fetch(`${API_BASE}/outputs/workspace/${workspaceId}/runtime/stop`, {
+        method: 'POST',
+        headers,
+      }).catch(() => {});
+    };
+  }, [workspaceId, appendTerminalLine]);
 
   const workspaceServeUrl = workspaceId
     ? `${SERVE_BASE}/workspace/${workspaceId}/serve/index.html`
@@ -969,70 +926,19 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
           >
             <Tab label="Preview" value={TAB_PREVIEW} />
             <Tab label="Code" value={TAB_CODE} />
-            {showConsole && <Tab label="Console" value={TAB_CONSOLE} />}
+            <Tab label="Terminal" value={TAB_TERMINAL} />
           </Tabs>
           {activeTab === TAB_PREVIEW && (
-            <>
-              <Tooltip title="Reload preview">
-                <IconButton
-                  size="small"
-                  onClick={() => previewRef.current?.reload()}
-                  sx={{ color: c.text.muted }}
-                >
-                  <RefreshIcon sx={{ fontSize: 18 }} />
-                </IconButton>
-              </Tooltip>
-              {effectiveId && (
-                <Tooltip title="Execute with backend code">
-                  <IconButton
-                    size="small"
-                    onClick={handleRunPreview}
-                    sx={{ mr: 1, color: c.accent.primary }}
-                  >
-                    <PlayArrowIcon sx={{ fontSize: 18 }} />
-                  </IconButton>
-                </Tooltip>
-              )}
-            </>
+            <Tooltip title="Reload preview">
+              <IconButton
+                size="small"
+                onClick={() => previewRef.current?.reload()}
+                sx={{ mr: 1, color: c.text.muted }}
+              >
+                <RefreshIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </Tooltip>
           )}
-          <Tooltip title={showConsole ? 'Hide console' : 'Show console'}>
-            <Box
-              onClick={() => {
-                if (showConsole && activeTab === TAB_CONSOLE) {
-                  setShowConsole(false);
-                  setActiveTab(TAB_PREVIEW);
-                } else if (showConsole) {
-                  setShowConsole(false);
-                  if (activeTab === TAB_CONSOLE) setActiveTab(TAB_PREVIEW);
-                } else {
-                  setShowConsole(true);
-                  setHasNewConsoleOutput(false);
-                  setActiveTab(TAB_CONSOLE);
-                }
-              }}
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                px: 0.75,
-                py: 0.5,
-                mr: 1,
-                borderRadius: 1,
-                position: 'relative',
-                bgcolor: showConsole ? c.accent.primary + '15' : 'transparent',
-                '&:hover': { bgcolor: showConsole ? c.accent.primary + '25' : c.bg.elevated },
-                transition: 'background-color 0.15s',
-              }}
-            >
-              <Typography sx={{ fontFamily: c.font.mono, fontSize: '0.72rem', fontWeight: 700, color: showConsole ? c.accent.primary : c.text.ghost, lineHeight: 1 }}>
-                {'>_'}
-              </Typography>
-              {hasNewConsoleOutput && !showConsole && (
-                <Box sx={{ position: 'absolute', top: 2, right: 2, width: 6, height: 6, borderRadius: '50%', bgcolor: '#4ade80' }} />
-              )}
-            </Box>
-          </Tooltip>
         </Box>
 
         {/* Tab content */}
@@ -1043,7 +949,8 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
               serveUrl={workspaceServeUrl}
               frontendCode={!workspaceServeUrl ? (files['index.html'] ?? '') : undefined}
               inputData={testInput}
-              backendResult={executeResult?.backend_result}
+              backendResult={null}
+              onConsoleMessage={handleWebviewConsole}
             />
           )}
           {activeTab === TAB_CODE && (
@@ -1162,8 +1069,8 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
               </Box>
             </Box>
           )}
-          {activeTab === TAB_CONSOLE && (
-            <ConsolePanel entry={consoleEntry} c={c} />
+          {activeTab === TAB_TERMINAL && (
+            <TerminalPanel lines={terminalLines} />
           )}
         </Box>
       </Box>

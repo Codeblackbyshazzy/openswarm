@@ -252,6 +252,66 @@ def _ws_auth_ok(websocket: WebSocket) -> bool:
     return True
 
 
+@app.websocket("/ws/outputs/runtime/{workspace_id}/logs")
+async def websocket_runtime_logs(websocket: WebSocket, workspace_id: str):
+    """Stream the persistent app-backend's stdout/stderr to the Terminal
+    pane. On connect we replay the runtime's ring buffer so a Terminal
+    tab opened mid-session sees the context it missed, then we tail
+    every subsequent line until disconnect."""
+    if not _ws_auth_ok(websocket):
+        return
+    await websocket.accept()
+    from backend.apps.outputs.runtime import manager as runtime_manager
+    rt = runtime_manager.get(workspace_id)
+    if rt is None:
+        # No active runtime — surface that to the client and close. The
+        # frontend will call /runtime/start and reconnect.
+        try:
+            await websocket.send_text(json.dumps({
+                "event": "runtime:not_attached",
+                "workspace_id": workspace_id,
+            }))
+        finally:
+            await websocket.close()
+        return
+    # Buffer log lines from the synchronous subscriber callback into an
+    # asyncio.Queue we can `await` on the WS sender side. The subscribe
+    # call replays the ring buffer synchronously, so the queue gets
+    # primed with existing lines before we enter the loop.
+    queue: asyncio.Queue[tuple[str, str]] = asyncio.Queue()
+
+    def _on_line(line) -> None:
+        try:
+            queue.put_nowait((line.stream, line.text))
+        except asyncio.QueueFull:
+            pass
+
+    unsubscribe = rt.subscribe(_on_line)
+    try:
+        # Initial status frame so the client knows port/running state
+        # without a second HTTP round-trip.
+        await websocket.send_text(json.dumps({
+            "event": "runtime:status",
+            "workspace_id": workspace_id,
+            "data": {
+                "running": rt.running,
+                "port": rt.port,
+                "backend_url": f"http://127.0.0.1:{rt.port}" if rt.running and rt.port else None,
+            },
+        }))
+        while True:
+            stream, text = await queue.get()
+            await websocket.send_text(json.dumps({
+                "event": "runtime:log",
+                "workspace_id": workspace_id,
+                "data": {"stream": stream, "text": text},
+            }))
+    except WebSocketDisconnect:
+        pass
+    finally:
+        unsubscribe()
+
+
 @app.websocket("/ws/dashboard")
 async def websocket_dashboard(websocket: WebSocket):
     if not _ws_auth_ok(websocket):
