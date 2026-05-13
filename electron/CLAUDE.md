@@ -2,6 +2,10 @@
 
 Electron 40.x (CastLabs DRM build) desktop shell + auto-updater via GitHub Releases. Entry: `main.js`. Version is in `package.json`. See root `CLAUDE.md` for repo-wide constraints.
 
+## Coding precedences
+
+Full precedences live in root [CLAUDE.md](../.claude/CLAUDE.md). Always: **understand the end goal before coding** (what does the user actually need?); **reuse before you write** (grep existing IPC handlers / helpers in `main.js` — most needs already have one); ~300 LOC/file ceiling; downward-tree imports; no comments except WHY-non-obvious; test the packaged build path after meaningful changes (not just dev); weigh speed (startup time), efficiency (memory), robustness (auto-updater, OAuth windows), UX, security (signed binaries, no plaintext secrets) on every change.
+
 ## Build / release
 
 - Local build: `npm run build` → produces `build-staging/` containing the frontend dist, backend bundle, standalone Python 3.13, and the 9router binary. Build artifacts are ephemeral; not git-tracked.

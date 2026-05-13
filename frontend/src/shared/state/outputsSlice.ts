@@ -60,6 +60,12 @@ export interface OutputExecuteResult {
   stdout: string | null;
   stderr: string | null;
   error: string | null;
+  // Present when the backend AST validator flagged risky imports/calls and
+  // the caller didn't pass force=true. UI shows these alongside `code_preview`
+  // in a "review and Run Anyway" dialog; resubmitting with force:true bypasses
+  // the gate. Absent (undefined) on the happy path.
+  warnings?: string[] | null;
+  code_preview?: string | null;
 }
 
 interface OutputsState {
@@ -115,7 +121,9 @@ export const deleteOutput = createAsyncThunk('outputs/delete', async (id: string
 
 export const executeOutput = createAsyncThunk(
   'outputs/execute',
-  async (body: { output_id: string; input_data: Record<string, any> }) => {
+  // `force` opts past the AST warnings gate — only set after the user has
+  // seen the code preview in the run dialog and clicked Run Anyway.
+  async (body: { output_id: string; input_data: Record<string, any>; force?: boolean }) => {
     const res = await fetch(`${OUTPUTS_API}/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

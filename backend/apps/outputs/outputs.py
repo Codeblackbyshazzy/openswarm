@@ -16,7 +16,7 @@ from backend.apps.outputs.models import (
     Output, OutputCreate, OutputUpdate, OutputExecute, OutputExecuteResult,
     VibeCodeRequest, WorkspaceSeedRequest,
 )
-from backend.apps.outputs.executor import execute_backend_code
+from backend.apps.outputs.executor import execute_backend_code, get_code_warnings
 from backend.apps.outputs.view_builder_templates import (
     VIEW_TEMPLATE_FILES,
     load_app_builder_skill,
@@ -586,8 +586,14 @@ async def write_workspace_file(workspace_id: str, filepath: str, body: dict):
     folder = os.path.join(WORKSPACE_DIR, workspace_id)
     if not os.path.isdir(folder):
         raise HTTPException(status_code=404, detail="Workspace not found")
+    folder_norm = os.path.normpath(folder)
     full_path = os.path.normpath(os.path.join(folder, filepath))
-    if not full_path.startswith(os.path.normpath(folder)):
+    # `startswith(folder_norm + os.sep)` (not just folder_norm) so a workspace
+    # `abc-123` can't be tricked into writing into a sibling `abc-1234-evil` —
+    # prefix-string collision rather than path-component containment. Today's
+    # UUID-format ids make the collision unlikely in practice, but the check
+    # is one character and immunizes future id schemes.
+    if full_path != folder_norm and not full_path.startswith(folder_norm + os.sep):
         raise HTTPException(status_code=403, detail="Path traversal not allowed")
     os.makedirs(os.path.dirname(full_path), exist_ok=True)
     with open(full_path, "w") as f:
@@ -601,8 +607,9 @@ async def delete_workspace_file(workspace_id: str, filepath: str):
     folder = os.path.join(WORKSPACE_DIR, workspace_id)
     if not os.path.isdir(folder):
         raise HTTPException(status_code=404, detail="Workspace not found")
+    folder_norm = os.path.normpath(folder)
     full_path = os.path.normpath(os.path.join(folder, filepath))
-    if not full_path.startswith(os.path.normpath(folder)):
+    if full_path != folder_norm and not full_path.startswith(folder_norm + os.sep):
         raise HTTPException(status_code=403, detail="Path traversal not allowed")
     if os.path.isfile(full_path):
         os.remove(full_path)
@@ -782,16 +789,33 @@ async def execute_output(body: OutputExecute):
     stdout_text = None
     stderr_text = None
     error = None
+    warnings_out: Optional[list[str]] = None
+    code_preview: Optional[str] = None
     if output.backend_code:
-        try:
-            exec_result = await execute_backend_code(
-                output.backend_code, body.input_data
-            )
-            backend_result = exec_result.result
-            stdout_text = exec_result.stdout
-            stderr_text = exec_result.stderr
-        except Exception as e:
-            error = str(e)
+        # HITL gate: collect warnings up front. If the caller hasn't opted
+        # in via force=True AND the code touches anything outside the safe
+        # allowlist, return the warnings + the code itself so the UI can
+        # show a preview dialog. No subprocess is spawned on this path —
+        # zero-cost when warnings exist, identical-to-before when they
+        # don't.
+        if not body.force:
+            warnings_out = get_code_warnings(output.backend_code)
+            if warnings_out:
+                code_preview = output.backend_code
+        if not warnings_out:
+            try:
+                # We've either already vetted (no warnings above) or the
+                # user explicitly opted in with force=True. Pass
+                # skip_validation=True so we don't pay for a redundant
+                # AST walk inside execute_backend_code.
+                exec_result = await execute_backend_code(
+                    output.backend_code, body.input_data, skip_validation=True
+                )
+                backend_result = exec_result.result
+                stdout_text = exec_result.stdout
+                stderr_text = exec_result.stderr
+            except Exception as e:
+                error = str(e)
 
     return OutputExecuteResult(
         output_id=output.id,
@@ -802,6 +826,8 @@ async def execute_output(body: OutputExecute):
         stdout=stdout_text,
         stderr=stderr_text,
         error=error,
+        warnings=warnings_out if warnings_out else None,
+        code_preview=code_preview,
     ).model_dump()
 
 

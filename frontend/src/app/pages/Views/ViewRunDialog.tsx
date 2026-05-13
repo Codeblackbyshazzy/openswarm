@@ -7,6 +7,7 @@ import Button from '@mui/material/Button';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { Output, executeOutput, OutputExecuteResult, getFrontendCode, getBackendCode, buildServeUrl, SERVE_BASE } from '@/shared/state/outputsSlice';
 import { useAppDispatch } from '@/shared/hooks';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
@@ -27,17 +28,23 @@ const ViewRunDialog: React.FC<Props> = ({ output, onClose }) => {
   const [result, setResult] = useState<OutputExecuteResult | null>(null);
   const [running, setRunning] = useState(false);
 
-  const handleRun = async () => {
+  const warnings = result?.warnings && result.warnings.length > 0 ? result.warnings : null;
+  const codePreview = result?.code_preview || null;
+
+  const runWith = async (force: boolean) => {
     setRunning(true);
     try {
       const res = await dispatch(
-        executeOutput({ output_id: output.id, input_data: inputData })
+        executeOutput({ output_id: output.id, input_data: inputData, force })
       ).unwrap();
       setResult(res);
     } finally {
       setRunning(false);
     }
   };
+
+  const handleRun = () => runWith(false);
+  const handleRunAnyway = () => runWith(true);
 
   return (
     <Dialog open onClose={onClose} maxWidth="lg" fullWidth>
@@ -107,7 +114,47 @@ const ViewRunDialog: React.FC<Props> = ({ output, onClose }) => {
                   <CircularProgress size={28} />
                 </Box>
               )}
-              {result ? (
+              {warnings && codePreview ? (
+                <Box sx={{ p: 2, overflow: 'auto', height: '100%', display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <WarningAmberIcon sx={{ color: c.status.warning, fontSize: 22 }} />
+                    <Typography sx={{ fontSize: '0.95rem', fontWeight: 600, color: c.text.primary }}>
+                      Review before running
+                    </Typography>
+                  </Box>
+                  <Typography sx={{ fontSize: '0.8rem', color: c.text.secondary }}>
+                    This Output's backend code does things outside the safe
+                    data-shaping allowlist. Read it and decide whether to run.
+                  </Typography>
+                  <Box
+                    component="ul"
+                    sx={{ m: 0, pl: 2.5, color: c.text.secondary, fontSize: '0.78rem', lineHeight: 1.55 }}
+                  >
+                    {warnings.map((w, i) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </Box>
+                  <Box
+                    sx={{
+                      flex: 1,
+                      minHeight: 120,
+                      mt: 0.5,
+                      p: 1.25,
+                      borderRadius: 1,
+                      border: `1px solid ${c.border.subtle}`,
+                      bgcolor: c.bg.secondary,
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontSize: '0.74rem',
+                      lineHeight: 1.5,
+                      color: c.text.primary,
+                      whiteSpace: 'pre',
+                      overflow: 'auto',
+                    }}
+                  >
+                    {codePreview}
+                  </Box>
+                </Box>
+              ) : result ? (
                 <ViewPreview
                   serveUrl={`${SERVE_BASE}/${output.id}/serve/index.html`}
                   frontendCode={result.frontend_code}
@@ -127,14 +174,25 @@ const ViewRunDialog: React.FC<Props> = ({ output, onClose }) => {
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose} sx={{ color: c.text.muted }}>Close</Button>
-        <Button
-          variant="contained"
-          onClick={handleRun}
-          disabled={running}
-          sx={{ bgcolor: c.accent.primary, '&:hover': { bgcolor: c.accent.hover } }}
-        >
-          {running ? 'Running...' : getBackendCode(output) ? 'Execute & Preview' : 'Preview'}
-        </Button>
+        {warnings ? (
+          <Button
+            variant="contained"
+            onClick={handleRunAnyway}
+            disabled={running}
+            sx={{ bgcolor: c.status.warning, '&:hover': { bgcolor: c.status.warning } }}
+          >
+            {running ? 'Running...' : 'Run anyway'}
+          </Button>
+        ) : (
+          <Button
+            variant="contained"
+            onClick={handleRun}
+            disabled={running}
+            sx={{ bgcolor: c.accent.primary, '&:hover': { bgcolor: c.accent.hover } }}
+          >
+            {running ? 'Running...' : getBackendCode(output) ? 'Execute & Preview' : 'Preview'}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );

@@ -2,6 +2,10 @@
 
 FastAPI orchestrator. Entry: `backend/main.py` (uvicorn `:8324`, REST `/api/*`, WS `/ws/*`, Swagger `/docs`). See root `CLAUDE.md` for repo-wide constraints.
 
+## Coding precedences
+
+Full precedences live in root [CLAUDE.md](../.claude/CLAUDE.md). Always: **understand the end goal before coding** (what does the user actually need?); **reuse before you write** (grep existing routes / SubApps / helpers — most needs already have one); ~300 LOC/file ceiling; downward-tree imports; no comments except WHY-non-obvious; test after meaningful changes; weigh speed, efficiency, robustness, UX, security on every change.
+
 ## Run / test
 
 - Dev: `bash backend/run.sh` (creates `.venv/`, installs `requirements.txt`, runs uvicorn with `--reload`).

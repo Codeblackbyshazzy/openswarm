@@ -2,6 +2,10 @@
 
 React 18 + TypeScript + webpack 5 + Redux. Entry: `src/app/Main.tsx`. Dev server on `:3000` proxies REST and WebSocket to backend on `:8324`. See root `CLAUDE.md` for repo-wide constraints.
 
+## Coding precedences
+
+Full precedences live in root [CLAUDE.md](../.claude/CLAUDE.md). Always: **understand the end goal before coding** (what does the user actually need?); **reuse before you write** (grep existing components / hooks / Redux slices — most needs already have one); ~300 LOC/file ceiling; downward-tree imports (`shared/` → `app/components/` → `pages/`); no comments except WHY-non-obvious; manually exercise the UI after meaningful changes; weigh speed (no double renders), efficiency, robustness, UX (loading/error/animation states), security on every change.
+
 ## Run
 
 - Dev (full stack): `bash run.sh`.

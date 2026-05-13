@@ -123,6 +123,14 @@ class OutputUpdate(BaseModel):
 class OutputExecute(BaseModel):
     output_id: str
     input_data: dict[str, Any] = Field(default_factory=dict)
+    # When False (default), `/execute` returns AST warnings instead of
+    # running if the backend code touches anything outside the safe
+    # data-shaping allowlist. The UI shows those warnings to the user and
+    # re-submits with force=True after they click "Run Anyway." This is
+    # a UX gate, not a security one — anyone holding the auth token can
+    # set force=True; the value is providing the user explicit visibility
+    # of what's about to execute.
+    force: bool = False
 
 
 class OutputExecuteResult(BaseModel):
@@ -134,6 +142,11 @@ class OutputExecuteResult(BaseModel):
     stdout: Optional[str] = None
     stderr: Optional[str] = None
     error: Optional[str] = None
+    # Populated when the AST validator flagged risky constructs and the
+    # caller didn't set force=True. When present, `backend_result` is null
+    # because execution was deferred pending user consent.
+    warnings: Optional[list[str]] = None
+    code_preview: Optional[str] = None
 
 
 class WorkspaceSeedRequest(BaseModel):
