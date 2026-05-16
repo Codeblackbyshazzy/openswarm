@@ -409,7 +409,7 @@ const ToolSection: React.FC<ToolSectionProps> = ({
         )}
       </Box>
     </CardContent>
-    <Collapse in={open && enabled}>
+    <Collapse in={open && enabled} timeout={0} unmountOnExit>
       <Box sx={{ px: 2, pb: 2, pt: 0, borderTop: `1px solid ${c.border.subtle}` }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1.5, mb: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -438,7 +438,7 @@ const ToolSection: React.FC<ToolSectionProps> = ({
                   </Box>
                   <PermToggle value={catPolicy === 'mixed' ? 'ask' : catPolicy} onChange={(v) => onCategoryPermissionChange(catTools.map((t) => t.name), v)} />
                 </Box>
-                <Collapse in={isOpen}>
+                <Collapse in={isOpen} timeout={0} unmountOnExit>
                   <Box sx={{ px: 1, pb: 1 }}>
                     {catTools.map((bt) => {
                       const toolPolicy = builtinPermissions[bt.name] || 'always_allow';
@@ -1131,7 +1131,7 @@ const Tools: React.FC = () => {
           <Typography sx={{ color: c.text.muted, fontWeight: 600, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Built-in Action Sets</Typography>
           <Chip label={coreTools.length + deferredTools.length + outputs.length + browserTools.length} size="small" sx={{ bgcolor: c.bg.secondary, color: c.text.muted, fontSize: '0.7rem', height: 18, minWidth: 24, '& .MuiChip-label': { px: 0.8 } }} />
         </Box>
-        <Collapse in={builtinSectionOpen}>
+        <Collapse in={builtinSectionOpen} timeout={0} unmountOnExit>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pl: 1 }}>
 
       {/* Core Tools */}
@@ -1183,7 +1183,7 @@ const Tools: React.FC = () => {
               )}
             </Box>
           </CardContent>
-          <Collapse in={viewsSectionOpen && viewsSectionEnabled}>
+          <Collapse in={viewsSectionOpen && viewsSectionEnabled} timeout={0} unmountOnExit>
             <Box sx={{ px: 2, pb: 2, pt: 0, borderTop: `1px solid ${c.border.subtle}` }}>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 1.5 }}>
                 {outputs.map((out) => {
@@ -1265,7 +1265,7 @@ const Tools: React.FC = () => {
               )}
             </Box>
           </CardContent>
-          <Collapse in={browserSectionOpen && browserSectionEnabled}>
+          <Collapse in={browserSectionOpen && browserSectionEnabled} timeout={0} unmountOnExit>
             <Box sx={{ px: 2, pb: 2, pt: 0, borderTop: `1px solid ${c.border.subtle}` }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1.5, mb: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -1299,7 +1299,7 @@ const Tools: React.FC = () => {
                           <Tooltip title="Always deny"><IconButton size="small" onClick={() => handleBuiltinCategoryPermissionChange(browserDelegationTools.map((t) => t.name), 'deny')} sx={{ p: 0.4, borderRadius: 1, bgcolor: groupPolicy === 'deny' ? `${c.status.error}20` : 'transparent', color: groupPolicy === 'deny' ? c.status.error : c.text.ghost, '&:hover': { bgcolor: `${c.status.error}15`, color: c.status.error } }}><BlockIcon sx={{ fontSize: 16 }} /></IconButton></Tooltip>
                         </Box>
                       </Box>
-                      <Collapse in={isOpen}>
+                      <Collapse in={isOpen} timeout={0} unmountOnExit>
                         <Box sx={{ px: 1, pb: 1 }}>
                           {browserDelegationTools.map((bt) => {
                             const toolPolicy = builtinPermissions[bt.name] || 'always_allow';
@@ -1347,7 +1347,7 @@ const Tools: React.FC = () => {
                           <Tooltip title="Always deny"><IconButton size="small" onClick={() => handleBuiltinCategoryPermissionChange(browserActionTools.map((t) => t.name), 'deny')} sx={{ p: 0.4, borderRadius: 1, bgcolor: groupPolicy === 'deny' ? `${c.status.error}20` : 'transparent', color: groupPolicy === 'deny' ? c.status.error : c.text.ghost, '&:hover': { bgcolor: `${c.status.error}15`, color: c.status.error } }}><BlockIcon sx={{ fontSize: 16 }} /></IconButton></Tooltip>
                         </Box>
                       </Box>
-                      <Collapse in={isOpen}>
+                      <Collapse in={isOpen} timeout={0} unmountOnExit>
                         <Box sx={{ px: 1, pb: 1 }}>
                           {browserActionTools.map((bt) => {
                             const toolPolicy = builtinPermissions[bt.name] || 'always_allow';
@@ -1388,7 +1388,7 @@ const Tools: React.FC = () => {
           <Typography sx={{ color: c.text.muted, fontWeight: 600, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Custom Action Sets</Typography>
           <Chip label={tools.length + uninstalledIntegrations.length} size="small" sx={{ bgcolor: c.bg.secondary, color: c.text.muted, fontSize: '0.7rem', height: 18, minWidth: 24, '& .MuiChip-label': { px: 0.8 } }} />
         </Box>
-        <Collapse in={customSectionOpen}>
+        <Collapse in={customSectionOpen} timeout={0} unmountOnExit>
           {loading ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pl: 1, mt: 1 }}>
               {[0, 1, 2, 3].map((i) => (
@@ -1538,7 +1538,7 @@ const Tools: React.FC = () => {
                           <PermToggle value={svcPolicy === 'mixed' ? 'ask' : svcPolicy} onChange={(v) => handleGroupPermissionChange(tool.id, allNames, v)} />
                         </Box>
                       </Box>
-                      <Collapse in={isOpen}>
+                      <Collapse in={isOpen} timeout={0} unmountOnExit>
                         <Box sx={{ px: 1, pb: 1 }}>
                           {(data.read?.length || 0) > 0 && (
                             <Box sx={{ mt: 0.5 }}>
@@ -1770,7 +1770,7 @@ const Tools: React.FC = () => {
                       </Box>
                     </CardContent>
 
-                    <Collapse in={isExpanded && !isDisabled}>
+                    <Collapse in={isExpanded && !isDisabled} timeout={0} unmountOnExit>
                         <Box sx={{ px: 2, pb: 2, pt: 0, borderTop: `1px solid ${c.border.subtle}` }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1.5, mb: 1 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -2077,7 +2077,7 @@ const Tools: React.FC = () => {
                       <KeyboardArrowDownIcon sx={{ fontSize: 16, color: c.text.ghost, transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', flexShrink: 0 }} />
                     </Box>
 
-                    <Collapse in={isExpanded}>
+                    <Collapse in={isExpanded} timeout={0} unmountOnExit>
                       <Box sx={{ ml: 4.5, mr: 1.5, mb: 1, px: 2, py: 1.5, bgcolor: c.bg.elevated, borderRadius: 1.5, borderLeft: '2px solid rgba(174,86,48,0.12)' }}>
                         <Typography sx={{ color: c.text.secondary, fontSize: '0.85rem', mb: 1.5, lineHeight: 1.5 }}>
                           {srv.description}

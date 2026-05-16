@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import { useStreamingMessage } from '@/shared/state/streamingSlice';
-import { useTypewriter } from '@/shared/useTypewriter';
 import MessageBubble from './MessageBubble';
 import ToolCallBubble from './ToolCallBubble';
 
@@ -26,11 +25,21 @@ interface Props {
 // local and cheap.
 const StreamingBubble: React.FC<Props> = ({ sessionId, activeBranchId, turnLabel, onStreamGrew }) => {
   const streamingMessage = useStreamingMessage(sessionId);
-  // Typewriter pacing: smooths bursty upstream output into a steady
-  // character-by-character reveal with tiny pauses after punctuation.
-  // The full text always lives in Redux (so resume/replay still works);
-  // this only controls how fast it APPEARS to the user.
-  const typedContent = useTypewriter(streamingMessage?.content ?? '');
+  // Render the raw streaming content as it arrives. We tried a
+  // client-side typewriter (word + char chunking, punctuation pauses)
+  // but it introduced two real problems:
+  //   1. The pacing was slower than Claude's actual emit rate, so the
+  //      visible response lagged behind real arrival by 2-3x.
+  //   2. On stream_end, useStreamingMessage clears and the streamed
+  //      partial vanished, then the final message rendered all at
+  //      once via MessageBubble. That's the "no streaming, just a
+  //      huge block" experience.
+  // The other isolation work (streamingSlice, RAF WS batching,
+  // StreamingBubble as a leaf) is what actually makes streaming feel
+  // smooth: the React tree above this component stays dormant, the
+  // browser renders one growing text node per frame, and the user
+  // sees tokens arrive at the model's natural pace.
+  const typedContent = streamingMessage?.content ?? '';
   // Fire onStreamGrew once per render (i.e. per delta) on a RAF so the
   // host can scroll if it wants to. RAF coalesces multiple deltas in
   // the same frame into one host call. The ref-callback keeps the

@@ -279,8 +279,15 @@ const Modes: React.FC = () => {
                 border: `1px solid ${c.border.subtle}`,
                 borderRadius: 2,
                 boxShadow: c.shadow.sm,
-                '&:hover': { borderColor: mode.color, boxShadow: c.shadow.md },
-                transition: 'border-color 0.2s, box-shadow 0.2s',
+                // Promote each card to its own compositor layer so a
+                // hover-cross between cards in the grid only re-paints
+                // that one card's layer, not the whole grid.
+                willChange: 'transform',
+                // Animate ONLY border-color on hover (cheap). Removing
+                // the box-shadow animation kills the per-frame CPU
+                // paint that fired on every hover-cross.
+                '&:hover': { borderColor: mode.color },
+                transition: 'border-color 0.2s',
               }}
             >
               <CardContent sx={{ pb: 1 }}>

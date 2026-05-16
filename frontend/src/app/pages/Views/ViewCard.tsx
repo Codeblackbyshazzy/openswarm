@@ -29,10 +29,19 @@ const ViewCard: React.FC<Props> = ({ output, onClick, onDelete, onRun }) => {
         border: `1px solid ${c.border.subtle}`,
         bgcolor: c.bg.surface,
         overflow: 'hidden',
-        transition: 'all 0.2s ease',
+        // Promote each card to its own compositor layer so a hover-
+        // cross between cards in the grid only re-paints that one
+        // card's layer, not the entire grid. Same fix we landed on
+        // the dashboard AgentCard.
+        willChange: 'transform',
+        // Animate ONLY transform on hover (composited on the GPU).
+        // Previously this also animated box-shadow + border-color via
+        // `transition: all`, which forces per-frame CPU paint for the
+        // shadow blur on every card the user hovers across. Border
+        // color is layout-free and ~free to paint, so we keep that.
+        transition: 'transform 0.15s ease, border-color 0.15s ease',
         '&:hover': {
           borderColor: c.border.strong,
-          boxShadow: c.shadow.md,
           transform: 'translateY(-2px)',
         },
         '&:hover .card-actions': { opacity: 1 },
@@ -56,6 +65,8 @@ const ViewCard: React.FC<Props> = ({ output, onClick, onDelete, onRun }) => {
             component="img"
             src={output.thumbnail}
             alt={`${output.name} preview`}
+            loading="lazy"
+            decoding="async"
             sx={{
               width: '100%',
               height: '100%',
@@ -149,4 +160,8 @@ const ViewCard: React.FC<Props> = ({ output, onClick, onDelete, onRun }) => {
   );
 };
 
-export default ViewCard;
+// Memoize so re-renders of the parent (Views.tsx) don't re-render every
+// card. The callback props are inline arrow functions from the parent so
+// they change every render, but the equality check below treats them as
+// stable when `output` identity is unchanged.
+export default React.memo(ViewCard, (prev, next) => prev.output === next.output);

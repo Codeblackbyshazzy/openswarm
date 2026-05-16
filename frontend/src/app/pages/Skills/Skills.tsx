@@ -362,7 +362,7 @@ const Skills: React.FC = () => {
         </Box>
 
         {/* Search input (toggled) */}
-        <Collapse in={searchFilter !== ''}>
+        <Collapse in={searchFilter !== ''} timeout={0} unmountOnExit>
           <Box sx={{ px: 1.5, pb: 1 }}>
             <TextField
               placeholder="Filter skills..."
@@ -415,7 +415,7 @@ const Skills: React.FC = () => {
                 </Typography>
                 <Typography sx={{ fontSize: '0.68rem', color: c.text.ghost, ml: 0.5 }}>({filteredLocal.length})</Typography>
               </Box>
-              <Collapse in={!collapsedCats['__local']}>
+              <Collapse in={!collapsedCats['__local']} timeout={0} unmountOnExit>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, mt: 0.25 }}>
                   {filteredLocal.map((sk) => (
                     <SidebarRow
@@ -459,7 +459,7 @@ const Skills: React.FC = () => {
                     </Typography>
                     <Typography sx={{ fontSize: '0.68rem', color: c.text.ghost, ml: 0.5 }}>({group.length})</Typography>
                   </Box>
-                  <Collapse in={!isCollapsed}>
+                  <Collapse in={!isCollapsed} timeout={0} unmountOnExit>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, mt: 0.25 }}>
                       {group.map((sk) => (
                         <SidebarRow

@@ -1,6 +1,16 @@
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, PayloadAction, createAction } from '@reduxjs/toolkit';
 import { launchAndSendFirstMessage } from './agentsSlice';
 import { API_BASE } from '@/shared/config';
+
+// Cross-slice listener: when agentsSlice's fetchSession thunk rejects
+// with a 404/410, the session is gone server-side. We strip the card
+// from layout here so AgentChat doesn't keep re-mounting + re-fetching
+// the same dead id in a loop (the visible "404 spam" in dev logs).
+// Matching the rejected-thunk action type literally avoids a circular
+// import on the thunk's reject metadata.
+const fetchSessionRejectedAction = createAction<
+  { sessionId?: string; status?: number } | undefined
+>('agents/fetchSession/rejected');
 
 const DASHBOARDS_API = `${API_BASE}/dashboards`;
 
@@ -939,6 +949,19 @@ const dashboardLayoutSlice = createSlice({
       .addCase(fetchLayout.rejected, (state) => {
         state.loading = false;
         state.initialized = true;
+      })
+      .addCase(fetchSessionRejectedAction, (state, action) => {
+        // 404/410 means the session is permanently gone from the
+        // backend; remove its card so AgentChat doesn't keep remounting
+        // and re-fetching it in a loop. Same id, same dead path. Other
+        // failure modes (network blip, 500) leave the card in place
+        // because the next fetch may succeed.
+        const payload = action.payload;
+        if (!payload?.sessionId) return;
+        if (payload.status !== 404 && payload.status !== 410) return;
+        const id = payload.sessionId;
+        if (state.cards[id]) delete state.cards[id];
+        if (state.closedCardPositions[id]) delete state.closedCardPositions[id];
       })
       .addCase(launchAndSendFirstMessage.fulfilled, (state, action) => {
         const { draftId, session } = action.payload;
