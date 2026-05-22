@@ -6,7 +6,9 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Tooltip, { tooltipClasses } from '@mui/material/Tooltip';
 import Icon from '@mui/material/Icon';
 import { styled } from '@mui/material/styles';
-import ChatBubbleRounded from '@mui/icons-material/ChatBubbleRounded';
+import ChatBubbleOutlineRounded from '@mui/icons-material/ChatBubbleOutlineRounded';
+import AddRounded from '@mui/icons-material/AddRounded';
+import HistoryRounded from '@mui/icons-material/HistoryRounded';
 import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
@@ -386,6 +388,57 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
 
     return (
       <>
+      {(inputOpen || historyOpen) && (
+        // Image #54: paired mode pills float above the composer/popover.
+        // `+ New Chat` is decorative-active while inputOpen; clicking it
+        // from history mode closes the popover and re-focuses the input.
+        // `History` toggles the SchedulePopover.
+        <Box sx={{ display: 'flex', gap: 0.75, mb: 1, pl: 0.5 }}>
+          <Box
+            onClick={() => {
+              if (historyOpen) handleCloseHistory();
+              if (!inputOpen) onNewAgent();
+            }}
+            role="button"
+            sx={{
+              display: 'inline-flex', alignItems: 'center', gap: 0.4,
+              fontSize: '0.82rem', fontWeight: 600,
+              color: c.text.primary,
+              bgcolor: c.bg.surface,
+              border: `1px solid ${inputOpen && !historyOpen ? c.border.medium : c.border.subtle}`,
+              boxShadow: inputOpen && !historyOpen ? c.shadow.sm : 'none',
+              px: 1.1, py: 0.45, borderRadius: 999,
+              cursor: 'pointer',
+              '&:hover': { bgcolor: c.bg.elevated },
+            }}>
+            <AddRounded sx={{ fontSize: 14 }} />
+            New Chat
+          </Box>
+          <Box
+            onClick={() => {
+              if (historyOpen) handleCloseHistory();
+              else {
+                setPopoverMode('search');
+                setHistoryOpen(true);
+              }
+            }}
+            role="button"
+            sx={{
+              display: 'inline-flex', alignItems: 'center', gap: 0.4,
+              fontSize: '0.82rem', fontWeight: 600,
+              color: historyOpen ? c.text.primary : c.text.secondary,
+              bgcolor: c.bg.surface,
+              border: `1px solid ${historyOpen ? c.border.medium : c.border.subtle}`,
+              boxShadow: historyOpen ? c.shadow.sm : 'none',
+              px: 1.1, py: 0.45, borderRadius: 999,
+              cursor: 'pointer',
+              '&:hover': { bgcolor: c.bg.elevated },
+            }}>
+            <HistoryRounded sx={{ fontSize: 14 }} />
+            History
+          </Box>
+        </Box>
+      )}
       <MotionBox
         ref={containerRef}
         layout
@@ -611,7 +664,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
                   }),
                 }}
               >
-                <ChatBubbleRounded sx={{ fontSize: 18 }} />
+                <ChatBubbleOutlineRounded sx={{ fontSize: 18 }} />
               </Box>
             </WarmTooltip>
 
