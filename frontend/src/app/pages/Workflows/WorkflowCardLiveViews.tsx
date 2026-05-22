@@ -141,10 +141,11 @@ export function RunningView({ workflow, steps, runs, mode = 'card' }: {
   const runId = card?.runId || null;
   const run = useMemo(() => (runs || []).find((r) => r.id === runId) || null, [runs, runId]);
 
-  // Synthesize an active step index off the run's elapsed/expected ratio
-  // until we wire per-step backend telemetry. Mirrors the heuristic the
-  // old StepList used; placeholder until last_tool_call drives this.
-  const activeIdx = useActiveStepIdx(steps.length, runs, runId);
+  // Prefer the backend's real active_step_idx (broadcast on each step
+  // bump in executor.execute). Fall back to elapsed/expected heuristic
+  // when the field is missing (older runs or first-frame race).
+  const heuristicIdx = useActiveStepIdx(steps.length, runs, runId);
+  const activeIdx = typeof run?.active_step_idx === 'number' ? run.active_step_idx : heuristicIdx;
   const statuses: StepStatus[] = steps.map((_, i) =>
     i < activeIdx ? 'done' : i === activeIdx ? 'active' : 'pending',
   );
@@ -464,13 +465,19 @@ export function FailedView({ workflow, steps, runs, mode = 'card' }: {
 }
 
 function guessFailedIdx(run: WorkflowRun | null, total: number): number {
-  if (!run || !run.error) return Math.max(0, total - 1);
-  // Backend may serialize as "Step N: ..."; pull N when present so the
-  // X lands on the right row instead of always the last.
-  const m = /step\s+(\d+)/i.exec(run.error);
-  if (m) {
-    const n = parseInt(m[1], 10);
-    if (!Number.isNaN(n) && n >= 1 && n <= total) return n - 1;
+  if (!run) return Math.max(0, total - 1);
+  // Backend pins active_step_idx at the failed step before flipping
+  // status to 'failure'. Prefer that; fall back to parsing "Step N"
+  // out of the error string for legacy runs.
+  if (typeof run.active_step_idx === 'number') {
+    return Math.max(0, Math.min(total - 1, run.active_step_idx));
+  }
+  if (run.error) {
+    const m = /step\s+(\d+)/i.exec(run.error);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (!Number.isNaN(n) && n >= 1 && n <= total) return n - 1;
+    }
   }
   return Math.max(0, Math.min(total - 1, 1));
 }

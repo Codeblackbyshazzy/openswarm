@@ -120,6 +120,10 @@ class WorkflowRun(BaseModel):
     # the workflow is running. Surfaced under the active step in RunningView
     # (Image #40) so the user can tell the run is still making progress.
     last_tool_label: Optional[str] = None
+    # Currently-executing step index (0-based). Executor bumps this each
+    # time it dispatches a step prompt and broadcasts the run. RunningView
+    # uses this for the disc statuses; estimate fallback only when null.
+    active_step_idx: Optional[int] = None
 
 
 class WorkflowCreate(BaseModel):

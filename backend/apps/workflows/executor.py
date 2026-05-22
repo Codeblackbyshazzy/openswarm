@@ -209,12 +209,26 @@ async def execute(wf: Workflow, triggered_by: str = "schedule", scheduled_for: O
         # session is idle before posting the next step. Keeps the runner
         # safe regardless of how long each turn takes.
         step_error: Optional[str] = None
-        for step in steps:
+        for idx, step in enumerate(steps):
+            # Broadcast the step bump before sending so RunningView flips
+            # the disc immediately, not after the agent finishes the step.
+            run.active_step_idx = idx
+            run.last_tool_label = None
+            try:
+                from backend.apps.agents.ws_manager import ws_manager as _wsm
+                await _wsm.broadcast_global("workflow:run", {
+                    "workflow_id": wf.id,
+                    "run": run.model_dump(mode="json"),
+                })
+            except Exception:
+                pass
             await agent_manager.send_message(session.id, step)
             await _await_session_idle(session.id)
             sess_state = agent_manager.sessions.get(session.id)
             if sess_state is not None and getattr(sess_state, "status", None) == "error":
                 step_error = "Agent session entered error state"
+                # Pin active step so FailedView can render the X on the
+                # right row. error_step_idx == active_step_idx at fail time.
                 break
 
         run.finished_at = datetime.now()

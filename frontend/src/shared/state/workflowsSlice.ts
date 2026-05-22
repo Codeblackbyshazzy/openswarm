@@ -92,6 +92,9 @@ export interface WorkflowRun {
   triggered_by: 'schedule' | 'manual' | 'retry';
   /** Live "what's the agent doing" subtitle while status is 'running'. */
   last_tool_label?: string | null;
+  /** Currently-executing 0-based step index while status is 'running';
+   *  freezes on the failed step when status flips to 'failure'. */
+  active_step_idx?: number | null;
 }
 
 /** Transient view-only state per card; position lives in dashboardLayoutSlice.workflowCards. */

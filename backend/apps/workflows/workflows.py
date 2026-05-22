@@ -138,16 +138,21 @@ async def create_workflow(body: WorkflowCreate):
         wf.icon = _derive_icon(wf)
     if wf.schedule.enabled:
         wf.next_run_at = scheduler.compute_next_fire(wf)
-    # Force-generate title + description from the steps in a single aux
-    # call. Previously we only filled missing description, leaving stale
-    # session names ("Inbox check") as titles. One round-trip, both
-    # fields, overwrites whatever shallow draft the FE sent.
+    # Force-generate title + description + per-step labels from the steps
+    # in a single aux call. Previously we only filled missing description,
+    # leaving stale session names ("Inbox check") as titles. Step labels
+    # are the 3-6 word at-a-glance headlines surfaced in StepList; without
+    # them the UI falls back to truncated raw prompts.
     try:
-        title, description = await _generate_title_and_description(wf)
+        title, description, labels = await _generate_workflow_metadata(wf)
         if title:
             wf.title = title
         if description:
             wf.description = description
+        if labels and len(labels) == len(wf.steps):
+            for i, lab in enumerate(labels):
+                if lab:
+                    wf.steps[i].label = lab
     except Exception:
         pass
     storage.save_workflow(wf)
@@ -155,35 +160,35 @@ async def create_workflow(body: WorkflowCreate):
     return _enriched(wf)
 
 
-async def _generate_title_and_description(wf: Workflow) -> tuple[str, str]:
-    """Single aux-model call returning (title, description).
+async def _generate_workflow_metadata(wf: Workflow) -> tuple[str, str, list[str]]:
+    """Single aux-model call returning (title, description, step_labels).
 
-    Uses strict JSON output so both fields come back in one round-trip.
-    Returns ("", "") on any failure so the caller can write back
-    unconditionally without dropping the workflow create.
+    One round-trip for all three so we don't burn 3x aux cost. Returns
+    ("", "", []) on any failure; caller writes back unconditionally.
     """
     if not wf.steps:
-        return "", ""
+        return "", "", []
     try:
         from backend.apps.agents.providers.registry import resolve_aux_model
         from backend.apps.agents.providers.registry import get_anthropic_client_for_model
         from backend.apps.settings.settings import load_settings as _ls
     except Exception:
-        return "", ""
+        return "", "", []
     settings = _ls()
     try:
         aux_model, _ = await resolve_aux_model(settings, preferred_tier="haiku")
         client = get_anthropic_client_for_model(settings, aux_model)
     except Exception:
-        return "", ""
+        return "", "", []
     steps_lines = "\n".join(f"{i+1}. {s.text}" for i, s in enumerate(wf.steps) if s.text)
+    n_steps = len(wf.steps)
     prompt = (
         "You name and describe a saved automation routine that the user "
-        "can re-run later. The routine is defined ONLY by the numbered "
-        "steps below; treat those as the user's instructions to the "
-        "agent.\n\n"
+        "can re-run later, AND produce a short at-a-glance label for "
+        "each step. The routine is defined ONLY by the numbered steps "
+        "below; treat those as the user's instructions to the agent.\n\n"
         "Return STRICT JSON, nothing else, no code fence:\n"
-        "  {\"title\": string, \"description\": string}\n\n"
+        '  {"title": string, "description": string, "step_labels": [string, ...]}\n\n'
         "title rules:\n"
         "- 2 to 5 words, Title Case\n"
         "- Starts with a verb-noun pair when possible (e.g. \"Summarize "
@@ -197,27 +202,26 @@ async def _generate_title_and_description(wf: Workflow) -> tuple[str, str]:
         "digest each Sunday at 9am.\"\n"
         "    \"Pulls today's calendar plus inbox, writes a Notion brief, "
         "and texts you the link.\"\n"
-        "- Examples of BAD output you MUST AVOID verbatim:\n"
-        "    \"This is an AI-generated description...\"\n"
-        "    \"Auto-generated description used to wrap workflows...\"\n"
-        "    Any sentence that talks about the description itself\n"
         "- Start with a verb. Do NOT start with \"This\", \"A\", \"An\", "
         "\"The workflow\", \"This routine\".\n\n"
+        f"step_labels rules:\n"
+        f"- EXACTLY {n_steps} entries, one per step, same order.\n"
+        "- Each label: 3 to 6 words, Sentence case.\n"
+        "- Imperative verb-led (\"Summarize emails & calendar\", \"Make "
+        "brief in notion\", \"Email brief link to me\").\n"
+        "- No trailing punctuation, no quotes, no emoji.\n"
+        "- Should read as the human-friendly NAME of the step, NOT a "
+        "restatement of the prompt.\n\n"
         f"Steps:\n{steps_lines}"
     )
     import json
     import re as _re
 
     def _extract_json_object(s: str) -> Optional[dict]:
-        """Find the first {...} block and json.loads it. Handles code
-        fences, prose preambles, and trailing chatter that some aux
-        models like to add."""
         s = s.strip()
         if s.startswith("```"):
             s = _re.sub(r"^```(?:json)?\s*", "", s, flags=_re.IGNORECASE)
             s = _re.sub(r"\s*```\s*$", "", s)
-        # Greedy brace match; falls through to direct json.loads if no
-        # braces are visible at all.
         start = s.find("{")
         end = s.rfind("}")
         if start != -1 and end != -1 and end > start:
@@ -228,13 +232,9 @@ async def _generate_title_and_description(wf: Workflow) -> tuple[str, str]:
             return None
 
     try:
-        # Prefill the assistant turn with `{` so the model is steered into
-        # emitting JSON from the first token. The Anthropic API treats a
-        # trailing assistant message as a prefill; we'll glue it back on
-        # before parsing.
         resp = await client.messages.create(
             model=aux_model,
-            max_tokens=240,
+            max_tokens=400 + n_steps * 30,
             messages=[
                 {"role": "user", "content": prompt},
                 {"role": "assistant", "content": "{"},
@@ -248,16 +248,16 @@ async def _generate_title_and_description(wf: Workflow) -> tuple[str, str]:
         raw = "{" + text.strip() if not text.strip().startswith("{") else text.strip()
         data = _extract_json_object(raw)
         if not data:
-            logger.warning("description gen: failed to parse aux model output: %s", raw[:400])
-            return "", ""
+            logger.warning("workflow meta gen: failed to parse aux model output: %s", raw[:400])
+            return "", "", []
         title = (data.get("title") or "").strip()[:80]
         description = (data.get("description") or "").strip()[:500]
-        if not description:
-            logger.warning("description gen: empty description from aux model. Raw: %s", raw[:400])
-        return title, description
+        raw_labels = data.get("step_labels") or []
+        labels = [str(x or "").strip()[:60] for x in raw_labels] if isinstance(raw_labels, list) else []
+        return title, description, labels
     except Exception as e:
-        logger.warning("description gen: aux model call failed: %s", e)
-        return "", ""
+        logger.warning("workflow meta gen: aux model call failed: %s", e)
+        return "", "", []
 
 
 def _last_run_cost(wid: str) -> float:

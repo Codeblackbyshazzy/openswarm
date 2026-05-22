@@ -697,12 +697,21 @@ function RunningHeader({ workflowId }: { workflowId: string }) {
     } catch { /* best-effort */ }
     dispatch(updateWorkflowCard({ workflowId, patch: { view: 'saved', runId: null } }));
   }, [dispatch, workflowId, run]);
-  const onPause = React.useCallback(() => {
-    // Pause is "this run keeps going but no further fires queue." We
-    // can't actually pause a streaming agent mid-call, so this just
-    // flips the schedule paused flag for now.
-    void workflow;
-  }, [workflow]);
+  // Pause = "let this run finish, but stop firing future schedules."
+  // Can't actually pause a streaming agent turn mid-call, so we flip
+  // schedule.enabled so the scheduler stops queuing the next fire. The
+  // button label flips to "Resume" while paused; user can re-enable
+  // without leaving the running view.
+  const isPaused = !!workflow && !workflow.schedule.enabled && workflow.schedule.runs_count > 0;
+  const onPauseToggle = React.useCallback(async () => {
+    if (!workflow) return;
+    const next = { ...workflow.schedule, enabled: isPaused };
+    await dispatch(updateWorkflow({
+      id: workflow.id,
+      patch: { schedule: next as Workflow['schedule'] },
+      ifMatch: workflow.updated_at || null,
+    }));
+  }, [dispatch, workflow, isPaused]);
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, px: 2, pb: 1.25, pt: 0, flexShrink: 0 }}>
       <Box sx={{ flex: 1 }} />
@@ -713,19 +722,21 @@ function RunningHeader({ workflowId }: { workflowId: string }) {
         <StopRounded sx={{ fontSize: 15 }} />
         Stop
       </Box>
-      <Box
-        onClick={onPause}
-        role="button"
-        sx={{
-          display: 'inline-flex', alignItems: 'center', gap: 0.35,
-          fontSize: '0.82rem', fontWeight: 700,
-          px: 1.1, py: 0.4, borderRadius: 999,
-          bgcolor: c.accent.primary, color: '#fff', cursor: 'pointer',
-          '&:hover': { filter: 'brightness(1.05)' },
-        }}>
-        <PauseRounded sx={{ fontSize: 15 }} />
-        Pause
-      </Box>
+      <Tooltip title={isPaused ? 'Schedule is paused. Click to resume future fires.' : 'Pause future scheduled fires. This run finishes normally.'}>
+        <Box
+          onClick={onPauseToggle}
+          role="button"
+          sx={{
+            display: 'inline-flex', alignItems: 'center', gap: 0.35,
+            fontSize: '0.82rem', fontWeight: 700,
+            px: 1.1, py: 0.4, borderRadius: 999,
+            bgcolor: c.accent.primary, color: '#fff', cursor: 'pointer',
+            '&:hover': { filter: 'brightness(1.05)' },
+          }}>
+          <PauseRounded sx={{ fontSize: 15 }} />
+          {isPaused ? 'Resume' : 'Pause'}
+        </Box>
+      </Tooltip>
     </Box>
   );
 }
