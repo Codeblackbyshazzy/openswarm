@@ -35,7 +35,7 @@ import { useOverlayScrollPassthrough } from './useOverlayScrollPassthrough';
 import { useStreamingMessage } from '@/shared/state/streamingSlice';
 import { isCanvasInteractionActive, onCanvasInteractionEnd } from '@/shared/canvasInteractionState';
 import { openWorkflowCard, type Workflow } from '@/shared/state/workflowsSlice';
-import { addWorkflowCard } from '@/shared/state/dashboardLayoutSlice';
+import { addWorkflowCard, setWorkflowCardPosition, setWorkflowCardSize } from '@/shared/state/dashboardLayoutSlice';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesomeOutlined';
 
 /** Extract up to 3 substantive user-prompt steps to seed a workflow. */
@@ -962,14 +962,26 @@ const AgentCard: React.FC<Props> = ({
                       provider: session.provider,
                     };
                     const tempId = `draft-${session.id}`;
+                    // The OG chat card BECOMES the workflow card: capture
+                    // its position + size, remove the chat card, and drop
+                    // the workflow card in the same physical slot. The
+                    // chat session itself stays accessible via History.
+                    // Per Image #61 / #62: no tether arrow, no second
+                    // card alongside.
+                    // Capture this card's current position/size, drop the
+                    // workflow card in the same slot, then remove the
+                    // source chat card.
                     dispatch(addWorkflowCard({
                       workflowId: tempId,
-                      sourceSessionId: session.id,
+                      sourceSessionId: null,
                       expandedSessionIds,
                     }));
+                    dispatch(setWorkflowCardPosition({ workflowId: tempId, x: cardX, y: cardY }));
+                    dispatch(setWorkflowCardSize({ workflowId: tempId, width: cardWidth, height: cardHeight }));
+                    dispatch(removeCard(session.id));
                     dispatch(openWorkflowCard({
                       workflowId: tempId,
-                      sourceSessionId: session.id,
+                      sourceSessionId: null,
                       view: 'preview',
                       draft,
                     }));
