@@ -24,22 +24,6 @@ export const EASE = {
   pulse: 'cubic-bezier(0.4, 0, 0.6, 1)',
 } as const;
 
-/** Array-form easing for framer-motion; same curves as EASE. */
-export const FRAMER_EASE = {
-  out: [0.16, 1, 0.3, 1] as [number, number, number, number],
-  inOut: [0.4, 0, 0.2, 1] as [number, number, number, number],
-  spring: [0.34, 1.56, 0.64, 1] as [number, number, number, number],
-  pulse: [0.4, 0, 0.6, 1] as [number, number, number, number],
-};
-
-/** Shared fadeIn keyframe; import once. */
-export const fadeInKeyframes = {
-  '@keyframes openswarmFadeIn': {
-    from: { opacity: 0 },
-    to: { opacity: 1 },
-  },
-};
-
 /** Shared skeleton/indicator pulse keyframe. */
 export const pulseKeyframes = {
   '@keyframes openswarmPulse': {

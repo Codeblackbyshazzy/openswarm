@@ -244,7 +244,7 @@ export function useDashboardSelection(
 
   // Inject (once) a global CSS rule that makes browser webviews and iframes
   // transparent to mouse events while a marquee drag is active. Without this,
-  // the Electron <webview> hit-tests the cursor at the OS level — when the
+  // the Electron <webview> hit-tests the cursor at the OS level , when the
   // cursor lands on an interactable element inside the browser (button,
   // link, text), the webview steals the cursor and the marquee drag visually
   // freezes until the cursor escapes. Setting `pointer-events: none` makes

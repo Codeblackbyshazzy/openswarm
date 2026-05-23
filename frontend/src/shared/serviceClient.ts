@@ -93,16 +93,5 @@ export function getSessionTraceState(): {
   };
 }
 
-export function _resetForTest(): void {
-  _queue.length = 0;
-  if (_flushTimer != null) {
-    clearTimeout(_flushTimer);
-    _flushTimer = null;
-  }
-  _appStart = Date.now();
-  _lastTs = _appStart;
-  _recentReports.length = 0;
-}
-
 const serviceClient = { sync, report, getSessionTraceState, getRecentActions };
 export default serviceClient;

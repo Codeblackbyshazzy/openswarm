@@ -44,7 +44,7 @@ export const store = configureStore({
   // "SerializableStateInvariantMiddleware took 41ms" repeatedly under load.
   //
   // Production builds skip these middlewares anyway, so disabling them in
-  // dev makes dev behavior match prod — no surprises at packaging time.
+  // dev makes dev behavior match prod , no surprises at packaging time.
   // Trade-off: serializability bugs (e.g. accidentally putting a Map or
   // Date directly into state) won't be caught at dev time. We've shipped
   // many versions with stable slice shapes; that risk is now low.

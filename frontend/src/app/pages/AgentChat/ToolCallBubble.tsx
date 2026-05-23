@@ -1241,7 +1241,7 @@ function parseCreateAgentResult(rawText: string): string {
 
 function parseInvokeAgentResult(rawText: string): InvokeAgentParsed | null {
   const headerMatch = rawText.match(
-    /\*\*Invoked Agent Result\*\*(?:\s*—\s*(.+?))?\s*\(forked session:\s*([a-f0-9]+)\)/,
+    /\*\*Invoked Agent Result\*\*(?:\s*;\s*(.+?))?\s*\(forked session:\s*([a-f0-9]+)\)/,
   );
   if (!headerMatch) return null;
 

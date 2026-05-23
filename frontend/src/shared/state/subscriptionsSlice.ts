@@ -71,15 +71,6 @@ export function selectSubscriptionConnections(
   return providers.connections ?? [];
 }
 
-export function isProviderConnected(
-  state: WithSubscriptions,
-  providerId: string,
-): boolean {
-  return selectSubscriptionConnections(state).some(
-    (p) => p.provider === providerId && (p.isActive || p.testStatus === 'active'),
-  );
-}
-
 export function hasAnyActiveSubscription(state: WithSubscriptions): boolean {
   return selectSubscriptionConnections(state).some(
     (p) => p.isActive || p.testStatus === 'active',

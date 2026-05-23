@@ -247,7 +247,7 @@ export function findOpenGridCell(
 // sibling). Spirals outward from the anchor on a grid, snapping to
 // cell-aligned positions so the result still looks intentional, not
 // dropped from orbit. Caps the spiral search at ~1000 cells to avoid
-// pathological work in adversarial layouts — falls back to
+// pathological work in adversarial layouts , falls back to
 // findOpenGridCell after that.
 //
 // Cost: O(rects × cells_scanned). Spawn events are rare (not per-frame),
@@ -304,7 +304,7 @@ export function findOpenSpotNear(
     }
   }
 
-  // Pathological — full canvas occupied near anchor. Fall back to the
+  // Pathological , full canvas occupied near anchor. Fall back to the
   // global first-empty scan so we never return an overlap.
   return findOpenGridCell(occupiedRects, newW, newH);
 }
@@ -347,8 +347,8 @@ const dashboardLayoutSlice = createSlice({
         height: number;
         // Optional: which existing sessions are currently expanded
         // (showing their full chat history). Without this, the collision
-        // check uses each card's STORED height — which is the collapsed
-        // value — even when the card is currently rendering at the
+        // check uses each card's STORED height , which is the collapsed
+        // value , even when the card is currently rendering at the
         // expanded ~620px. Result: new sub-agent cards spawn into the
         // collapsed footprint but overlap the visually expanded one.
         // Caller (Dashboard.tsx) passes the current expanded set so
@@ -559,7 +559,7 @@ const dashboardLayoutSlice = createSlice({
       const h = card.height || DEFAULT_BROWSER_CARD_H;
       // Collision-resolve the backend-proposed position. Backend agents
       // often spawn sub-browsers at the parent's coordinates or at a
-      // default (0,0) — without this guard, the new card lands on top
+      // default (0,0) , without this guard, the new card lands on top
       // of an existing one and the user sees a single card with
       // multiple titles fighting for the z-index. Bias toward the
       // proposed position so the spawn still LOOKS related to wherever

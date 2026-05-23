@@ -22,10 +22,3 @@ function getServerSnapshot(): boolean {
 export function useReducedMotion(): boolean {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
-
-/** Returns 0 (or `opts.floor`) when reduced-motion is on, else `ms`. */
-export function useMotionDuration(ms: number, opts: { floor?: number } = {}): number {
-  const reduced = useReducedMotion();
-  if (!reduced) return ms;
-  return opts.floor ?? 0;
-}

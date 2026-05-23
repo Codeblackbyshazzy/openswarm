@@ -106,7 +106,7 @@ function getAgentWorkTime(
   // True wall-clock duration: how long the user actually waited, from
   // their prompt to the LAST assistant/system message of that turn.
   // Covers thinking + every tool call + assistant text generation +
-  // any subagent/MCP work — anything that consumed user attention.
+  // any subagent/MCP work , anything that consumed user attention.
   //
   // This is intentionally NOT the sum of `thinking.elapsed_ms` (which
   // would cover only reasoning time and miss tool execution). The
@@ -115,13 +115,13 @@ function getAgentWorkTime(
   // did this take?" which is a different question.
   //
   // For each user message we find the LAST adjacent assistant/system
-  // message before the next user message — that's the turn boundary.
+  // message before the next user message , that's the turn boundary.
   // If the turn is still in flight (last user message has no assistant
   // reply yet AND session is running/waiting), extrapolate to now so
   // the timer ticks live.
   //
   // Hidden messages (auto-continuation prompts from MCPActivate, etc.)
-  // are skipped — they're system-internal turns the user didn't see
+  // are skipped , they're system-internal turns the user didn't see
   // and shouldn't be billed for.
   const visible = messages.filter((m) => !m.hidden);
   let totalMs = 0;
@@ -259,7 +259,7 @@ const HANDLE_DEFS: { dir: ResizeDir; sx: Record<string, any> }[] = [
 interface OuterProps {
   sessionId: string;
   expanded: boolean;
-  // Stable getter — cards read pan/zoom on demand (drag math) instead of
+  // Stable getter , cards read pan/zoom on demand (drag math) instead of
   // receiving them as props. Without this, every wheel/pan tick on the
   // canvas re-rendered every card, even though the canvas root's CSS
   // transform is what actually moves them visually. Cards only need the
@@ -346,7 +346,7 @@ const AgentCard: React.FC<Props> = ({
     // through so the layout reconciles to the truth right then.
     let suppressedHeight: number | null = null;
     const ro = new ResizeObserver((entries) => {
-      // Short-circuit when dashboard is hidden — observer stays attached so
+      // Short-circuit when dashboard is hidden , observer stays attached so
       // the next resize after returning to the dashboard fires correctly.
       if (!isDashboardActiveRef.current) return;
       // Short-circuit during active canvas interaction (pan/drag/wheel).
@@ -690,7 +690,7 @@ const AgentCard: React.FC<Props> = ({
         position: 'relative',
         // contain: streaming chat updates inside don't reflow the dashboard.
         // Skipping `paint` here because the highlighted/selected/glow
-        // boxShadows legitimately extend past the card border — `paint`
+        // boxShadows legitimately extend past the card border , `paint`
         // containment would clip those visuals.
         contain: 'layout style',
         // Promote each card to its own compositor layer so paint
@@ -902,7 +902,7 @@ const AgentCard: React.FC<Props> = ({
         />
       ))}
 
-      {/* Selection overlay – blocks click interaction while selected, enabling drag from anywhere */}
+      {/* Selection overlay , blocks click interaction while selected, enabling drag from anywhere */}
       {isSelected && (
         <Box
           ref={scrollOverlayRef}
@@ -923,7 +923,7 @@ const AgentCard: React.FC<Props> = ({
         />
       )}
 
-      {/* Drag zone: header + metadata – entire region above separator is draggable */}
+      {/* Drag zone: header + metadata , entire region above separator is draggable */}
       <Box
         onPointerDown={handleDragPointerDown}
         onPointerMove={handleDragPointerMove}

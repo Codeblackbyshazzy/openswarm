@@ -60,7 +60,7 @@ import NoteCard from './NoteCard';
 import CanvasControls from './CanvasControls';
 import CardSearchPalette from './CardSearchPalette';
 import DirectionHints from './DirectionHints';
-// OnboardingWalkthrough was retired in v2 — the new OnboardingRoot/Panel
+// OnboardingWalkthrough was retired in v2 , the new OnboardingRoot/Panel
 // (mounted in Main.tsx) replaces it. Keeping this banner to prevent stale
 // imports from sneaking back in via auto-completion.
 import DashboardToolbar from './DashboardToolbar';
@@ -163,7 +163,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
   const [pendingSelectSessionId, setPendingSelectSessionId] = useState<string | null>(null);
   const [focusedCardId, setFocusedCardId] = useState<string | null>(null);
   const [newAgentBounce, setNewAgentBounce] = useState(false);
-  // Cleanup any leftover walkthrough localStorage from v1 — the v2 panel
+  // Cleanup any leftover walkthrough localStorage from v1 , the v2 panel
   // ignores it but it would otherwise hang around forever.
   useEffect(() => {
     try {
@@ -213,7 +213,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
   const restoredExpandedRef = useRef(false);
   const canvasStateRef = useRef({ panX: canvas.panX, panY: canvas.panY, zoom: canvas.zoom });
   canvasStateRef.current = { panX: canvas.panX, panY: canvas.panY, zoom: canvas.zoom };
-  // Stable getter — AgentCards read pan/zoom on demand during drag math.
+  // Stable getter , AgentCards read pan/zoom on demand during drag math.
   const getCanvasState = useCallback(() => canvasStateRef.current, []);
   // Notify the currently dragging card (if any) that pan/zoom changed so
   // it can re-pin to the cursor. useEffect rather than render-body
@@ -402,7 +402,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
     if (e.button !== 0) return;
     if (isCardTarget(e.target, e.currentTarget)) return;
 
-    // Canvas click — drop any lingering input focus so arrow-key nav
+    // Canvas click , drop any lingering input focus so arrow-key nav
     // works immediately without the user having to press Escape first.
     const active = document.activeElement as HTMLElement | null;
     const activeTag = active?.tagName;
@@ -522,7 +522,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
         );
         for (const s of dashSessions) {
           if (warmAbort.signal.aborted) break;
-          // Fire-and-forget — the endpoint always 200s and the side
+          // Fire-and-forget , the endpoint always 200s and the side
           // effect is invisible cache population.
           fetch(`${API_BASE}/agents/sessions/${s.id}/warm-cache`, {
             method: 'POST',
@@ -584,7 +584,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
       || Object.keys(allCards.viewCards).length > 0
       || Object.keys(allCards.browserCards).length > 0;
     if (!hasCards) {
-      // Empty dashboard — queue a thumbnail clear (sent on exit alongside
+      // Empty dashboard , queue a thumbnail clear (sent on exit alongside
       // the existing capture-update path). Backend treats '' as "set to
       // empty"; null in PUT body means "don't update".
       pendingThumbnailRef.current = '';
@@ -710,7 +710,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
   const prevParentStatusRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
-    if (!isActive) return;  // Heavy logic — pause when dashboard is hidden
+    if (!isActive) return;  // Heavy logic , pause when dashboard is hidden
     if (!layoutInitialized || !autoRevealSubAgents) return;
 
     const subSessions = Object.values(sessions).filter(
@@ -816,7 +816,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
   const pendingSaveRef = useRef<Parameters<typeof saveLayout>[0] | null>(null);
 
   useEffect(() => {
-    if (!isActive) return;  // Don't persist layout while dashboard is hidden — save buffers in pendingSaveRef and flushes on resume
+    if (!isActive) return;  // Don't persist layout while dashboard is hidden , save buffers in pendingSaveRef and flushes on resume
     if (!layoutInitialized || !dashboardId) return;
     if (skipInitialSave.current) {
       skipInitialSave.current = false;
@@ -1132,7 +1132,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
     const handleKey = (e: KeyboardEvent) => {
       if (!isActive) return;  // Don't fire shortcuts when dashboard is hidden
 
-      // Escape blurs any active input and restores focus to the canvas —
+      // Escape blurs any active input and restores focus to the canvas ,
       // so you can quickly "unstick" keyboard focus and start navigating.
       if (e.key === 'Escape') {
         const active = document.activeElement as HTMLElement | null;
@@ -1172,7 +1172,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
       const target = findNearestCard(currentFocused, direction);
 
       if (!target) {
-        // No card in that direction — shake
+        // No card in that direction , shake
         if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current);
         setShakeDirection(direction);
         shakeTimerRef.current = setTimeout(() => {
@@ -1311,7 +1311,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
               if (bc) {
                 // Use placeCard (collision-aware) instead of
                 // setCardPosition (blind setter). The "left of the
-                // browser" anchor is the IDEAL spot — but if it's
+                // browser" anchor is the IDEAL spot , but if it's
                 // already taken by an existing chat (e.g. step 3's
                 // YouTube agent that's still on canvas when step 5
                 // creates a new chat for the same browser), placeCard
@@ -1466,7 +1466,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
   }, [dispatch, canvas.actions]);
 
   useEffect(() => {
-    if (!isActive) return;  // Heavy geometry recalculation — pause when dashboard is hidden
+    if (!isActive) return;  // Heavy geometry recalculation , pause when dashboard is hidden
     const DRIFT_THRESHOLD = 60;
 
     // Group tethered sub-agent cards by source, only including those still in the spawn column
@@ -1507,7 +1507,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
   }, [isActive, expandedSessionIds, glowingAgentCards, cards, dispatch, measuredHeightsTick]);
 
   useEffect(() => {
-    if (!isActive) return;  // Heavy geometry recalculation — pause when dashboard is hidden
+    if (!isActive) return;  // Heavy geometry recalculation , pause when dashboard is hidden
     const DRIFT_THRESHOLD = 60;
 
     const sourceToSiblings = new Map<string, string[]>();
@@ -1604,8 +1604,8 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
     }).filter(Boolean) as Array<{ key: string; path: string; labelX: number; labelY: number; label: string; fading: boolean }>;
 
     // Build browser tethers from TWO sources and merge:
-    // 1. glowingBrowserCards — the short-lived "flash" when a browser is first assigned
-    // 2. Active browser-agent sessions — persistent as long as the agent runs
+    // 1. glowingBrowserCards , the short-lived "flash" when a browser is first assigned
+    // 2. Active browser-agent sessions , persistent as long as the agent runs
     //
     // Source #2 is the fix for tethers disappearing when the parent session
     // completes a turn (which clears glowingBrowserCards even though the
@@ -1713,7 +1713,7 @@ const DashboardInner: React.FC<DashboardProps> = ({ dashboardId, isActive = true
       if (t) glowTethers.set(browserId, t);
     }
 
-    // Source 2: active browser-agent sessions (persistent — survives parent turn completion)
+    // Source 2: active browser-agent sessions (persistent , survives parent turn completion)
     for (const s of sessionList) {
       if (s.mode !== 'browser-agent') continue;
       if (s.status !== 'running' && s.status !== 'waiting_approval') continue;
