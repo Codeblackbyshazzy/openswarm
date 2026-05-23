@@ -11,7 +11,7 @@ import {
   ToolDefinition,
 } from '@/shared/state/toolsSlice';
 import { API_BASE } from '@/shared/config';
-import { Integration } from './integrations';
+import { Integration } from '../integrations';
 
 type Snackbar = { open: boolean; message: string; severity?: 'success' | 'error' };
 

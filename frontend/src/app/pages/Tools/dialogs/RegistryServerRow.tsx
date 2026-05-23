@@ -16,7 +16,7 @@ import PublicIcon from '@mui/icons-material/Public';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { McpServer, McpServerDetail } from '@/shared/state/mcpRegistrySlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-import { cleanServerName } from './toolsHelpers';
+import { cleanServerName } from '../toolsHelpers';
 
 interface RegistryServerRowProps {
   srv: McpServer;

@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { useAppDispatch } from '@/shared/hooks';
 import { createTool, discoverTools } from '@/shared/state/toolsSlice';
 import { searchRegistry, fetchRegistryStats, McpServer } from '@/shared/state/mcpRegistrySlice';
-import { ToolForm, serverToToolForm, serverToMcpConfig } from './toolsHelpers';
+import { ToolForm, serverToToolForm, serverToMcpConfig } from '../toolsHelpers';
 
 type Snackbar = { open: boolean; message: string; severity?: 'success' | 'error' };
 type RegSource = '' | 'community' | 'google' | 'curated';

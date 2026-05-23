@@ -31,14 +31,14 @@ import { Skeleton } from '@/app/components/Loading';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { Integration, INTEGRATIONS } from './integrations';
 import { CATEGORY_ORDER } from './toolsHelpers';
-import ToolSection from './ToolSection';
-import BrowserPermissionCard from './BrowserPermissionCard';
-import RegistryBrowserDialog from './RegistryBrowserDialog';
-import ToolDialogs from './ToolDialogs';
-import CustomToolCard from './CustomToolCard';
-import IntegrationGalleryCard from './IntegrationGalleryCard';
-import { useToolsActions } from './useToolsActions';
-import { useBuiltinSections } from './useBuiltinSections';
+import ToolSection from './cards/ToolSection';
+import BrowserPermissionCard from './cards/BrowserPermissionCard';
+import RegistryBrowserDialog from './dialogs/RegistryBrowserDialog';
+import ToolDialogs from './dialogs/ToolDialogs';
+import CustomToolCard from './cards/CustomToolCard';
+import IntegrationGalleryCard from './cards/IntegrationGalleryCard';
+import { useToolsActions } from './hooks/useToolsActions';
+import { useBuiltinSections } from './hooks/useBuiltinSections';
 
 const Tools: React.FC = () => {
   const c = useClaudeTokens();

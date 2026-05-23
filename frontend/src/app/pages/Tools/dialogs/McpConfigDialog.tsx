@@ -15,7 +15,7 @@ import Avatar from '@mui/material/Avatar';
 import ExtensionIcon from '@mui/icons-material/Extension';
 import { McpServer } from '@/shared/state/mcpRegistrySlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-import { cleanServerName } from './toolsHelpers';
+import { cleanServerName } from '../toolsHelpers';
 
 interface McpConfigDialogProps {
   open: boolean;

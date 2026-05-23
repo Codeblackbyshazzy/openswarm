@@ -22,7 +22,7 @@ import PanToolIcon from '@mui/icons-material/PanTool';
 import CallSplitIcon from '@mui/icons-material/CallSplit';
 import { BuiltinTool } from '@/shared/state/toolsSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-import { CATEGORY_ORDER } from './toolsHelpers';
+import { CATEGORY_ORDER } from '../toolsHelpers';
 
 interface ToolSectionProps {
   label: string;

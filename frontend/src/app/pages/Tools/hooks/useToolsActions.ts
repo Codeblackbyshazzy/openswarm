@@ -10,8 +10,8 @@ import {
   BuiltinTool,
 } from '@/shared/state/toolsSlice';
 import { McpServer } from '@/shared/state/mcpRegistrySlice';
-import { ToolForm, emptyForm } from './toolsHelpers';
-import { Integration } from './integrations';
+import { ToolForm, emptyForm } from '../toolsHelpers';
+import { Integration } from '../integrations';
 import { useToolConnections } from './useToolConnections';
 import { useRegistryBrowser } from './useRegistryBrowser';
 

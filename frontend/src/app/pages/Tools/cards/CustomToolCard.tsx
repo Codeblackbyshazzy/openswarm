@@ -23,7 +23,7 @@ import SecurityIcon from '@mui/icons-material/Security';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { ToolDefinition } from '@/shared/state/toolsSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-import { Integration } from './integrations';
+import { Integration } from '../integrations';
 import ServiceGroup from './ServiceGroup';
 import CustomToolDevInfo from './CustomToolDevInfo';
 import CustomToolConnect from './CustomToolConnect';

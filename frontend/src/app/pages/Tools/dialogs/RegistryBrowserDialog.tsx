@@ -24,7 +24,7 @@ import { McpServer, McpServerDetail } from '@/shared/state/mcpRegistrySlice';
 import { ToolDefinition } from '@/shared/state/toolsSlice';
 import { Skeleton } from '@/app/components/Loading';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-import { cleanServerName } from './toolsHelpers';
+import { cleanServerName } from '../toolsHelpers';
 import RegistryServerRow from './RegistryServerRow';
 
 interface RegistryBrowserDialogProps {
