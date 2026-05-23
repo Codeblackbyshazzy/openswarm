@@ -6,7 +6,7 @@ import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import CloseIcon from '@mui/icons-material/Close';
 import { ClaudeTokens } from '@/shared/styles/claudeTokens';
-import { formatTokenCount } from './helpers';
+import { formatTokenCount } from '../helpers';
 
 interface Props {
   c: ClaudeTokens;

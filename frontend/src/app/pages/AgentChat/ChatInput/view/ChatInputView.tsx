@@ -9,13 +9,13 @@ import { SelectedElement } from '@/app/components/ElementSelectionContext';
 import { ContextPath } from '@/app/components/DirectoryBrowser';
 import { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import { TriggerState } from '@/app/components/richEditorUtils';
-import { AttachedImage, ForcedToolGroup } from './types';
-import { SendBlock } from './useContextFiles';
-import { ModelPickerState } from './useModelPicker';
+import { AttachedImage, ForcedToolGroup } from '../types';
+import { SendBlock } from '../hooks/useContextFiles';
+import { ModelPickerState } from '../hooks/useModelPicker';
 import { SendBlockBanner } from './SendBlockBanner';
 import { AttachmentChips } from './AttachmentChips';
 import { EditorSurface } from './EditorSurface';
-import { ChatInputToolbar } from './ChatInputToolbar';
+import { ChatInputToolbar } from '../toolbar/ChatInputToolbar';
 import { ChatInputOverlays } from './ChatInputOverlays';
 
 type ThinkingLevel = 'off' | 'low' | 'medium' | 'high' | 'auto';

@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { ContextPath } from '@/app/components/DirectoryBrowser';
 import { API_BASE, getAuthToken } from '@/shared/config';
-import { ForcedToolGroup } from './types';
-import { basename } from './helpers';
+import { ForcedToolGroup } from '../types';
+import { basename } from '../helpers';
 
 export type SendBlock = null | {
   estimate: number;

@@ -4,7 +4,7 @@ import Typography from '@mui/material/Typography';
 import { ContextPath } from '@/app/components/DirectoryBrowser';
 import { API_BASE, getAuthToken } from '@/shared/config';
 import { ClaudeTokens } from '@/shared/styles/claudeTokens';
-import { SendBlock } from './useContextFiles';
+import { SendBlock } from '../hooks/useContextFiles';
 
 interface Props {
   sendBlock: NonNullable<SendBlock>;

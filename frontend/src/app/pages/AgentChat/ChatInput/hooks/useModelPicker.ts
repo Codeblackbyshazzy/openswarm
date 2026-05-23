@@ -11,7 +11,7 @@ import {
   COST_STEPS,
   readLS,
   writeLS,
-} from './modelPicker';
+} from '../model-picker/modelPicker';
 
 type CapFilters = { reasoning: boolean; subscription: boolean; apiKey: boolean };
 

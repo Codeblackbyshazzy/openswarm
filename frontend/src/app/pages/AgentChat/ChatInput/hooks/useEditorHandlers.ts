@@ -14,7 +14,7 @@ import { clearSessionMessages } from '@/shared/state/agentsSlice';
 import { scheduleDraftSave } from './draftStore';
 import { handleSlashCommand } from './slashCommands';
 import { tryPasteClipboardCards } from './pasteCards';
-import { ForcedToolGroup } from './types';
+import { ForcedToolGroup } from '../types';
 
 type Skill = { id: string; name: string; content: string };
 

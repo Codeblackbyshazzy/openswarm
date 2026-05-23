@@ -2,7 +2,7 @@ import { SelectedElement } from '@/app/components/ElementSelectionContext';
 import { getWebview } from '@/shared/browserRegistry';
 import { ContextPath } from '@/app/components/DirectoryBrowser';
 import { AttachedImage } from './types';
-import { SendBlock } from './useContextFiles';
+import { SendBlock } from './hooks/useContextFiles';
 
 type OutImage = { data: string; media_type: string };
 

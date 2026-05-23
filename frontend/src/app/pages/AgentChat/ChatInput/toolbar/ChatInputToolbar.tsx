@@ -4,10 +4,10 @@ import { useElementSelection } from '@/app/components/ElementSelectionContext';
 import { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import { ContextRing } from './ContextRing';
 import { ModeControl } from './ModeControl';
-import { ModelPickerMenu } from './ModelPickerMenu';
+import { ModelPickerMenu } from '../model-picker/ModelPickerMenu';
 import { ThinkingLevelControl } from './ThinkingLevelControl';
 import { ToolbarActions } from './ToolbarActions';
-import { ModelPickerState } from './useModelPicker';
+import { ModelPickerState } from '../hooks/useModelPicker';
 
 type ThinkingLevel = 'off' | 'low' | 'medium' | 'high' | 'auto';
 

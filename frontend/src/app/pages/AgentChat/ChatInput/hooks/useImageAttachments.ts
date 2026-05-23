@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { AttachedImage } from './types';
+import { AttachedImage } from '../types';
 
 export function useImageAttachments() {
   const [images, setImages] = useState<AttachedImage[]>([]);

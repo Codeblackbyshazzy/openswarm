@@ -11,8 +11,8 @@ import { getToolGroupIcon } from '@/app/components/CommandPicker';
 import { SelectedElement } from '@/app/components/ElementSelectionContext';
 import { ContextPath } from '@/app/components/DirectoryBrowser';
 import { ClaudeTokens } from '@/shared/styles/claudeTokens';
-import { AttachedImage, ForcedToolGroup } from './types';
-import { formatTokenCount, pathTail } from './helpers';
+import { AttachedImage, ForcedToolGroup } from '../types';
+import { formatTokenCount, pathTail } from '../helpers';
 
 interface ElementSelectionLike {
   removeOwnerElement: (ownerId: string, id: string) => void;

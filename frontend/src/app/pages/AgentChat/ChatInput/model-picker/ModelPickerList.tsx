@@ -8,7 +8,7 @@ import Collapse from '@mui/material/Collapse';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import { PROVIDER_COLORS, OR_AUTO_COLLAPSE_THRESHOLD } from './modelPicker';
-import { formatTokenCount } from './helpers';
+import { formatTokenCount } from '../helpers';
 import { ModelPickerRecents } from './ModelPickerRecents';
 
 interface Props {

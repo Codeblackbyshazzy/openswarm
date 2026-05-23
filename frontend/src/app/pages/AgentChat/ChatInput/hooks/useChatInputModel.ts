@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useAppSelector } from '@/shared/hooks';
-import { sortModelsForPicker } from './modelPicker';
+import { sortModelsForPicker } from '../model-picker/modelPicker';
 
 const FALLBACK_MODELS = [
   { value: 'sonnet', label: 'Claude Sonnet 4.6', context_window: 1_000_000, reasoning: true },

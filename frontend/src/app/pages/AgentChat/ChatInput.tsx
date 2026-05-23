@@ -6,15 +6,15 @@ import { serializeEditorContent, AttachedSkill } from '@/app/components/richEdit
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { fetchModes } from '@/shared/state/modesSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-import { useChatInputModel } from './ChatInput/useChatInputModel';
-import { useDraftLoad, deleteDraft, loadDraft } from './ChatInput/draftStore';
-import { handleSlashCommand } from './ChatInput/slashCommands';
+import { useChatInputModel } from './ChatInput/hooks/useChatInputModel';
+import { useDraftLoad, deleteDraft, loadDraft } from './ChatInput/hooks/draftStore';
+import { handleSlashCommand } from './ChatInput/hooks/slashCommands';
 import { materializeImages, appendSelectedElements, computeSendBlock } from './ChatInput/sendHelpers';
-import { useImageAttachments } from './ChatInput/useImageAttachments';
-import { useContextFiles } from './ChatInput/useContextFiles';
-import { useModelPicker } from './ChatInput/useModelPicker';
-import { useEditorHandlers } from './ChatInput/useEditorHandlers';
-import { ChatInputView } from './ChatInput/ChatInputView';
+import { useImageAttachments } from './ChatInput/hooks/useImageAttachments';
+import { useContextFiles } from './ChatInput/hooks/useContextFiles';
+import { useModelPicker } from './ChatInput/hooks/useModelPicker';
+import { useEditorHandlers } from './ChatInput/hooks/useEditorHandlers';
+import { ChatInputView } from './ChatInput/view/ChatInputView';
 import { ICON_MAP, FALLBACK_MODE_BASE } from './ChatInput/modeConfig';
 import { AttachedImage, ForcedToolGroup, ChatInputHandle } from './ChatInput/types';
 
