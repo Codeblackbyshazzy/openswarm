@@ -1,7 +1,7 @@
 import React from 'react';
-import SelectionOverlay from '@/app/components/SelectionOverlay';
-import { ElementSelectionProvider } from '@/app/components/ElementSelectionContext';
-import { useDomElementSelector } from '@/app/components/useDomElementSelector';
+import SelectionOverlay from '@/app/components/editor/SelectionOverlay';
+import { ElementSelectionProvider } from '@/app/components/editor/ElementSelectionContext';
+import { useDomElementSelector } from '@/app/components/editor/useDomElementSelector';
 import { useDashboardController } from './hooks/state/useDashboardController';
 import DashboardCanvas from './canvas/DashboardCanvas';
 

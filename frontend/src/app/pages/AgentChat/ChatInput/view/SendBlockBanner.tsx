@@ -1,7 +1,7 @@
 import React from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import { ContextPath } from '@/app/components/DirectoryBrowser';
+import { ContextPath } from '@/app/components/editor/DirectoryBrowser';
 import { API_BASE, getAuthToken } from '@/shared/config';
 import { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import { SendBlock } from '../hooks/useContextFiles';

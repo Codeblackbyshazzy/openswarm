@@ -19,7 +19,7 @@ import {
   type CardPosition,
 } from '@/shared/state/dashboardLayoutSlice';
 import { generateDashboardName } from '@/shared/state/dashboardsSlice';
-import type { ContextPath } from '@/app/components/DirectoryBrowser';
+import type { ContextPath } from '@/app/components/editor/DirectoryBrowser';
 import type { CanvasActions } from '../interaction/useCanvasControls';
 
 type SpawnOrigin = { x: number; y: number; type?: 'branch' };

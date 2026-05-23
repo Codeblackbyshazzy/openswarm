@@ -1,5 +1,5 @@
 import React from 'react';
-import { ContextPath } from '@/app/components/DirectoryBrowser';
+import { ContextPath } from '@/app/components/editor/DirectoryBrowser';
 
 export interface AttachedImage {
   data: string;

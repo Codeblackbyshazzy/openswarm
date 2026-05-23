@@ -15,7 +15,7 @@ import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { createDraftSession, removeDraftSession } from '@/shared/state/agentsSlice';
 import { createSkill } from '@/shared/state/skillsSlice';
 import AgentChat from '../AgentChat/AgentChat';
-import { ContextPath } from '@/app/components/DirectoryBrowser';
+import { ContextPath } from '@/app/components/editor/DirectoryBrowser';
 import { API_BASE } from '@/shared/config';
 
 const SKILLS_WORKSPACE_API = `${API_BASE}/skills`;

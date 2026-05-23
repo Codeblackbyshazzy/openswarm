@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, RefObject } from 'react';
-import { SelectedElement, useElementSelection } from '@/app/components/ElementSelectionContext';
+import { SelectedElement, useElementSelection } from '@/app/components/editor/ElementSelectionContext';
 
 const OVERLAY_ID = '__clawd-select-overlay__';
 const LABEL_ID = '__clawd-select-label__';

@@ -1,4 +1,4 @@
-import { useElementSelection, SelectedElement } from '@/app/components/ElementSelectionContext';
+import { useElementSelection, SelectedElement } from '@/app/components/editor/ElementSelectionContext';
 import { getClipboardCards, clearClipboard } from '@/shared/dashboardClipboard';
 
 /** Drains the dashboard clipboard into owner-scoped selected elements. Returns true if it consumed the paste. */

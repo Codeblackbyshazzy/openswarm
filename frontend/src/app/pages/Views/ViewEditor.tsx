@@ -38,7 +38,7 @@ import ViewPreview, { ViewPreviewHandle } from './ViewPreview';
 import TerminalPanel, { TerminalLine } from './TerminalPanel';
 import { getDefault } from '@/shared/inputSchemaDefaults';
 import CodeEditor from './CodeEditor';
-import { ElementSelectionProvider } from '@/app/components/ElementSelectionContext';
+import { ElementSelectionProvider } from '@/app/components/editor/ElementSelectionContext';
 import { captureViewThumbnail } from './captureViewThumbnail';
 import { API_BASE, getAuthToken } from '@/shared/config';
 import { onboardingBus } from '@/app/components/Onboarding/eventBus';

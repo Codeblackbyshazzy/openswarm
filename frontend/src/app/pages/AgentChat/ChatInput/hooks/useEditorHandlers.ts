@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, RefObject } from 'react';
-import { CommandPickerItem } from '@/app/components/CommandPicker';
-import { useElementSelection } from '@/app/components/ElementSelectionContext';
+import { CommandPickerItem } from '@/app/components/editor/CommandPicker';
+import { useElementSelection } from '@/app/components/editor/ElementSelectionContext';
 import {
   SKILL_PILL_ATTR,
   AttachedSkill,
@@ -8,7 +8,7 @@ import {
   detectEditorTrigger,
   TriggerState,
   EMPTY_TRIGGER,
-} from '@/app/components/richEditorUtils';
+} from '@/app/components/editor/richEditorUtils';
 import { useAppDispatch } from '@/shared/hooks';
 import { clearSessionMessages } from '@/shared/state/agentsSlice';
 import { scheduleDraftSave } from './draftStore';

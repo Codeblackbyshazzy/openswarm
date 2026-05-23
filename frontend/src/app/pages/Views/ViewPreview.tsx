@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useMemo, useCallback, forwardRef, useImperati
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { Skeleton } from '@/app/components/feedback/Loading';
-import { useElementSelection } from '@/app/components/ElementSelectionContext';
+import { useElementSelection } from '@/app/components/editor/ElementSelectionContext';
 import { useIframeElementSelector } from './useIframeElementSelector';
 import { getAuthToken, ensureAuthToken } from '@/shared/config';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';

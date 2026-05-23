@@ -48,8 +48,8 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import ExtensionIcon from '@mui/icons-material/Extension';
 import ListSubheader from '@mui/material/ListSubheader';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-import DirectoryBrowser from '@/app/components/DirectoryBrowser';
-import RichPromptEditor from '@/app/components/RichPromptEditor';
+import DirectoryBrowser from '@/app/components/editor/DirectoryBrowser';
+import RichPromptEditor from '@/app/components/editor/RichPromptEditor';
 
 const ICON_MAP: Record<string, React.ReactNode> = {
   smart_toy: <SmartToyOutlinedIcon sx={{ fontSize: 20 }} />,

@@ -1,6 +1,6 @@
 import React, { RefObject } from 'react';
 import Box from '@mui/material/Box';
-import { useElementSelection } from '@/app/components/ElementSelectionContext';
+import { useElementSelection } from '@/app/components/editor/ElementSelectionContext';
 import { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import { ContextRing } from './ContextRing';
 import { ModeControl } from './ModeControl';

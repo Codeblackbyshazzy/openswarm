@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import CommandPicker, { CommandPickerItem } from '@/app/components/CommandPicker';
+import CommandPicker, { CommandPickerItem } from '@/app/components/editor/CommandPicker';
 import {
   SKILL_PILL_ATTR,
   AttachedSkill,
@@ -12,7 +12,7 @@ import {
   detectEditorTrigger,
   TriggerState,
   EMPTY_TRIGGER,
-} from '@/app/components/richEditorUtils';
+} from '@/app/components/editor/richEditorUtils';
 import { useAppSelector } from '@/shared/hooks';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 

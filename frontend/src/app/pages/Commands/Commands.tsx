@@ -14,7 +14,7 @@ import ViewQuiltOutlinedIcon from '@mui/icons-material/ViewQuiltOutlined';
 import { useAppSelector, useAppDispatch } from '@/shared/hooks';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { fetchBuiltinTools, fetchTools } from '@/shared/state/toolsSlice';
-import { getToolGroupIcon } from '@/app/components/CommandPicker';
+import { getToolGroupIcon } from '@/app/components/editor/CommandPicker';
 import { fetchOutputs } from '@/shared/state/outputsSlice';
 import { fetchSkills } from '@/shared/state/skillsSlice';
 import { fetchModes } from '@/shared/state/modesSlice';

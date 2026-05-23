@@ -1,6 +1,6 @@
-import { SelectedElement } from '@/app/components/ElementSelectionContext';
+import { SelectedElement } from '@/app/components/editor/ElementSelectionContext';
 import { getWebview } from '@/shared/browserRegistry';
-import { ContextPath } from '@/app/components/DirectoryBrowser';
+import { ContextPath } from '@/app/components/editor/DirectoryBrowser';
 import { AttachedImage } from './types';
 import { SendBlock } from './hooks/useContextFiles';
 

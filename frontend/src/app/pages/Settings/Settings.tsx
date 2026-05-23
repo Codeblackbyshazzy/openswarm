@@ -10,7 +10,7 @@ import { onboardingBus } from '@/app/components/Onboarding/eventBus';
 import { fetchModels } from '@/shared/state/modelsSlice';
 import { fetchModes } from '@/shared/state/modesSlice';
 import { useThemeMode, useClaudeTokens } from '@/shared/styles/ThemeContext';
-import DirectoryBrowser from '@/app/components/DirectoryBrowser';
+import DirectoryBrowser from '@/app/components/editor/DirectoryBrowser';
 import { CommandsContent } from '@/app/pages/Commands/Commands';
 import GeneralTab from './sections/general/GeneralTab';
 import ModelsTab from './sections/models/ModelsTab';

@@ -1,8 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { useElementSelection } from '@/app/components/ElementSelectionContext';
+import { useElementSelection } from '@/app/components/editor/ElementSelectionContext';
 import { onboardingBus } from '@/app/components/Onboarding/eventBus';
-import { ContextPath } from '@/app/components/DirectoryBrowser';
-import { serializeEditorContent, AttachedSkill } from '@/app/components/richEditorUtils';
+import { ContextPath } from '@/app/components/editor/DirectoryBrowser';
+import { serializeEditorContent, AttachedSkill } from '@/app/components/editor/richEditorUtils';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { fetchModes } from '@/shared/state/modesSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
@@ -19,7 +19,7 @@ import { ICON_MAP, FALLBACK_MODE_BASE } from './ChatInput/modeConfig';
 import { AttachedImage, ForcedToolGroup, ChatInputHandle } from './ChatInput/types';
 
 export type { AttachedImage, ForcedToolGroup, ChatInputHandle };
-export type { AttachedSkill } from '@/app/components/richEditorUtils';
+export type { AttachedSkill } from '@/app/components/editor/richEditorUtils';
 
 interface Props {
   onSend: (message: string, images?: Array<{ data: string; media_type: string }>, contextPaths?: ContextPath[], forcedTools?: string[], attachedSkills?: Array<{ id: string; name: string; content: string }>, selectedBrowserIds?: string[]) => void;

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { ContextPath } from '@/app/components/DirectoryBrowser';
+import { ContextPath } from '@/app/components/editor/DirectoryBrowser';
 import { API_BASE, getAuthToken } from '@/shared/config';
 import { ForcedToolGroup } from '../types';
 import { basename } from '../helpers';

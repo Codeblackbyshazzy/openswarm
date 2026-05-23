@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
-import { useElementSelection } from '@/app/components/ElementSelectionContext';
+import { useElementSelection } from '@/app/components/editor/ElementSelectionContext';
 import { useCanvasControls } from '../interaction/useCanvasControls';
 import { useDashboardSelection } from './useDashboardSelection';
 import { useDashboardSelectors } from './useDashboardSelectors';
