@@ -27,7 +27,6 @@ from backend.apps.tools_lib.tools_lib import (
     save_trusted_sensitive_paths,
 )
 from backend.config.paths import SESSIONS_DIR
-from backend.apps.service.client import sync as _sync
 from backend.apps.agents.error_classify import (
     _NON_TRANSIENT_PATTERNS,
     _TRANSIENT_CAPACITY_PATTERNS,
@@ -42,6 +41,7 @@ from backend.apps.agents.session_store import (
     _save_session,
     build_search_text,
 )
+from backend.apps.agents.cloud_sync import _sync_session_close
 
 logger = logging.getLogger(__name__)
 
@@ -4605,35 +4605,7 @@ class AgentManager:
         return build_search_text(session, max_len)
 
     def _sync_session_close(self, session: AgentSession, close_reason: str = "user"):
-        """Submit the session state to the cloud on close. The cloud
-        consumes the dump however it sees fit; the desktop just hands off
-        a snapshot. Skipped for mock sessions so dev runs don't post to
-        the real backend.
-
-        Synthesizes a `closed_at` timestamp on the dump if the session
-        doesn't have one. Two paths previously sent close-events without
-        a timestamp and made the cloud unable to compute duration_ms
-        (which surfaced as duration_ms=null on 90% of session.ended events,
-        browser-agent and shutdown paths in particular):
-
-          1. browser_agent.py calls this without setting closed_at.
-          2. shutdown_all_sessions() clears closed_at to None for the
-             on-disk restore mechanism, then syncs.
-
-        Fix is here at the bottleneck rather than at every caller so we
-        can't miss a future call site. The on-disk session JSON keeps its
-        original (possibly None) closed_at, only the cloud-bound dump
-        gets the synthesized timestamp.
-        """
-        if close_reason == "mock" or getattr(session, "_mock_run", False):
-            return
-        try:
-            dump = session.model_dump(mode="json")
-            if not dump.get("closed_at"):
-                dump["closed_at"] = datetime.now().isoformat()
-            _sync(dump)
-        except Exception:
-            pass
+        _sync_session_close(session, close_reason)
 
     async def close_session(self, session_id: str) -> None:
         """Close a session: pause the agent if running, persist to JSON file,
