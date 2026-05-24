@@ -20,6 +20,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AgentMessage } from '@/shared/state/agentsSlice';
 import { openSettingsModal } from '@/shared/state/settingsSlice';
+import { shallowEqual } from 'react-redux';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { SKILL_COLOR } from '@/app/components/richEditorUtils';
@@ -909,7 +910,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
       activeMcpCount: s.active_mcps?.length ?? 0,
       messagesCount: s.messages?.length ?? 0,
     } as OverflowContext;
-  });
+  }, shallowEqual);
   const openswarmError = !isUser ? parseOpenSwarmError(rawText, overflowCtx) : null;
 
   // (message.id, kind) keys so cap card analytics fire once, not on edits.

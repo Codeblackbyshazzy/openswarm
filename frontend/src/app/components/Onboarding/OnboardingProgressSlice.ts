@@ -5,7 +5,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 const STORAGE_KEY = 'openswarm.onboarding.v2';
 const SCHEMA_VERSION = 2 as const;
 
-export type PanelMode = 'pill' | 'expanded' | 'roadmap' | 'hidden';
+export type PanelMode = 'pill' | 'expanded' | 'roadmap' | 'docked' | 'hidden';
 
 export interface PerStepState {
   lastViewedAt: number;

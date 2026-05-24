@@ -67,15 +67,8 @@ const OnboardingPanel: React.FC = () => {
     return STEPS.find((s) => !progress.completedSteps.includes(s.id)) ?? null;
   }, [progress.currentStepId, progress.completedSteps]);
 
-  // Stage-relative (panel) vs overall (pill).
+  // Stage name labels the panel; the count + bar stay global so progress never resets between stages.
   const stageOf = currentStep?.stage ?? 'get_started';
-  const stageSteps = useMemo(
-    () => STEPS.filter((s) => s.stage === stageOf),
-    [stageOf],
-  );
-  const stageDone = stageSteps.filter((s) =>
-    progress.completedSteps.includes(s.id),
-  ).length;
 
   const total = STEPS.length;
   const done = progress.completedSteps.length;
@@ -243,20 +236,41 @@ const OnboardingPanel: React.FC = () => {
                         {STAGE_LABELS[stageOf]}
                       </Typography>
                       <Typography sx={{ fontSize: 11, color: c.text.muted }}>
-                        {stageDone}/{stageSteps.length}
+                        {done}/{total}
                       </Typography>
                     </Box>
-                    <IconButton
-                      size="small"
-                      onClick={() => {
-                        report('panel_minimized', { from: 'expanded' });
-                        progress.setPanelMode('pill');
-                      }}
-                      sx={{ color: c.text.tertiary, p: 0.4 }}
-                      aria-label="Minimize"
-                    >
-                      <RemoveIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }}>
+                      <ButtonBase
+                        onClick={() => {
+                          report('panel_skipped', { from: 'expanded' });
+                          progress.setPanelMode('docked');
+                        }}
+                        sx={{
+                          fontSize: 11.5,
+                          fontWeight: 500,
+                          color: c.text.muted,
+                          px: 0.7,
+                          py: 0.3,
+                          borderRadius: `${c.radius.sm}px`,
+                          transition: 'color 0.15s, background 0.15s',
+                          '&:hover': { color: c.text.primary, bgcolor: `${c.text.tertiary}0A` },
+                        }}
+                        aria-label="Skip setup and tuck it into the sidebar"
+                      >
+                        Skip
+                      </ButtonBase>
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          report('panel_minimized', { from: 'expanded' });
+                          progress.setPanelMode('pill');
+                        }}
+                        sx={{ color: c.text.tertiary, p: 0.4 }}
+                        aria-label="Minimize"
+                      >
+                        <RemoveIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    </Box>
                   </Box>
                   <Box
                     sx={{
@@ -269,14 +283,10 @@ const OnboardingPanel: React.FC = () => {
                     }}
                   >
                     <motion.div
-                      key={`stage-progress-${stageOf}`}
+                      key="tour-progress"
                       initial={false}
                       animate={{
-                        width: `${
-                          stageSteps.length > 0
-                            ? (stageDone / stageSteps.length) * 100
-                            : 0
-                        }%`,
+                        width: `${total > 0 ? (done / total) * 100 : 0}%`,
                       }}
                       transition={{ duration: 0.6, ease: [0.2, 0.8, 0.2, 1] }}
                       style={{

@@ -61,14 +61,17 @@ const subscriptionsSlice = createSlice({
 
 export const { setSubscriptionStatus } = subscriptionsSlice.actions;
 
+// Stable empty ref so the selector doesn't hand back a fresh [] each call (forces needless rerenders).
+const EMPTY_CONNECTIONS: SubscriptionConnection[] = [];
+
 /** Unwraps the polymorphic `providers` shape (modern object vs legacy array). */
 export function selectSubscriptionConnections(
   state: WithSubscriptions,
 ): SubscriptionConnection[] {
   const providers = state.subscriptions.status?.providers;
-  if (!providers) return [];
+  if (!providers) return EMPTY_CONNECTIONS;
   if (Array.isArray(providers)) return providers;
-  return providers.connections ?? [];
+  return providers.connections ?? EMPTY_CONNECTIONS;
 }
 
 export function isProviderConnected(
