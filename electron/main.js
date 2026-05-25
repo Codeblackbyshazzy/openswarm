@@ -1461,6 +1461,11 @@ ipcMain.on('splash:action', (_event, action) => {
 });
 
 ipcMain.handle('get-backend-port', () => backendPort);
+// Sync mirrors so preload.js can expose window.openswarm synchronously (no await), closing the race where React renders before the async exposure resolves and window.openswarm is briefly undefined. backendPort is assigned in app.whenReady before any BrowserWindow is created, so it is always set by the time preload runs.
+ipcMain.on('get-backend-port-sync', (event) => { event.returnValue = backendPort; });
+ipcMain.on('get-webview-preload-path-sync', (event) => {
+  event.returnValue = `file://${path.join(__dirname, 'webview-preload.js')}`;
+});
 ipcMain.handle('get-auth-token', async () => {
   // Wait for backend if it's still cold-starting; this is the lazy-backend gate that lets the window open while Python is warming up.
   if (!backendReady) await backendReadyPromise;
