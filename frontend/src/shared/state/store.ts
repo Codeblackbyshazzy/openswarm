@@ -15,6 +15,7 @@ import updateReducer from './updateSlice';
 import modelsReducer from './modelsSlice';
 import interactionReducer from './interactionSlice';
 import subscriptionsReducer from './subscriptionsSlice';
+import workflowsReducer from './workflowsSlice';
 import onboardingProgressReducer from '@/shared/state/onboardingProgressSlice';
 
 export const store = configureStore({
@@ -35,6 +36,7 @@ export const store = configureStore({
     models: modelsReducer,
     interaction: interactionReducer,
     subscriptions: subscriptionsReducer,
+    workflows: workflowsReducer,
     onboardingProgress: onboardingProgressReducer,
   },
   // Disable Redux Toolkit's dev-mode invariant middleware (serializable +
@@ -57,3 +59,10 @@ export const store = configureStore({
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
+
+// Expose the store on window in dev so playwright + the user's devtools
+// can drive UI flows without hunting for selectors. The expose is
+// guarded by NODE_ENV so production bundles don't ship it.
+if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
+  (window as unknown as { __OPENSWARM_STORE__?: typeof store }).__OPENSWARM_STORE__ = store;
+}
