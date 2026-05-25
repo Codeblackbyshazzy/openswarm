@@ -5,7 +5,7 @@ import Popover from '@mui/material/Popover';
 import Tooltip from '@mui/material/Tooltip';
 import InputBase from '@mui/material/InputBase';
 import HistoryIcon from '@mui/icons-material/HistoryToggleOffRounded';
-import CalendarTodayRounded from '@mui/icons-material/CalendarTodayRounded';
+import CalendarMonthRounded from '@mui/icons-material/CalendarMonthRounded';
 import EditOutlined from '@mui/icons-material/EditOutlined';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
@@ -163,19 +163,20 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, minHeight: '100%' }}>
       <StepList steps={steps} expandable expandedIds={expandedIds} onToggleExpand={onToggleStep} />
       <Box sx={{ flex: 1 }} />
-      {/* Schedule prompt card. Soft accent tint + calendar icon, matching Image #7. */}
+      {/* Schedule prompt card. Soft warning-gold tint + calendar icon, matching
+          Image #35. Gold is the same token the HITL/human-intervention UI uses. */}
       <Box sx={{
         display: 'flex', alignItems: 'flex-start', gap: 1.25,
         p: 1.5, borderRadius: `${c.radius.lg}px`,
-        bgcolor: c.accent.primary + '10',
-        border: `1px solid ${c.accent.primary}30`,
+        bgcolor: c.status.warning + '10',
+        border: `1px solid ${c.status.warning}30`,
       }}>
         <Box sx={{
           width: 32, height: 32, borderRadius: `${c.radius.md}px`,
-          bgcolor: c.accent.primary + '22', color: c.accent.primary,
+          bgcolor: c.status.warning + '22', color: c.status.warning,
           display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}>
-          <CalendarTodayRounded sx={{ fontSize: 16 }} />
+          <CalendarMonthRounded sx={{ fontSize: 18 }} />
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: c.text.primary, lineHeight: 1.3 }}>
@@ -204,10 +205,10 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
             display: 'inline-flex', alignItems: 'center', gap: 0.5,
             fontSize: '0.88rem', fontWeight: 700,
             px: 1.75, py: 0.6, borderRadius: 999,
-            color: '#fff', bgcolor: c.accent.primary,
+            color: '#fff', bgcolor: c.status.warning,
             cursor: busy ? 'wait' : 'pointer',
             opacity: busy ? 0.6 : 1,
-            '&:hover': { bgcolor: c.accent.primary, filter: 'brightness(1.06)' },
+            '&:hover': { bgcolor: c.status.warning, filter: 'brightness(1.06)' },
           }}>
           Schedule Workflow
         </Box>
@@ -288,7 +289,7 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
             cursor: scheduleClickable ? 'pointer' : 'default',
             '&:hover': scheduleClickable ? { color: c.text.primary } : {},
           }}>
-          <CalendarTodayRounded sx={{ fontSize: 15, color: c.text.muted, flexShrink: 0 }} />
+          <CalendarMonthRounded sx={{ fontSize: 16, color: c.text.muted, flexShrink: 0 }} />
           <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scheduleLine}</Box>
         </Box>
         <Box

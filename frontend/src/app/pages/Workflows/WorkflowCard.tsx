@@ -42,6 +42,7 @@ import StopRounded from '@mui/icons-material/StopRounded';
 import PauseRounded from '@mui/icons-material/PauseRounded';
 import { StatusDot, RunSparkline, LastFiredHint, isStaleSinceLastRun } from './workflowVisuals';
 import { store } from '@/shared/state/store';
+import { getAgentWorkTime } from '@/shared/agentWorkTime';
 
 type ResizeDir = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 
@@ -486,7 +487,13 @@ const WorkflowCard: React.FC<Props> = ({
           accent pill. */}
       {isDraft && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, px: 2, pb: 1.25, pt: 0, flexShrink: 0 }}>
-          <SubtitleRow workflow={null} runs={null} />
+          <SubtitleRow
+            workflow={null}
+            runs={null}
+            fallbackModel={card?.draft?.model}
+            fallbackMode={card?.draft?.mode}
+            fallbackSourceSessionId={card?.draft?.source_session_id}
+          />
           <Box sx={{ flex: 1 }} />
           <TabBtn label="History" icon={<HistoryIcon sx={{ fontSize: 16 }} />} active={false} onClick={() => {}} />
           <TabBtn label="Run" icon={<PlayArrowIcon sx={{ fontSize: 16 }} />} active={false} accent onClick={() => {}} />
@@ -536,7 +543,7 @@ const WorkflowCard: React.FC<Props> = ({
           Crossfades between Run/Edit/History tabs so the swap doesn't
           read as a "jump". Outer box is the scrollable viewport; the
           animated child changes per `card.view`. */}
-      <Box ref={bodyScrollRef} data-no-drag sx={{ flex: 1, p: 2, overflowY: 'auto', minHeight: 0, position: 'relative', overscrollBehavior: 'contain', display: 'flex', flexDirection: 'column' }}>
+      <Box ref={bodyScrollRef} data-no-drag sx={{ flex: 1, p: 2, overflowY: 'auto', minHeight: 0, position: 'relative', overscrollBehavior: 'contain', display: 'flex', flexDirection: 'column', borderTop: `1px solid ${c.border.subtle}` }}>
         {/* No AnimatePresence wrapper here on purpose: framer-motion's
             crossfade was racing user-input events and stealing focus
             from the title/description/step InputBases on every parent
@@ -727,34 +734,48 @@ function StatusPill({ view, workflow, runs }: { view: string; workflow: Workflow
   );
 }
 
-function SubtitleRow({ workflow, runs }: { workflow: Workflow | null; runs: import('@/shared/state/workflowsSlice').WorkflowRun[] | null }) {
+function SubtitleRow({ workflow, runs, fallbackModel, fallbackMode, fallbackSourceSessionId }: {
+  workflow: Workflow | null;
+  runs: import('@/shared/state/workflowsSlice').WorkflowRun[] | null;
+  fallbackModel?: string;
+  fallbackMode?: string;
+  fallbackSourceSessionId?: string | null;
+}) {
   const c = useClaudeTokens();
   const modelsByProvider = useAppSelector((s) => s.models.byProvider);
+  // Draft preview has no workflow yet; fall back to the converting chat's
+  // model/mode and use its work time for the "28s" so the subtitle reads the
+  // same as the source chat card did.
+  const sourceSession = useAppSelector((s) => fallbackSourceSessionId ? s.agents.sessions[fallbackSourceSessionId] : undefined);
   // Match Image #34/#35/#36/#38/#40: "Claude Opus 4.6  agent  28s".
-  // Spaces between fields, all in muted text. Duration is the most
-  // recent finished run's elapsed time; falls back to nothing when no
-  // run has completed yet (PreviewView).
+  // Spaces between fields, all in muted text.
+  const effModel = workflow?.model || fallbackModel || '';
   const modelLabel = React.useMemo(() => {
-    if (!workflow?.model) return '';
+    if (!effModel) return '';
     for (const list of Object.values(modelsByProvider || {})) {
       for (const m of (list as any[]) || []) {
-        if (m.value === workflow.model) return m.label || workflow.model;
+        if (m.value === effModel) return m.label || effModel;
       }
     }
-    return workflow.model;
-  }, [workflow?.model, modelsByProvider]);
-  const modeLabel = workflow?.mode || '';
+    return effModel;
+  }, [effModel, modelsByProvider]);
+  const modeLabel = workflow?.mode || fallbackMode || '';
   const duration = React.useMemo(() => {
-    if (!runs || runs.length === 0) return '';
-    const last = runs.find((r) => r.finished_at);
-    if (!last || !last.finished_at) return '';
-    const ms = new Date(last.finished_at).getTime() - new Date(last.started_at).getTime();
-    if (ms <= 0) return '';
-    if (ms < 1000) return `${ms}ms`;
-    if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
-    const m = Math.floor(ms / 60_000);
-    return `${m}m`;
-  }, [runs]);
+    const finished = (runs || []).find((r) => r.finished_at);
+    if (finished && finished.finished_at) {
+      const ms = new Date(finished.finished_at).getTime() - new Date(finished.started_at).getTime();
+      if (ms > 0) {
+        if (ms < 1000) return `${ms}ms`;
+        if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
+        return `${Math.floor(ms / 60_000)}m`;
+      }
+    }
+    if (sourceSession) {
+      const { total } = getAgentWorkTime(sourceSession.messages || [], sourceSession.status);
+      if (total > 0) return total < 60 ? `${total}s` : `${Math.floor(total / 60)}m`;
+    }
+    return '';
+  }, [runs, sourceSession]);
   return (
     <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1.25, fontSize: '0.82rem', color: c.text.muted, minWidth: 0, overflow: 'hidden' }}>
       {modelLabel && <Box component="span" sx={{ whiteSpace: 'nowrap' }}>{modelLabel}</Box>}
