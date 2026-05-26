@@ -33,8 +33,9 @@
   ;   1. App is running (user double-clicked installer without quitting)
   ;      → taskkill /F /IM OpenSwarm.exe /T cascades through children
   ;   2. App crashed and left orphan python.exe / node.exe with no parent
-  ;      to taskkill via PID → wmic finds them by ExecutablePath substring
-  ;      and deletes them
+  ;      to taskkill via PID → PowerShell finds them by image path under
+  ;      the install dir and force-kills them (wmic, the old approach, was
+  ;      removed from Windows 11 24H2 and silently no-oped there)
   ;
   ; Both are safe (filter to install-dir-rooted processes only) and
   ; both no-op silently if no matching processes exist.
@@ -42,10 +43,14 @@
   nsExec::Exec 'taskkill /F /IM OpenSwarm.exe /T'
   Pop $0  ; discard exit code; non-fatal if no process matched
 
-  ; wmic where-clause: match anything under the per-user install dir.
-  ; The single backslash in '%\\Programs\\OpenSwarm\\%' becomes a
-  ; literal backslash after NSIS's escape, then SQL LIKE pattern.
-  nsExec::Exec 'wmic process where "ExecutablePath like ''%\\Programs\\OpenSwarm\\%''" delete'
+  ; Kill orphaned node/python whose image lives under the install dir (e.g.
+  ; an App Builder vite node.exe that outlived a crash). A running .exe
+  ; locks its own image, which would block the upgrade overwrite and
+  ; surface "cannot be closed". Scoped by path so the user's own
+  ; node/python stay untouched. PowerShell, not wmic, since wmic is gone
+  ; from Windows 11 24H2. NSIS escaping: backtick-delimited so the inner "
+  ; and ' are literals; $$ yields a literal $ (so $$_ becomes PowerShell $_).
+  nsExec::Exec `powershell -NoProfile -NonInteractive -Command "Get-Process node,python -ErrorAction SilentlyContinue | Where-Object { $$_.Path -like '*\Programs\OpenSwarm\*' } | Stop-Process -Force -ErrorAction SilentlyContinue"`
   Pop $0
 
   ; Brief pause so Windows kernel releases handles before NSIS tries
