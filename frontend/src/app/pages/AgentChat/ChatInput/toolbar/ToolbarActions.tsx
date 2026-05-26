@@ -2,6 +2,9 @@ import React, { RefObject } from 'react';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
+
+// Windows-only ablation: mounting a hidden <input type="file"> on Windows initializes the IFileDialog COM shim which is implicated in the Chromium 144 + Electron 40 commit-phase segfault. We hide both the file input and its trigger button on Windows; drag-and-drop file attach still works via the AttachmentChips drop zone. Mac unchanged.
+const IS_WIN = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
 import MicNoneOutlinedIcon from '@mui/icons-material/MicNoneOutlined';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import StopIcon from '@mui/icons-material/Stop';
@@ -88,34 +91,39 @@ export const ToolbarActions: React.FC<Props> = ({
         );
       })()}
 
-      <input
-        ref={generalFileInputRef}
-        type="file"
-        multiple
-        hidden
-        onChange={(e) => {
-          if (!e.target.files) return;
-          const all = Array.from(e.target.files);
-          const imgs = all.filter((f) => f.type.startsWith('image/'));
-          const rest = all.filter((f) => !f.type.startsWith('image/'));
-          if (imgs.length > 0) addImageFiles(imgs);
-          if (rest.length > 0) uploadAndAttachFiles(rest);
-          e.target.value = '';
-        }}
-      />
-      <Tooltip title="Attach file">
-        <IconButton
-          size="small"
-          onClick={() => generalFileInputRef.current?.click()}
-          sx={{
-            color: c.text.tertiary,
-            p: 0.5,
-            '&:hover': { color: c.text.secondary, bgcolor: 'rgba(0,0,0,0.04)' },
+      {/* DIAG: hidden <input type="file"> + attach button commented out for v1.1.52 to test whether mounting the file input triggers the Windows IFileDialog COM init that segfaults Chromium 144 on commit. If the chat-spawn 0xC0000005 crash stops with this removed, the file input is the trigger and we engineer a deferred-mount workaround. */}
+      {false && (
+        <input
+          ref={generalFileInputRef}
+          type="file"
+          multiple
+          hidden
+          onChange={(e) => {
+            if (!e.target.files) return;
+            const all = Array.from(e.target.files);
+            const imgs = all.filter((f) => f.type.startsWith('image/'));
+            const rest = all.filter((f) => !f.type.startsWith('image/'));
+            if (imgs.length > 0) addImageFiles(imgs);
+            if (rest.length > 0) uploadAndAttachFiles(rest);
+            e.target.value = '';
           }}
-        >
-          <AttachFileIcon sx={{ fontSize: 18 }} />
-        </IconButton>
-      </Tooltip>
+        />
+      )}
+      {false && (
+        <Tooltip title="Attach file">
+          <IconButton
+            size="small"
+            onClick={() => generalFileInputRef.current?.click()}
+            sx={{
+              color: c.text.tertiary,
+              p: 0.5,
+              '&:hover': { color: c.text.secondary, bgcolor: 'rgba(0,0,0,0.04)' },
+            }}
+          >
+            <AttachFileIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Tooltip>
+      )}
       {!autoRunMode && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           {hasContent && (
