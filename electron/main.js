@@ -57,9 +57,30 @@ function perfMark(name) {
 let _preflightInfo = {};
 let _preflightVerdict = null;
 
-// Comprehensive preflight (electron/preflight.js): fans out checks under hard per-check timeouts, caches the verdict keyed by app version, emits a [preflight2] line backend.log picks up. Kill switch via env or future settings.preflight_enabled. Fire-and-forget so it overlaps with backend spawn instead of adding to boot time.
+// Comprehensive preflight (electron/preflight.js): fans out checks under hard per-check timeouts, emits a [preflight2] verdict line, defers cache write until BOTH preflight finished AND backend-http-ready so a mid-boot kill cannot poison the next launch's cached verdict. Kill switch via OPENSWARM_DISABLE_PREFLIGHT=1.
+let _preflightPendingCache = null;
+// Cheap deterministic hash of installation_id into [0,99]; used by the cohort gate so the same install always falls in the same bucket regardless of when it boots.
+function installIdBucket(id) {
+  if (!id) return 0;
+  let h = 5381; for (let i = 0; i < id.length; i++) { h = ((h << 5) + h + id.charCodeAt(i)) >>> 0; }
+  return h % 100;
+}
+
 function runComprehensivePreflight() {
   if (process.env.OPENSWARM_DISABLE_PREFLIGHT === '1') { console.log('[preflight2] skipped (OPENSWARM_DISABLE_PREFLIGHT=1)'); return; }
+  // Honor settings.preflight_enabled and cohort gate. Read sync from settings.json
+  // since the backend isn't up yet; missing/unreadable file just means "use defaults".
+  try {
+    const settingsPath = path.join(app.getPath('userData'), 'data', 'settings', 'settings.json');
+    const raw = fs.readFileSync(settingsPath, 'utf8');
+    const s = JSON.parse(raw);
+    if (s && s.preflight_enabled === false) { console.log('[preflight2] skipped (settings.preflight_enabled=false)'); return; }
+    const pct = (s && typeof s.preflight_rollout_pct === 'number') ? s.preflight_rollout_pct : 100;
+    if (pct < 100) {
+      const bucket = installIdBucket(s && s.installation_id);
+      if (bucket >= pct) { console.log(`[preflight2] skipped (cohort gate: bucket ${bucket} >= ${pct}%)`); return; }
+    }
+  } catch { /* no settings yet = first launch = run with defaults */ }
   let pf;
   try { pf = require('./preflight'); } catch (e) { console.log(`[preflight2] module load failed: ${e && e.message}`); return; }
   let dataDir;
@@ -68,13 +89,27 @@ function runComprehensivePreflight() {
   if (dataDir) { try { pf.pruneOldCaches(pf.defaultEnv(), dataDir, version); } catch {} }
   const cached = dataDir ? pf.readCache(pf.defaultEnv(), dataDir, version) : null;
   if (cached) { console.log(`[preflight2] cached verdict=${cached.verdict} (skipping fresh probes)`); _preflightVerdict = cached; return; }
-  // Async; don't await. The beacon picks up _preflightVerdict if it has landed by then.
   pf.run(pf.defaultEnv(), { dataDir, gpu: { app } }).then((result) => {
     _preflightVerdict = result;
-    if (dataDir && result.verdict === 'ok') { try { pf.writeCache(pf.defaultEnv(), dataDir, version, result); } catch {} }
     const reasons = result.results.filter((r) => r.status !== 'ok').map((r) => `${r.name}:${r.status}(${r.reason})`).join('; ');
     console.log(`[preflight2] verdict=${result.verdict} totalMs=${result.totalMs} ${reasons || 'all-checks-ok'}`);
+    if (dataDir && result.verdict === 'ok') {
+      _preflightPendingCache = { pf, dataDir, version, result };
+      maybeCommitPreflightCache();
+    }
   }).catch((e) => { console.log(`[preflight2] threw: ${e && e.message}`); });
+}
+
+// Only write the cache once backend-http-ready has fired, so a kill in the
+// window between preflight-finish and backend-actually-serving cannot leave a
+// "verdict=ok" token that masks a real boot break on the next launch.
+function maybeCommitPreflightCache() {
+  if (!_preflightPendingCache) return;
+  if (_perfValues['backend-http-ready'] == null) return;
+  const { pf, dataDir, version, result } = _preflightPendingCache;
+  _preflightPendingCache = null;
+  try { pf.writeCache(pf.defaultEnv(), dataDir, version, result); console.log(`[preflight2] cache committed for v${version}`); }
+  catch (e) { console.log(`[preflight2] cache write failed: ${e && e.message}`); }
 }
 
 function logPreflight(backendPort) {
@@ -834,6 +869,7 @@ async function startBackend() {
   await waitForBackend(backendPort, { process: backendProcess });
   perfMark('backend-http-ready');
   console.log(`Backend ready on port ${backendPort}`);
+  maybeCommitPreflightCache();
   maybeSendBootBeacon();
 
   // Backend writes a per-install auth token file at startup. Read it
