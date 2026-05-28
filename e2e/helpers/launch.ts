@@ -1,5 +1,6 @@
 import { _electron as electron, ElectronApplication, Page } from '@playwright/test';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 // Repo root is two levels up from this file (e2e/helpers/).
@@ -27,7 +28,34 @@ export function packagedAppPath(): string {
   return found;
 }
 
+// On a clean profile (fresh CI runner) the SignInGate modal blocks the UI so
+// every Playwright click lands on the backdrop instead of the real button,
+// silently greening the test. Pre-seed user_id BEFORE launch so the gate
+// dismisses. We only seed when no settings.json exists, so this never touches
+// a developer's signed-in machine.
+function seedTestUserIfClean(): void {
+  // Gate on CI so a developer running `npm test` locally never has their real
+  // (or absent) sign-in state replaced with a fake one.
+  if (process.env.CI !== 'true' && process.env.OPENSWARM_E2E_SEED !== '1') return;
+  const userData =
+    process.platform === 'win32'
+      ? path.join(process.env.APPDATA || os.homedir(), 'OpenSwarm', 'data', 'settings')
+      : process.platform === 'darwin'
+        ? path.join(os.homedir(), 'Library', 'Application Support', 'OpenSwarm', 'data', 'settings')
+        : path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'OpenSwarm', 'data', 'settings');
+  const file = path.join(userData, 'settings.json');
+  // verify-all may have created the file without a user_id (no auth flow); we
+  // re-seed in that case too. Only existing-with-real-user_id is left alone.
+  let existing: any = {};
+  try { existing = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { existing = {}; }
+  if (existing && typeof existing === 'object' && existing.user_id) return;
+  fs.mkdirSync(userData, { recursive: true });
+  const merged = { ...existing, user_id: 'e2e-fake-user', user_email: 'e2e@openswarm.test' };
+  fs.writeFileSync(file, JSON.stringify(merged, null, 2));
+}
+
 export async function launchApp(): Promise<ElectronApplication> {
+  seedTestUserIfClean();
   return electron.launch({ executablePath: packagedAppPath(), args: [] });
 }
 
