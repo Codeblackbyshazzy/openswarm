@@ -27,6 +27,10 @@ function main() {
 
   const steps = [
     // Pure-logic gates run first - cheap, no build needed, fail fast.
+    ['preflight selftest (Layer 1+2: unit + hang fuzz)', 'selftest-preflight.js', []],
+    ['preflight rigs (Layer 3: failure simulators)', 'verify-preflight-rigs.js', []],
+    ['preflight race (Layer 4: parallel + cache)', 'verify-preflight-race.js', []],
+    ['preflight matrix (Layer 5: hostile-env scenario)', 'verify-preflight.js', []],
     ['deps fully pinned (reproducible backend builds)', 'verify-deps-pinned.js', []],
     ['no build-host paths leaked into the artifact', 'verify-host-leakage.js', appArg],
     ['bundled python runs (--version + import smoke)', 'verify-python-health.js', appArg],

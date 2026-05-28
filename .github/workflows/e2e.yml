@@ -61,6 +61,36 @@ jobs:
         shell: bash
         run: node scripts/ci/selftest-gate.js
 
+      # Preflight Layer 1+2+3+4 (unit, hang fuzz, failure rigs, race) - pure node, ~5s.
+      - name: Preflight selftest (Layers 1+2)
+        shell: bash
+        run: node scripts/ci/selftest-preflight.js
+      - name: Preflight failure rigs (Layer 3)
+        shell: bash
+        run: node scripts/ci/verify-preflight-rigs.js
+      - name: Preflight race / cache (Layer 4)
+        shell: bash
+        run: node scripts/ci/verify-preflight-race.js
+
+      # Preflight Layer 5: hostile-env scenarios. Each leg asserts the verdict
+      # matches the expected envelope for that scenario; network=blocked
+      # producing 'fail' instead of 'warn' is the false-positive bug class.
+      - name: Preflight matrix (normal)
+        shell: bash
+        run: node scripts/ci/verify-preflight.js
+      - name: Preflight matrix (network=blocked must -> warn)
+        shell: bash
+        env: { OPENSWARM_TEST_NETWORK: blocked }
+        run: node scripts/ci/verify-preflight.js
+      - name: Preflight matrix (appdata=readonly must -> fail)
+        shell: bash
+        env: { OPENSWARM_TEST_APPDATA: readonly }
+        run: node scripts/ci/verify-preflight.js
+      - name: Preflight matrix (lang=de-DE must stay -> ok)
+        shell: bash
+        env: { OPENSWARM_TEST_LANG: de-DE }
+        run: node scripts/ci/verify-preflight.js
+
       - name: Build packaged app (Windows)
         if: startsWith(matrix.os, 'windows')
         shell: pwsh
@@ -139,6 +169,15 @@ jobs:
       - name: Gate selftest (mutation)
         shell: bash
         run: node scripts/ci/selftest-gate.js
+      - name: Preflight selftest + rigs + race + matrix (Layers 1-5)
+        shell: bash
+        run: |
+          node scripts/ci/selftest-preflight.js
+          node scripts/ci/verify-preflight-rigs.js
+          node scripts/ci/verify-preflight-race.js
+          node scripts/ci/verify-preflight.js
+          OPENSWARM_TEST_NETWORK=blocked node scripts/ci/verify-preflight.js
+          OPENSWARM_TEST_APPDATA=readonly node scripts/ci/verify-preflight.js
       - name: Build packaged app (Windows)
         shell: pwsh
         run: pwsh -NoProfile -File scripts/build-app-win.ps1
