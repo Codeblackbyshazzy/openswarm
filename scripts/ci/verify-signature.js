@@ -33,12 +33,19 @@ function inspectWindows(target) {
   const signer = (subject || '').trim();
 
   if (status === 'Valid') return { signed: true, status, signer };
-  if (signer && status === 'Unknown') {
-    const signtool = process.env.SIGNTOOL_PATH || 'signtool';
-    const v = sh(`"${signtool}" verify /pa /v "${target}"`);
-    return { signed: v.ok, status: `${status} (signtool verify /pa: ${v.ok ? 'pass' : 'fail'})`, signer };
-  }
-  return { signed: false, status, signer };
+  // Azure Trusted Signing's fresh short-lived certs make Get-AuthenticodeSignature
+  // report "Unknown" (often with a null SignerCertificate) on CI runners even when the
+  // file IS signed, so its quick status can't be trusted here. Defer to signtool
+  // verify /pa, the canonical Authenticode verifier, as the authoritative check: it
+  // passes a genuinely-signed file and fails a genuinely-unsigned one.
+  const signtool = process.env.SIGNTOOL_PATH || 'signtool';
+  const v = sh(`"${signtool}" verify /pa "${target}"`);
+  return {
+    signed: v.ok,
+    status: `${status} | signtool verify /pa: ${v.ok ? 'pass' : 'FAIL'}`,
+    signer,
+    detail: v.ok ? '' : v.out,
+  };
 }
 
 // macOS: codesign validity + Gatekeeper assessment + notarization staple.
@@ -63,6 +70,7 @@ function main() {
 
   process.stdout.write(`  signed = ${info.signed}\n  status = ${info.status}\n`);
   if (info.signer) process.stdout.write(`  signer = ${info.signer}\n`);
+  if (info.detail) process.stdout.write(`  signtool: ${info.detail}\n`);
 
   if (args.requireSigned && !info.signed) {
     process.stderr.write(`\nSIGNATURE FAIL: --require-signed but artifact is not validly signed (${info.status}).\n`);
