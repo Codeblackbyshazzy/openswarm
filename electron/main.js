@@ -1305,16 +1305,21 @@ function setupAutoUpdater() {
     autoUpdater.allowDowngrade = true;
   }
 
+  // electron-updater (Mac) passes an info object ({version,...}); the built-in
+  // Windows autoUpdater (Squirrel) fires update-available/-not-available with NO
+  // args and update-downloaded with positional (event, releaseNotes, releaseName,
+  // releaseDate, updateURL). Normalize so these handlers work for both.
   autoUpdater.on('update-available', (info) => {
-    console.log(`Update available: ${info.version}`);
-    cachedUpdateStatus = { status: 'available', info, error: null };
-    sendToRenderer('update-available', info);
+    const norm = info && info.version ? info : { version: '' };
+    console.log(`Update available: ${norm.version || '(version not reported by Squirrel)'}`);
+    cachedUpdateStatus = { status: 'available', info: norm, error: null };
+    sendToRenderer('update-available', norm);
   });
 
   autoUpdater.on('update-not-available', (info) => {
     console.log('App is up to date');
-    cachedUpdateStatus = { status: 'not-available', info, error: null };
-    sendToRenderer('update-not-available', info);
+    cachedUpdateStatus = { status: 'not-available', info: info || {}, error: null };
+    sendToRenderer('update-not-available', info || {});
   });
 
   autoUpdater.on('download-progress', (progress) => {
@@ -1322,13 +1327,21 @@ function setupAutoUpdater() {
     sendToRenderer('download-progress', progress);
   });
 
-  autoUpdater.on('update-downloaded', (info) => {
-    console.log(`Update downloaded: ${info.version}`);
-    cachedUpdateStatus = { status: 'downloaded', info, error: null };
-    sendToRenderer('update-downloaded', info);
+  autoUpdater.on('update-downloaded', (info, releaseNotes, releaseName) => {
+    const version = (info && info.version) || releaseName || '';
+    console.log(`Update downloaded: ${version || '(ready to install)'}`);
+    const norm = info && info.version ? info : { version };
+    cachedUpdateStatus = { status: 'downloaded', info: norm, error: null };
+    sendToRenderer('update-downloaded', norm);
   });
 
   autoUpdater.on('error', (err) => {
+    // Squirrel throws "AutoUpdater process ... is already running" when a check or
+    // download is already in flight (e.g. the user clicked Check twice). Benign.
+    if (/already running/i.test((err && err.message) || '')) {
+      console.log('[updater] check already in progress; ignoring duplicate trigger');
+      return;
+    }
     // Raw electron-updater errors are verbose (full URL, HTTP status, stack,
     // sometimes an HTML body). Keep the raw text in the log for debugging, but
     // never show it to the user. The common case is "Experimental updates is on
@@ -1340,17 +1353,22 @@ function setupAutoUpdater() {
     sendToRenderer('update-error', friendly);
   });
 
-  autoUpdater.checkForUpdates().catch((err) => {
-    console.log('Update check skipped:', err.message);
-  });
+  // electron-updater's checkForUpdates() returns a promise; the built-in Windows
+  // autoUpdater (Squirrel) returns nothing and reports via events, so a bare
+  // .catch() on it throws. Guard the call so both updaters work.
+  const _runUpdateCheck = (label) => {
+    try {
+      const p = autoUpdater.checkForUpdates();
+      if (p && typeof p.catch === 'function') p.catch((err) => console.log(`${label}:`, err && err.message));
+    } catch (err) {
+      console.log(`${label} threw:`, err && err.message);
+    }
+  };
+  _runUpdateCheck('Update check skipped');
 
   // Always-on users (lid never closes) miss the once-at-startup check
   // above. Re-check every 4h; coalesces if a download is already cached.
-  setInterval(() => {
-    autoUpdater.checkForUpdates().catch((err) => {
-      console.log('Periodic update check failed:', err.message);
-    });
-  }, 4 * 60 * 60 * 1000);
+  setInterval(() => _runUpdateCheck('Periodic update check failed'), 4 * 60 * 60 * 1000);
 }
 
 function killBackend() {
@@ -1991,6 +2009,12 @@ ipcMain.handle('check-for-updates', async () => {
     return { success: false, error: 'Not packaged' };
   }
   try {
+    // Built-in Windows autoUpdater (Squirrel) returns nothing and reports via
+    // update-available / update-not-available events, so don't expect a result.
+    if (isSquirrelUpdater) {
+      autoUpdater.checkForUpdates();
+      return { success: true };
+    }
     const result = await autoUpdater.checkForUpdates();
     if (!result) {
       sendToRenderer('update-error', 'Unable to check for updates.');
