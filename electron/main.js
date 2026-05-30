@@ -34,8 +34,18 @@ process.on('unhandledRejection', (reason) => {
 app.on('child-process-gone', (_event, details) => {
   console.error('[diag][main:child-process-gone]', JSON.stringify(details));
 });
+// Platform-split auto-updater: electron-updater on Mac (full-featured), Electron's
+// built-in autoUpdater on Windows (Squirrel.Windows target; electron-updater dropped Squirrel).
 let autoUpdater;
-try { autoUpdater = require('electron-updater').autoUpdater; } catch (_) {}
+let isSquirrelUpdater = false;
+try {
+  if (process.platform === 'win32') {
+    autoUpdater = require('electron').autoUpdater;
+    isSquirrelUpdater = true;
+  } else {
+    autoUpdater = require('electron-updater').autoUpdater;
+  }
+} catch (_) {}
 const path = require('path');
 const { spawn, execFileSync } = require('child_process');
 const os = require('os');
@@ -1274,15 +1284,26 @@ function getBuildInfo() {
 
 function setupAutoUpdater() {
   if (!autoUpdater) return;
-  // Silent background updates: download on detect, install on next quit.
-  // The OS gates the install on main-process exit (can't replace a
-  // running .app / locked .exe), so an active session is never disrupted.
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
-  // Renderer pushes the user's experimental-updates setting via IPC right after settings load.
-  autoUpdater.allowPrerelease = false;
-  // Lets us un-ship a bad release: re-flip GH 'latest' to an older one and users hop back to it.
-  autoUpdater.allowDowngrade = true;
+  if (isSquirrelUpdater) {
+    // Squirrel.Windows fetches its RELEASES feed from GH /latest/download/. The
+    // built-in autoUpdater has no autoDownload/allowPrerelease/allowDowngrade knobs.
+    try {
+      autoUpdater.setFeedURL({ url: 'https://github.com/openswarm-ai/openswarm/releases/latest/download/' });
+    } catch (err) {
+      console.warn('[updater] Squirrel setFeedURL failed:', err && err.message);
+      return;
+    }
+  } else {
+    // Silent background updates: download on detect, install on next quit.
+    // The OS gates the install on main-process exit (can't replace a
+    // running .app / locked .exe), so an active session is never disrupted.
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    // Renderer pushes the user's experimental-updates setting via IPC right after settings load.
+    autoUpdater.allowPrerelease = false;
+    // Lets us un-ship a bad release: re-flip GH 'latest' to an older one and users hop back to it.
+    autoUpdater.allowDowngrade = true;
+  }
 
   autoUpdater.on('update-available', (info) => {
     console.log(`Update available: ${info.version}`);
@@ -1983,6 +2004,8 @@ ipcMain.handle('check-for-updates', async () => {
 
 ipcMain.handle('download-update', async () => {
   if (!autoUpdater) return { success: false, error: 'Updater not available' };
+  // Squirrel built-in autoUpdater auto-downloads on detect; no manual trigger needed.
+  if (isSquirrelUpdater) return { success: true };
   try {
     await autoUpdater.downloadUpdate();
     return { success: true };
@@ -1993,6 +2016,8 @@ ipcMain.handle('download-update', async () => {
 
 ipcMain.handle('set-allow-prerelease', async (_e, value) => {
   if (!autoUpdater) return { success: false, error: 'Updater not available' };
+  // Built-in autoUpdater has no allowPrerelease; experimental channel on Windows is a TODO once we wire a separate Squirrel prerelease feed.
+  if (isSquirrelUpdater) return { success: false, error: 'Experimental channel not yet supported on Windows Squirrel target' };
   const next = Boolean(value);
   if (autoUpdater.allowPrerelease === next) return { success: true, changed: false };
   autoUpdater.allowPrerelease = next;
@@ -2007,6 +2032,8 @@ ipcMain.handle('set-allow-prerelease', async (_e, value) => {
 
 ipcMain.handle('install-update', async () => {
   if (!autoUpdater) return;
+  // Built-in autoUpdater (Windows) takes no args; electron-updater (Mac) takes (isSilent, isForceRunAfter).
+  if (isSquirrelUpdater) { autoUpdater.quitAndInstall(); return; }
   autoUpdater.quitAndInstall(false, true);
 });
 

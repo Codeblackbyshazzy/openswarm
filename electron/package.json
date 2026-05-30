@@ -73,7 +73,7 @@
       "icon": "build/icon.ico",
       "target": [
         {
-          "target": "nsis",
+          "target": "squirrel",
           "arch": [
             "x64"
           ]
@@ -86,6 +86,9 @@
           "sha256"
         ]
       }
+    },
+    "squirrelWindows": {
+      "iconUrl": "https://raw.githubusercontent.com/openswarm-ai/openswarm/main/electron/build/icon.ico"
     },
     "nsis": {
       "oneClick": true,
