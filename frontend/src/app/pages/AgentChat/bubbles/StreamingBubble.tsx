@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { useStreamingMessage } from '@/shared/state/streamingSlice';
 import MessageBubble from './MessageBubble';
 import ToolCallBubble from '../tool-bubbles/ToolCallBubble';
+import { useSmoothText } from './useSmoothText';
 
 interface Props {
   sessionId: string;
@@ -13,7 +14,15 @@ interface Props {
 /** Leaf subscriber for one session's streaming entry; isolates re-renders so AgentChat doesn't churn per character. */
 const StreamingBubble: React.FC<Props> = ({ sessionId, activeBranchId, turnLabel, onStreamGrew }) => {
   const streamingMessage = useStreamingMessage(sessionId);
-  const typedContent = streamingMessage?.content ?? '';
+  const rawContent = streamingMessage?.content ?? '';
+  // Smooth-reveal the assistant's generated text at a steady cadence so it reads
+  // like typing instead of bursty network chunks. Provider-agnostic by design:
+  // every model (Anthropic/OpenAI/Gemini/OpenRouter/custom) funnels through this
+  // same streaming slice, so smoothing here covers all of them at once. Tool-call
+  // input is left raw (it's args, not prose). Zero added TTFT (see useSmoothText).
+  const isTextRole = streamingMessage?.role !== 'tool_call';
+  const smoothContent = useSmoothText(rawContent, isTextRole);
+  const typedContent = isTextRole ? smoothContent : rawContent;
   // RAF-coalesce so onStreamGrew fires once per frame regardless of token rate.
   const onGrewRef = useRef(onStreamGrew);
   onGrewRef.current = onStreamGrew;
