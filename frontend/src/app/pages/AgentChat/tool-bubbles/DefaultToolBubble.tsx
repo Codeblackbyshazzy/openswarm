@@ -65,9 +65,14 @@ export const DefaultToolBubble: React.FC<DefaultToolBubbleProps> = ({
         // would flash) and when mcpCompact (rows inside a group already fade
         // via toolRowFadeIn). Transform+opacity only, so layout/scroll are untouched.
         ...(!isStreaming && !mcpCompact ? {
-          animation: 'toolBubbleEnter 160ms ease-out',
+          // 260ms / 8px glide (was 160ms / 4px). Tool events land at wildly
+          // uneven gaps (measured: 1ms-54s apart, stdev ~8s), so after a long
+          // pending wait the bubble used to POP in. A slightly longer, larger
+          // ease reads as the same calm "slide" as the streamed text instead of
+          // a snap. Transform+opacity only, so layout/scroll stay untouched.
+          animation: 'toolBubbleEnter 260ms cubic-bezier(0.22, 1, 0.36, 1)',
           '@keyframes toolBubbleEnter': {
-            from: { opacity: 0, transform: 'translateY(4px)' },
+            from: { opacity: 0, transform: 'translateY(8px)' },
             to: { opacity: 1, transform: 'translateY(0)' },
           },
         } : {}),
