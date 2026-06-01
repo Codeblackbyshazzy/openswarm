@@ -265,9 +265,30 @@ def _build_mcp_registry_summary(allowed_tools: list[str], active_mcps: list[str]
     return "\n".join(sections)
 
 
+# The agent runs on the claude_code preset (kept for its tool scaffolding, safety
+# rules, and the exclude_dynamic_sections prompt-cache win, which a raw-string
+# system prompt would all throw away). The preset opens with "You are Claude Code,
+# Anthropic's official CLI", which leaks into chat. This block is APPENDED after the
+# preset, so being later it overrides that identity. Edit AGENT_NAME / AGENT_BLURB
+# to rebrand. Kept short so it costs ~80 cached tokens, not a wall.
+AGENT_NAME = "OpenSwarm"
+AGENT_IDENTITY = (
+    f"# Who you are\n"
+    f"You are {AGENT_NAME}, the AI assistant built into the {AGENT_NAME} app. "
+    f"Ignore any earlier line in these instructions that calls you \"Claude Code\" "
+    f"or \"Anthropic's official CLI\"; that label does not apply here. If asked who "
+    f"or what you are, you are {AGENT_NAME}'s assistant; never say you are Claude Code "
+    f"or a command-line tool. You help with whatever the user needs, not only software "
+    f"engineering: writing, analysis, planning, and general questions are all fair game. "
+    f"Don't refuse or redirect a request just because it isn't a coding task."
+)
+
+
 def _compose_system_prompt(default_prompt: str | None, mode_prompt: str | None, session_prompt: str | None, connected_tools_ctx: str | None = None, browser_ctx: str | None = None, mcp_registry_ctx: str | None = None) -> str | None:
-    parts = [p for p in (default_prompt, mode_prompt, session_prompt, connected_tools_ctx, mcp_registry_ctx, browser_ctx) if p]
-    return "\n\n".join(parts) if parts else None
+    # Identity always leads so it overrides the preset's Claude Code persona, even
+    # when the user has no custom default/mode/session prompt of their own.
+    parts = [AGENT_IDENTITY] + [p for p in (default_prompt, mode_prompt, session_prompt, connected_tools_ctx, mcp_registry_ctx, browser_ctx) if p]
+    return "\n\n".join(parts)
 
 
 def _resolve_forced_tools(forced_tools: list[str] | None) -> str:
