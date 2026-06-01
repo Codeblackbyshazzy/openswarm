@@ -34,6 +34,10 @@ const SUPPORT_DIR = path.join(os.homedir(), 'Library', 'Application Support', 'o
 const UPDATING_LOCK = path.join(SUPPORT_DIR, 'updating.lock');
 const CLEAN_QUIT_LOCK = path.join(SUPPORT_DIR, 'clean-quit.lock');
 const RELAUNCH_LOG = path.join(SUPPORT_DIR, 'crash-watchdog-relaunches.log');
+// Touched ONLY when watchdog decides to relaunch. main.js reads + deletes it on
+// next startup, forwards to renderer, which shows a small "We recovered from
+// a crash" chip. Renderer-side: ipcMain.handle 'crash-recovery-info'.
+const RECOVERY_MARKER = path.join(SUPPORT_DIR, 'crash-recovery.json');
 
 const MIN_UPTIME_MS = 30_000;
 const POLL_INTERVAL_MS = 2_000;
@@ -91,6 +95,15 @@ async function sleep(ms) {
   // All guards passed: relaunch. `open -n` opens a fresh instance even if the
   // app is registered, which it always will be (LaunchServices remembers).
   recordRelaunch();
+  // Mark the relaunch so the next startup can show a "recovered" chip. Best-effort
+  // write; if the disk is full or perms fail, watchdog still relaunches silently.
+  try {
+    fs.writeFileSync(RECOVERY_MARKER, JSON.stringify({
+      ts: Date.now(),
+      parent_pid: PARENT_PID,
+      uptime_ms: uptime,
+    }));
+  } catch (_) {}
   try {
     spawn('open', ['-n', APP_BUNDLE_PATH], { detached: true, stdio: 'ignore' }).unref();
   } catch (_) {}

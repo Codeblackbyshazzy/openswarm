@@ -2102,6 +2102,27 @@ ipcMain.handle('get-webview-preload-path', () => {
 
 ipcMain.handle('get-update-status', () => cachedUpdateStatus);
 
+// One-shot recovery info: if the crash-watchdog relaunched us, returns the
+// {ts, parent_pid, uptime_ms} JSON it wrote and then DELETES the file so the
+// chip only shows once. Returns null if no marker present (normal launch).
+// macOS-only path; Windows/Linux always returns null.
+let _cachedRecoveryInfo = undefined;
+ipcMain.handle('get-crash-recovery-info', () => {
+  if (process.platform !== 'darwin') return null;
+  if (_cachedRecoveryInfo !== undefined) return _cachedRecoveryInfo;
+  const markerPath = path.join(os.homedir(), 'Library', 'Application Support', 'openswarm', 'crash-recovery.json');
+  try {
+    if (!fs.existsSync(markerPath)) { _cachedRecoveryInfo = null; return null; }
+    const raw = fs.readFileSync(markerPath, 'utf-8');
+    _cachedRecoveryInfo = JSON.parse(raw);
+    try { fs.unlinkSync(markerPath); } catch (_) {}
+    return _cachedRecoveryInfo;
+  } catch (_) {
+    _cachedRecoveryInfo = null;
+    return null;
+  }
+});
+
 ipcMain.handle('check-for-updates', async () => {
   if (!autoUpdater || !isPackaged) {
     sendToRenderer('update-error', 'Update check is only available in the packaged app.');

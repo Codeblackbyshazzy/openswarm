@@ -37,6 +37,7 @@ declare global {
     getAppVersion: () => Promise<string>;
     getBuildInfo: () => Promise<{ sha: string; shortSha: string; builtAt: string | null; channel: string }>;
     getUpdateStatus: () => Promise<{ status: string; info: any; error: string | null }>;
+    getCrashRecoveryInfo?: () => Promise<{ ts: number; parent_pid: number; uptime_ms: number } | null>;
     checkForUpdates: () => Promise<{ success: boolean; version?: string; error?: string }>;
     downloadUpdate: () => Promise<{ success: boolean; error?: string }>;
     installUpdate: () => Promise<void>;

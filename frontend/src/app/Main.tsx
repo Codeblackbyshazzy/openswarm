@@ -2,6 +2,7 @@ import React, { useMemo, useEffect, useState, useRef, Suspense } from 'react';
 import { Provider } from 'react-redux';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider as MuiThemeProvider, createTheme, CssBaseline } from '@mui/material';
+import Box from '@mui/material/Box';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import { store } from '../shared/state/store';
@@ -368,6 +369,46 @@ const DefaultModelGuard: React.FC<{ children: React.ReactNode }> = ({ children }
   );
 };
 
+/** Surfaces a brief recovery chip if the crash-watchdog relaunched us last cycle.
+ *  Mac-only path (watchdog only runs on darwin); main.js returns null elsewhere.
+ *  Auto-hides after 8s. No interaction required from the user; sessions are server-side
+ *  so reattachment is automatic via the WS dashboard subscription that's already wired. */
+const CrashRecoveryChip: React.FC = () => {
+  const [show, setShow] = React.useState(false);
+  React.useEffect(() => {
+    const api = (window as any).openswarm as OpenSwarmAPI | undefined;
+    if (!api?.getCrashRecoveryInfo) return;
+    api.getCrashRecoveryInfo().then((info) => {
+      if (info) setShow(true);
+    }).catch(() => {});
+  }, []);
+  React.useEffect(() => {
+    if (!show) return;
+    const t = setTimeout(() => setShow(false), 8000);
+    return () => clearTimeout(t);
+  }, [show]);
+  if (!show) return null;
+  return (
+    <Box sx={{
+      position: 'fixed', top: 16, right: 16, zIndex: 1500,
+      display: 'flex', alignItems: 'center', gap: 1,
+      bgcolor: 'background.paper',
+      border: '1px solid', borderColor: 'divider',
+      boxShadow: 3, borderRadius: '10px',
+      px: 1.75, py: 1, fontSize: '0.85rem',
+      maxWidth: 360,
+    }}>
+      <Box component="span" sx={{
+        width: 8, height: 8, borderRadius: '50%',
+        bgcolor: 'success.main',
+      }} />
+      <Box component="span">
+        We had a hiccup and brought you back. Your sessions are still here.
+      </Box>
+    </Box>
+  );
+};
+
 const UpdateListener: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const dispatch = useAppDispatch();
 
@@ -446,6 +487,7 @@ const ThemedApp: React.FC = () => {
             <SignInGateLoader>
             <DefaultModelGuard>
             <UpdateListener>
+              <CrashRecoveryChip />
               <DeepLinkListener>
                 <ErrorBoundary scope="routes">
                   <Suspense fallback={null}>

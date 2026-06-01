@@ -56,6 +56,7 @@ contextBridge.exposeInMainWorld('openswarm', {
   cdpCacheClear: (wcId) => ipcRenderer.invoke('cdp-cache-clear', wcId),
   capturePage: (rect) => ipcRenderer.invoke('capture-page', rect),
   getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
+  getCrashRecoveryInfo: () => ipcRenderer.invoke('get-crash-recovery-info'),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   downloadUpdate: () => ipcRenderer.invoke('download-update'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
