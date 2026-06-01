@@ -38,6 +38,17 @@ The dev server (`webpack-dev-server` on `:3000`) and the packaged DMG/EXE serve 
 
 When you touch routing, fetch wiring, asset loading, or WS plumbing, build with `npm run build` and run the packaged DMG/EXE to verify.
 
+## UI/UX precedences (user-visible text and surfaces)
+
+This app ships to non-developers. Anything a user sees has to read like a person wrote it, not like an error reached the screen.
+
+- **Plain English, no jargon.** No "aux provider", "context window", "AsyncClient", "code 400". If a non-engineer wouldn't know the word, don't say it.
+- **Never dump backend errors / stack traces / model JSON into a toast.** Log the raw error to console for devs; show the user a short, friendly ask + the next action they can take ("Try removing it, or pick a model with a bigger window in Settings."). The popup is for guidance, not debugging.
+- **Compact, breathing room, single message.** No 8-line walls of text in a 300px-wide column. Layout: one short sentence + 1-2 inline action buttons. Buttons read as actions ("Shrink it", "Remove"), not labels ("Summarize instead").
+- **Match the app's design tokens.** Use `c.bg.surface`, `c.border.medium`, `c.accent.primary` from `claudeTokens`. Avoid raw MUI `Alert variant="filled"` blocks of saturated yellow/red — they read as dev-mode warnings, not user dialogs.
+- **No alarming colors for normal flow.** "This file is too big" is a routine choice, not a warning. Warning/error coloring is reserved for actual failures the user can't recover from.
+- **Friendly without being cute.** Conversational, not chirpy. "Want me to shrink it down to a summary?" not "Whoops! That file is huge!".
+
 ## Pitfalls
 
 - Direct LLM calls from the frontend bypass the backend's provider routing and MCP gate. Don't add them; route through `/api/*` instead.
