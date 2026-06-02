@@ -242,3 +242,34 @@ def test_unquoted_text_stays_literal_backward_compatible(_isolated_skills):
     concrete = sk.rehydrate(found, "Please type hello and click Send")
     type_step = next(s for s in concrete if s["tool"] == "BrowserType")
     assert type_step["params"]["text"] == "hello world"   # literal, unchanged
+
+
+# --- skill self-awareness (list / deprecate) ------------------------------
+def test_list_skills_for_host(_isolated_skills):
+    sk.record_skill("shop.com", "search for shoes now", _log())
+    sk.record_skill("shop.com", "add item to the cart now", _log())
+    sk.record_skill("other.com", "do a thing now", _log())
+    listed = sk.list_skills("shop.com")
+    tasks = {x["task"] for x in listed}
+    assert len(listed) == 2 and all("steps" in x and "replays" in x for x in listed)
+    assert not any(t for t in tasks if t in sk.list_skills("other.com"))  # host-scoped
+
+
+def test_list_skills_reads_disk_after_restart(_isolated_skills):
+    sk.record_skill("shop.com", "search for shoes now", _log())
+    sk.clear(wipe_disk=False)               # restart: memory gone, disk intact
+    assert len(sk.list_skills("shop.com")) == 1
+
+
+def test_deprecate_removes_skill_from_memory_and_disk(_isolated_skills):
+    sk.record_skill("shop.com", "search for shoes now", _log())
+    sig = sk._sig("search for shoes now")
+    assert os.path.exists(sk._skill_path("shop.com", sig))
+    # deprecate using the task_sig as list_skills would surface it
+    assert sk.deprecate_skill("shop.com", sig) is True
+    assert not os.path.exists(sk._skill_path("shop.com", sig))
+    assert sk.find_skill("shop.com", "search for shoes now") is None
+
+
+def test_deprecate_unknown_is_false(_isolated_skills):
+    assert sk.deprecate_skill("shop.com", "never recorded this") is False

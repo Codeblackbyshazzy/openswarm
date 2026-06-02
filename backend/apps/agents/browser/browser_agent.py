@@ -678,6 +678,32 @@ async def run_browser_agent(
                     })
                     continue
 
+                # Skill self-awareness (backend-inline; the skill store is here,
+                # not in the webview). The agent can inspect what shortcuts it has
+                # for this site and prune stale ones. Kept off the LLM context by
+                # default (it's a tool the agent calls only when it wants).
+                if tu.name in ("BrowserListSkills", "BrowserDeprecateSkill"):
+                    cur_host = browser_skills.host_of(last_seen_url) or replay_host
+                    if tu.name == "BrowserListSkills":
+                        skills = browser_skills.list_skills(cur_host) if cur_host else []
+                        if skills:
+                            lines = "\n".join(f"- \"{s['task']}\" ({s['steps']} steps, reused {s['replays']}x)" for s in skills[:20])
+                            meta_text = f"Learned shortcuts for {cur_host}:\n{lines}"
+                        else:
+                            meta_text = f"No learned shortcuts for {cur_host or 'this site'} yet."
+                    else:
+                        target = tu.input.get("task", "")
+                        ok = browser_skills.deprecate_skill(cur_host, target) if cur_host else False
+                        meta_text = (f"Removed the stale shortcut \"{target}\"; it'll be re-learned next time you do it."
+                                     if ok else f"No matching shortcut \"{target}\" found to remove.")
+                    tool_results.append({"type": "tool_result", "tool_use_id": tu.id, "content": [{"type": "text", "text": meta_text}]})
+                    result_msg = Message(role="tool_result", content={"text": meta_text, "tool_name": tu.name, "elapsed_ms": 0})
+                    session.messages.append(result_msg)
+                    await ws_manager.send_to_session(session_id, "agent:message", {
+                        "session_id": session_id, "message": result_msg.model_dump(mode="json"),
+                    })
+                    continue
+
                 # Handle RequestHumanIntervention; pause and wait for user
                 if tu.name == "RequestHumanIntervention":
                     problem = tu.input.get("problem", "")

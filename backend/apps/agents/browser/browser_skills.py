@@ -429,6 +429,61 @@ def mark_replayed(host: str, task: str) -> None:
             _persist(host, s["task_sig"], s)  # keep the on-disk count fresh
 
 
+def list_skills(host: str) -> list[dict]:
+    """Compact summaries of the skills learned for a host (task + step count +
+    replay count), NOT full step dumps, so the agent can ask "what shortcuts do
+    I have here?" without pulling a wall of detail into context. Reads in-memory
+    + the on-disk library for this host."""
+    out: dict[str, dict] = {}
+    for s in _skills.values():
+        if s.get("host") == host:
+            out[s["task_sig"]] = {
+                "task": s["task_sig"], "steps": len(s.get("steps", [])),
+                "replays": s.get("replays", 0), "persisted": s.get("persisted", False),
+            }
+    d = _skills_dir()
+    if d:
+        try:
+            for f in os.listdir(d):
+                if not f.endswith(".json"):
+                    continue
+                try:
+                    with open(os.path.join(d, f), encoding="utf-8") as fh:
+                        data = json.load(fh)
+                except Exception:
+                    continue
+                sig = data.get("task_sig")
+                if data.get("host") == host and sig and sig not in out:
+                    out[sig] = {
+                        "task": sig, "steps": len(data.get("steps", [])),
+                        "replays": data.get("replays", 0), "persisted": True,
+                    }
+        except Exception:
+            pass
+    return sorted(out.values(), key=lambda x: -x["replays"])
+
+
+def deprecate_skill(host: str, task: str) -> bool:
+    """Remove a skill (in-memory + disk) so it stops being replayed. The agent
+    calls this when it judges a saved shortcut is stale / wrong (page changed).
+    Accepts either the raw task or the task_sig from list_skills (sig is
+    idempotent under _sig). Returns True if something was removed."""
+    if not host:
+        return False
+    sig = _sig(task)
+    removed = _skills.pop(_key(host, sig), None) is not None
+    path = _skill_path(host, sig)
+    if path and os.path.exists(path):
+        try:
+            os.remove(path)
+            removed = True
+        except Exception:
+            pass
+    if removed:
+        logger.info(f"[browser-skills] deprecated skill {host}::{sig}")
+    return removed
+
+
 def clear(wipe_disk: bool = False) -> None:
     """Clear the in-memory cache. With wipe_disk, also remove persisted files
     in the current skills dir (used by tests for isolation)."""

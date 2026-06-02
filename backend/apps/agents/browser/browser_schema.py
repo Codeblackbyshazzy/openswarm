@@ -327,6 +327,34 @@ BROWSER_TOOLS_SCHEMA = [
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
     {
+        "name": "BrowserListSkills",
+        "description": (
+            "List the shortcuts (learned skills) you already have for the CURRENT "
+            "site. Each is a previously-completed task you can repeat fast. Useful "
+            "when a task feels familiar: a near-match skill may let you adapt "
+            "instead of figuring the site out from scratch. Returns task summaries "
+            "+ how many times each has been reused. Read-only."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "BrowserDeprecateSkill",
+        "description": (
+            "Throw away a learned shortcut for this site that has gone stale (the "
+            "page changed, or replaying it no longer works), so it stops being "
+            "used. Pass the task text exactly as shown by BrowserListSkills. Use "
+            "this when you realize a saved shortcut is wrong; the correct version "
+            "will be re-learned the next time you do the task successfully."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string", "description": "The skill's task text (from BrowserListSkills) to remove."},
+            },
+            "required": ["task"],
+        },
+    },
+    {
         "name": "RequestHumanIntervention",
         "description": (
             "Request the user's help when you encounter an obstacle you cannot solve "

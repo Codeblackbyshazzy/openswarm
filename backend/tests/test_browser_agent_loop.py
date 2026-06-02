@@ -304,6 +304,36 @@ def test_prompt_caching_markers_present(monkeypatch):
     assert sum(1 for t in tools if t.get("cache_control")) == 1
 
 
+def test_agent_can_list_and_deprecate_its_own_skills(monkeypatch):
+    # The agent calls BrowserListSkills + BrowserDeprecateSkill inline (backend-
+    # handled, never sent to the webview), giving it agency over its own memory.
+    import backend.apps.agents.browser.browser_skills as SK
+    SK.clear()
+    BH._browser_history.clear()
+    # pre-seed a skill on this host
+    SK.record_skill("docs.google.com", "share the doc now", [
+        {"tool": "BrowserClickIndex", "input": {}, "ok": True, "clicked_role": "button", "clicked_name": "Share"},
+    ])
+    primary = FakeLLM([
+        Resp([_rp("check what i know here"), _tu("BrowserListSkills")]),
+        Resp([_rp("that one is stale, drop it"), _tu("BrowserDeprecateSkill", task="share the doc now")]),
+        Resp([Blk("text", "Pruned the stale shortcut.")], stop_reason="end_turn"),
+    ])
+    aux = FakeAux()
+    sent = _install(monkeypatch, primary, aux)
+    asyncio.run(BA.run_browser_agent(
+        task="manage my shortcuts", browser_id="bm", model="sonnet", initial_url=DOC_URL,
+    ))
+    # neither inline tool is sent to the webview executor
+    assert not any(c["action"] in ("list_skills", "deprecate_skill") for c in sent)
+    # the LLM saw the skill listing, then the deprecate confirmation
+    all_msgs = json.dumps([c["messages"] for c in primary.calls])
+    assert "Learned shortcuts for docs.google.com" in all_msgs
+    assert "Removed the stale shortcut" in all_msgs
+    # and the skill is actually gone
+    assert SK.find_skill("docs.google.com", "share the doc now") is None
+
+
 def test_prior_domain_hint_is_seeded_into_system_prompt(monkeypatch):
     BH._browser_history.clear(); BH._domain_notes.clear()
     BH.set_domain_note("google.com", "REMEMBERED: Share button is index 43; Tab into the dialog.")

@@ -20,6 +20,8 @@ _LOOP_DETECTION_EXCLUDED_TOOLS = {
     "BrowserWait",
     "ReportProgress",  # Phase 2
     "RequestHumanIntervention",
+    "BrowserListSkills",      # meta: inspect own learned skills
+    "BrowserDeprecateSkill",  # meta: prune a stale skill
 }
 
 _LOOP_WINDOW_SIZE = 5
