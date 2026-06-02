@@ -1,6 +1,7 @@
 import { getWebview, type BrowserWebview } from './browserRegistry';
 import { dashboardWs } from './ws/WebSocketManager';
 import { resolveInput } from './resolveUrl';
+import { rankAndCapInteractives, type RankItem } from './interactiveRanking';
 
 let initialized = false;
 
@@ -173,6 +174,7 @@ interface InteractiveElement {
   role: string;
   name: string;
   backendNodeId: number;
+  sessionId?: string;
 }
 
 function extractAxValue(prop: any): string {
@@ -189,49 +191,113 @@ function extractAxValue(prop: any): string {
 
 interface CdpResult { ok: boolean; result?: any; error?: string }
 
-async function sendCdp(wv: BrowserWebview, method: string, params?: Record<string, any>): Promise<any> {
+// sessionId undefined => root frame; a child-frame sessionId => that OOPIF.
+async function sendCdp(wv: BrowserWebview, method: string, params?: Record<string, any>, sessionId?: string): Promise<any> {
   const wcId = wv.getWebContentsId();
   const bridge = (window as any).openswarm?.sendCdpCommand as
-    | ((id: number, m: string, p?: any) => Promise<CdpResult>)
+    | ((id: number, m: string, p?: any, s?: string) => Promise<CdpResult>)
     | undefined;
   if (!bridge) throw new Error('CDP bridge not available, restart the app');
-  const resp = await bridge(wcId, method, params);
+  const resp = await bridge(wcId, method, params, sessionId);
   if (!resp || !resp.ok) {
     throw new Error(resp?.error || `CDP ${method} failed`);
   }
   return resp.result;
 }
 
-async function handleListInteractives(wv: BrowserWebview): Promise<Record<string, any>> {
-  let axResult;
+interface ChildSession { sessionId: string; frameId: string; parentSessionId: string | null; url: string }
+
+async function getChildSessions(wv: BrowserWebview): Promise<ChildSession[]> {
+  const bridge = (window as any).openswarm?.cdpChildSessionsGet as
+    | ((id: number) => Promise<ChildSession[]>) | undefined;
+  if (!bridge) return [];
   try {
-    axResult = await sendCdp(wv, 'Accessibility.getFullAXTree', {});
-  } catch (err: any) {
-    return { error: `getFullAXTree failed: ${err.message || String(err)}` };
+    return (await bridge(wv.getWebContentsId())) || [];
+  } catch {
+    return [];
   }
+}
 
-  const nodes: any[] = axResult?.nodes || [];
-  const interactives: InteractiveElement[] = [];
-  let index = 1;
-
+function axNodesToCandidates(nodes: any[], sessionId?: string): RankItem[] {
+  const out: RankItem[] = [];
   for (const node of nodes) {
     if (node.ignored) continue;
     const role = extractAxValue(node.role);
     if (!INTERACTIVE_ROLES.has(role)) continue;
     const name = extractAxValue(node.name);
-    if (!name && role !== 'textbox' && role !== 'searchbox' && role !== 'combobox') {
-      continue;
-    }
+    if (!name && role !== 'textbox' && role !== 'searchbox' && role !== 'combobox') continue;
     const backendNodeId = node.backendDOMNodeId;
     if (backendNodeId == null) continue;
-    interactives.push({ index, role, name: name.slice(0, 80), backendNodeId });
-    index++;
+    out.push({ role, name: name.slice(0, 80), backendNodeId, sessionId });
+  }
+  return out;
+}
+
+// Cumulative top-left offset of a frame within the root viewport: climb the
+// session chain adding each owning <iframe>'s top-left. Used ONLY to place the
+// cosmetic click ripple; the click itself dispatches in the element's own
+// frame, so this is best-effort. Verified getFrameOwner works through Electron.
+async function frameOffset(
+  wv: BrowserWebview, sessionId: string | undefined, children: ChildSession[],
+): Promise<{ dx: number; dy: number }> {
+  let dx = 0, dy = 0;
+  const byId = new Map(children.map((c) => [c.sessionId, c]));
+  const seen = new Set<string>();
+  let s: string | null | undefined = sessionId;
+  while (s && !seen.has(s)) {
+    seen.add(s);
+    const info = byId.get(s);
+    if (!info) break;
+    const parent = info.parentSessionId || undefined; // undefined => root
+    const owner = await sendCdp(wv, 'DOM.getFrameOwner', { frameId: info.frameId }, parent);
+    const ownerBox = await sendCdp(wv, 'DOM.getBoxModel', { backendNodeId: owner.backendNodeId }, parent);
+    const oc = ownerBox?.model?.content;
+    if (!Array.isArray(oc) || oc.length < 8) break;
+    dx += oc[0];
+    dy += oc[1];
+    s = info.parentSessionId;
+  }
+  return { dx, dy };
+}
+
+async function handleListInteractives(wv: BrowserWebview, params: Record<string, any> = {}): Promise<Record<string, any>> {
+  const candidates: RankItem[] = [];
+  try {
+    const rootTree = await sendCdp(wv, 'Accessibility.getFullAXTree', {});
+    candidates.push(...axNodesToCandidates(rootTree?.nodes || []));
+  } catch (err: any) {
+    return { error: `getFullAXTree failed: ${err.message || String(err)}` };
   }
 
+  // Merge cross-origin OOPIF child frames (e.g. the Google Docs share dialog),
+  // whose nodes never appear in the root tree. A frame that won't answer
+  // (closed / navigating) is skipped, not fatal.
+  const children = await getChildSessions(wv);
+  for (const child of children) {
+    try {
+      const childTree = await sendCdp(wv, 'Accessibility.getFullAXTree', {}, child.sessionId);
+      candidates.push(...axNodesToCandidates(childTree?.nodes || [], child.sessionId));
+    } catch {
+      // skip unresponsive frame
+    }
+  }
+
+  // Dedupe twins, rank what a human acts on first (and the current goal
+  // highest), cap the long tail.
+  const goal = typeof params?.goal === 'string' ? params.goal : '';
+  const { shown, truncated } = rankAndCapInteractives(candidates, { goal });
+  const interactives: InteractiveElement[] = shown.map((el, i) => ({
+    index: i + 1,
+    role: el.role,
+    name: el.name,
+    backendNodeId: el.backendNodeId,
+    sessionId: el.sessionId,
+  }));
+
   // Cache in main-process so click_index can resolve across separate WS commands.
-  const indexMap: Record<number, number> = {};
+  const indexMap: Record<number, { backendNodeId: number; sessionId?: string }> = {};
   for (const el of interactives) {
-    indexMap[el.index] = el.backendNodeId;
+    indexMap[el.index] = { backendNodeId: el.backendNodeId, sessionId: el.sessionId };
   }
   try {
     const cacheBridge = (window as any).openswarm?.cdpCacheSet;
@@ -243,9 +309,15 @@ async function handleListInteractives(wv: BrowserWebview): Promise<Record<string
   const lines = interactives.map(
     (el) => `[${el.index}]<${el.role} "${el.name}">`,
   );
-  const text = lines.length
-    ? `${lines.length} interactive elements:\n${lines.join('\n')}`
-    : 'No interactive elements found on this page.';
+  let text: string;
+  if (lines.length === 0) {
+    text = 'No interactive elements found on this page.';
+  } else {
+    text = `${lines.length} interactive elements:\n${lines.join('\n')}`;
+    if (truncated > 0) {
+      text += `\n... ${truncated} more not shown; scroll or scope with BrowserGetElements to reach them.`;
+    }
+  }
 
   return {
     text,
@@ -261,12 +333,17 @@ async function handleClickIndex(wv: BrowserWebview, params: Record<string, any>)
   }
 
   let backendNodeId: number | undefined;
+  let sessionId: string | undefined;
   try {
     const cacheBridge = (window as any).openswarm?.cdpCacheGet;
     if (cacheBridge) {
       const cached = await cacheBridge(wv.getWebContentsId());
-      if (cached && cached[idx] != null) {
-        backendNodeId = Number(cached[idx]);
+      const entry = cached && cached[idx];
+      if (typeof entry === 'number') {
+        backendNodeId = entry; // legacy cache shape
+      } else if (entry && typeof entry === 'object' && entry.backendNodeId != null) {
+        backendNodeId = Number(entry.backendNodeId);
+        sessionId = entry.sessionId || undefined;
       }
     }
   } catch {
@@ -279,54 +356,63 @@ async function handleClickIndex(wv: BrowserWebview, params: Record<string, any>)
     };
   }
 
-  // Revalidate: fails fast if the page mutated and the node is gone (vs. clicking the wrong element).
+  // Revalidate in the element's own frame: fails fast if the page mutated and
+  // the node is gone (vs. clicking the wrong element).
   try {
-    await sendCdp(wv, 'DOM.resolveNode', { backendNodeId });
+    await sendCdp(wv, 'DOM.resolveNode', { backendNodeId }, sessionId);
   } catch (err: any) {
     return {
       error: `Index ${idx} is no longer valid (${err.message || 'node not found'}). The page may have changed. Call BrowserListInteractives again.`,
     };
   }
 
-  // Input.dispatchMouseEvent (OS-level) bypasses synthetic-event filtering on hostile sites.
+  // Box model in the element's OWN frame -> frame-local center.
   let boxModel;
   try {
-    boxModel = await sendCdp(wv, 'DOM.getBoxModel', { backendNodeId });
+    boxModel = await sendCdp(wv, 'DOM.getBoxModel', { backendNodeId }, sessionId);
   } catch (err: any) {
     return {
       error: `Index ${idx} has no box model (likely off-screen or hidden). Try scrolling first or call BrowserListInteractives again.`,
     };
   }
-
   const content = boxModel?.model?.content;
   if (!Array.isArray(content) || content.length < 8) {
     return { error: `Index ${idx} has no valid bounding rect.` };
   }
-  // content is [x1,y1, x2,y2, x3,y3, x4,y4]; compute center
-  const x = (content[0] + content[4]) / 2;
-  const y = (content[1] + content[5]) / 2;
+  const lx = (content[0] + content[4]) / 2;
+  const ly = (content[1] + content[5]) / 2;
 
+  // Dispatch the OS-level click in the element's OWN frame (sessionId routes
+  // into the OOPIF). This is compositor-independent, so it lands even when the
+  // card is offscreen, and still passes the isTrusted check on hostile sites.
   try {
     await sendCdp(wv, 'Input.dispatchMouseEvent', {
-      type: 'mousePressed',
-      x, y,
-      button: 'left',
-      clickCount: 1,
-    });
+      type: 'mousePressed', x: lx, y: ly, button: 'left', clickCount: 1,
+    }, sessionId);
     await sendCdp(wv, 'Input.dispatchMouseEvent', {
-      type: 'mouseReleased',
-      x, y,
-      button: 'left',
-      clickCount: 1,
-    });
+      type: 'mouseReleased', x: lx, y: ly, button: 'left', clickCount: 1,
+    }, sessionId);
   } catch (err: any) {
     return { error: `Click failed: ${err.message || String(err)}` };
   }
 
+  // Cosmetic ripple: place it in top-level coords. Best-effort for OOPIF.
+  let rx = lx, ry = ly;
+  if (sessionId) {
+    try {
+      const children = await getChildSessions(wv);
+      const { dx, dy } = await frameOffset(wv, sessionId, children);
+      rx = lx + dx;
+      ry = ly + dy;
+    } catch {
+      // fall back to frame-local coords for the ripple
+    }
+  }
+
   return {
-    text: `Clicked index ${idx} at (${Math.round(x)}, ${Math.round(y)})`,
-    clickX: x / wv.clientWidth * 100,
-    clickY: y / wv.clientHeight * 100,
+    text: `Clicked index ${idx} at (${Math.round(rx)}, ${Math.round(ry)})`,
+    clickX: rx / wv.clientWidth * 100,
+    clickY: ry / wv.clientHeight * 100,
   };
 }
 
@@ -645,7 +731,7 @@ async function handleBrowserCommand(data: Record<string, any>) {
         result = await handlePressKey(wv, params);
         break;
       case 'list_interactives':
-        result = await handleListInteractives(wv);
+        result = await handleListInteractives(wv, params);
         break;
       case 'click_index':
         result = await handleClickIndex(wv, params);
