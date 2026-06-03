@@ -401,6 +401,17 @@ async def run_browser_agent(
         "message": user_msg.model_dump(mode="json"),
     })
 
+    # Perceived value, zero clicks: one calm line so the user FEELS the agent is
+    # picking up where it left off, not figuring the site out cold again. Only
+    # when strategy was actually seeded, so it's honest, never noise.
+    if pb_seeded and _pb_host:
+        _recall_msg = Message(role="assistant",
+                              content=f"Picking up what I learned about {_pb_host} from a previous visit.")
+        session.messages.append(_recall_msg)
+        await ws_manager.send_to_session(session_id, "agent:message", {
+            "session_id": session_id, "message": _recall_msg.model_dump(mode="json"),
+        })
+
     async def _cancellable(coro):
         """Race any awaitable against the cancel event. Returns None if cancelled."""
         task = asyncio.ensure_future(coro)
@@ -1131,10 +1142,20 @@ async def run_browser_agent(
                 pb_host = browser_skills.host_of(last_seen_url)
                 if pb_host:
                     aux_client, aux_model = await _get_aux_client()
-                    await browser_playbook.distill_and_store(
+                    changed = await browser_playbook.distill_and_store(
                         pb_host, skill_key_task, latest_working_mem, summary,
                         aux_client, aux_model,
                     )
+                    # Perceived value, zero clicks: a calm closing line so the user
+                    # sees the agent got a little smarter for next time. Only when
+                    # it genuinely learned something, so it stays honest + rare.
+                    if changed:
+                        _learn_msg = Message(role="assistant",
+                                             content=f"Noted what worked on {pb_host} so I'm faster here next time.")
+                        session.messages.append(_learn_msg)
+                        await ws_manager.send_to_session(session_id, "agent:message", {
+                            "session_id": session_id, "message": _learn_msg.model_dump(mode="json"),
+                        })
             except Exception as e:
                 logger.debug(f"[browser-playbook] distill skipped: {e}")
         agent_manager._sync_session_close(session)

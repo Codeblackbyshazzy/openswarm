@@ -726,6 +726,56 @@ def test_playbook_distills_on_success_survives_restart_and_seeds_next_run(monkey
     assert "Vercel/Linear + React" in system_text
 
 
+def test_ambient_memory_signals_fire_calmly(monkeypatch):
+    # Perceived value, zero clicks: the user should SEE the agent (a) pick up what
+    # it learned when strategy is seeded, and (b) note new learning at the end,
+    # both as calm one-liners in the existing stream, only when real.
+    import backend.apps.agents.browser.browser_playbook as PB
+    import backend.apps.agents.browser.browser_skills as SK
+    import json as _json
+    SK.clear(); PB.clear(wipe_disk=True)
+    BH._browser_history.clear()
+
+    class PBAux:
+        def __init__(self): self.messages = self
+        async def create(self, **kw):
+            return Resp([Blk("text", _json.dumps({"playbook": ["search company+React, not generic"]}))],
+                        stop_reason="end_turn")
+    msgs = []
+    orig = BA.ws_manager.send_to_session
+
+    async def _cap(session_id, event, payload):
+        if event == "agent:message":
+            c = payload.get("message", {}).get("content")
+            msgs.append(c if isinstance(c, str) else (c or {}).get("text", ""))
+        return await orig(session_id, event, payload)
+    monkeypatch.setattr(BA.ws_manager, "send_to_session", _cap, raising=False)
+
+    def _run():
+        return FakeLLM([
+            Resp([_rp("orient"), _tu("BrowserListInteractives")]),
+            Resp([_rp("go"), _tu("BrowserNavigate", url=DOC_URL)]),
+            Resp([_rp("read"), _tu("BrowserGetText")]),
+            Resp([_rp("act"), _tu("BrowserClickIndex", index=1)]),
+            Resp([Blk("text", "Done, found them.")], stop_reason="end_turn"),
+        ])
+
+    # Run 1: nothing learned yet -> NO recall line, but it learns -> closing line.
+    _install(monkeypatch, _run(), PBAux())
+    monkeypatch.setattr(BA.ws_manager, "send_to_session", _cap, raising=False)
+    asyncio.run(BA.run_browser_agent(task="find engineers", browser_id="b1", model="sonnet", initial_url=DOC_URL))
+    joined1 = " ".join(msgs)
+    assert "Picking up what I learned" not in joined1, "no recall on the first-ever visit"
+    assert "so I'm faster here next time" in joined1, "closing 'learned' line after first success"
+
+    # Run 2: now there's a playbook -> recall line fires.
+    msgs.clear()
+    _install(monkeypatch, _run(), PBAux())
+    monkeypatch.setattr(BA.ws_manager, "send_to_session", _cap, raising=False)
+    asyncio.run(BA.run_browser_agent(task="find more", browser_id="b2", model="sonnet", initial_url=DOC_URL))
+    assert any("Picking up what I learned about docs.google.com" in m for m in msgs), "recall line on a return visit"
+
+
 def test_playbook_not_learned_from_a_ghost_completion(monkeypatch):
     # Fail-safe: a dishonest 'completion' (all actions errored) must NOT distill a
     # playbook, garbage strategy from a failed run would mislead future runs.
