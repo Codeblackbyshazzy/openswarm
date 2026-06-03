@@ -273,3 +273,188 @@ def test_deprecate_removes_skill_from_memory_and_disk(_isolated_skills):
 
 def test_deprecate_unknown_is_false(_isolated_skills):
     assert sk.deprecate_skill("shop.com", "never recorded this") is False
+
+
+# --- versioned safe-edit: the trust gate ----------------------------------
+# A skill is never trusted until a real replay proves it; an unproven skill that
+# fails is quarantined (never replayed again) so a lossy skill can't ghost-succeed
+# or run slower-than-baseline; re-deriving different steps is a re-versioned EDIT.
+
+def test_new_skill_starts_on_probation(_isolated_skills):
+    sk.record_skill("shop.com", "do a thing now", _log())
+    s = sk.find_skill("shop.com", "do a thing now")
+    assert s["state"] == sk._PROBATION and s["rev"] == 1 and s["replays"] == 0
+
+
+def test_replay_success_promotes_probation_to_trusted(_isolated_skills):
+    sk.record_skill("shop.com", "do a thing now", _log())
+    sk.mark_replay_succeeded("shop.com", "do a thing now")
+    s = sk.find_skill("shop.com", "do a thing now")
+    assert s["state"] == sk._TRUSTED and s["replays"] == 1 and s["fails"] == 0
+
+
+def test_probation_failure_quarantines_and_blocks_future_replay(_isolated_skills):
+    sk.record_skill("shop.com", "do a thing now", _log())          # probation
+    verdict = sk.mark_replay_failed("shop.com", "do a thing now")
+    assert verdict == "quarantined"
+    # the ghost guard: a quarantined skill is NEVER handed back for replay...
+    assert sk.find_skill("shop.com", "do a thing now") is None
+    # ...but the record still exists (visible + deprecatable), it just won't run
+    listed = sk.list_skills("shop.com")
+    assert len(listed) == 1 and listed[0]["state"] == sk._QUARANTINE
+
+
+def test_quarantined_skill_re_recorded_identical_stays_quarantined(_isolated_skills):
+    sk.record_skill("shop.com", "do a thing now", _log())
+    sk.mark_replay_failed("shop.com", "do a thing now")            # quarantined
+    # the full LLM agent re-runs and distills the SAME (still-lossy) steps:
+    sk.record_skill("shop.com", "do a thing now", _log())
+    # it must stay quarantined -> pure-LLM baseline, never a wasted replay again
+    assert sk.find_skill("shop.com", "do a thing now") is None
+    assert sk.list_skills("shop.com")[0]["state"] == sk._QUARANTINE
+
+
+def test_quarantined_skill_unquarantines_on_a_real_edit(_isolated_skills):
+    sk.record_skill("shop.com", "do a thing now", _log())
+    sk.mark_replay_failed("shop.com", "do a thing now")            # quarantined
+    # now the page changed and the LLM derives a DIFFERENT click -> a real edit,
+    # which earns the skill another chance (back on probation, re-versioned)
+    edited = _log()[:-1] + [{"tool": "BrowserClickIndex", "input": {}, "ok": True,
+                             "clicked_role": "button", "clicked_name": "Submit"}]
+    sk.record_skill("shop.com", "do a thing now", edited)
+    s = sk.find_skill("shop.com", "do a thing now")
+    assert s is not None and s["state"] == sk._PROBATION and s["rev"] == 2
+
+
+def test_trusted_skill_tolerates_one_transient_miss_then_demotes(_isolated_skills):
+    sk.record_skill("shop.com", "do a thing now", _log())
+    sk.mark_replay_succeeded("shop.com", "do a thing now")         # trusted
+    assert sk.mark_replay_failed("shop.com", "do a thing now") == "kept"
+    s = sk.find_skill("shop.com", "do a thing now")
+    assert s["state"] == sk._TRUSTED and s["fails"] == 1           # still usable
+    assert sk.mark_replay_failed("shop.com", "do a thing now") == "demoted"
+    assert sk.find_skill("shop.com", "do a thing now")["state"] == sk._PROBATION
+
+
+def test_re_record_identical_keeps_trust_and_rev(_isolated_skills):
+    sk.record_skill("shop.com", "do a thing now", _log())
+    sk.mark_replay_succeeded("shop.com", "do a thing now")
+    sk.find_skill("shop.com", "do a thing now")["replays"] = 5     # pretend reused a lot
+    sk.record_skill("shop.com", "do a thing now", _log())          # identical re-derive
+    s = sk.find_skill("shop.com", "do a thing now")
+    assert s["state"] == sk._TRUSTED and s["rev"] == 1 and s["replays"] == 5
+
+
+def test_re_record_different_is_an_edit_that_reversions_to_probation(_isolated_skills):
+    sk.record_skill("shop.com", "do a thing now", _log())
+    sk.mark_replay_succeeded("shop.com", "do a thing now")         # trusted, rev 1
+    edited = _log()[:-1] + [{"tool": "BrowserClickIndex", "input": {}, "ok": True,
+                             "clicked_role": "button", "clicked_name": "Submit"}]
+    sk.record_skill("shop.com", "do a thing now", edited)          # different -> EDIT
+    s = sk.find_skill("shop.com", "do a thing now")
+    assert s["rev"] == 2 and s["state"] == sk._PROBATION and s["replays"] == 0
+    cbn = next(x for x in s["steps"] if x["tool"] == "BrowserClickByName")
+    assert cbn["params"]["name"] == "Submit"                       # the new step stuck
+
+
+def test_rev_and_state_persist_across_restart(_isolated_skills):
+    sk.record_skill("shop.com", "do a thing now", _log())
+    sk.mark_replay_succeeded("shop.com", "do a thing now")
+    edited = _log()[:-1] + [{"tool": "BrowserClickIndex", "input": {}, "ok": True,
+                             "clicked_role": "button", "clicked_name": "Submit"}]
+    sk.record_skill("shop.com", "do a thing now", edited)          # rev 2, probation
+    sk.clear(wipe_disk=False)                                      # restart
+    s = sk.find_skill("shop.com", "do a thing now")
+    assert s["rev"] == 2 and s["state"] == sk._PROBATION
+
+
+def test_steps_equal_distinguishes_slot_from_literal_and_changed_click():
+    nav = {"tool": "BrowserNavigate", "params": {"url": "https://x.com/a#frag"}}
+    nav2 = {"tool": "BrowserNavigate", "params": {"url": "https://x.com/a"}}   # frag stripped == same
+    lit = {"tool": "BrowserType", "params": {"selector": "#q", "text": "shoes"}}
+    slot = {"tool": "BrowserType", "params": {"selector": "#q", "value_slot": 0}}
+    send = {"tool": "BrowserClickByName", "params": {"role": "button", "name": "Send"}}
+    submit = {"tool": "BrowserClickByName", "params": {"role": "button", "name": "Submit"}}
+    assert sk._steps_equal([nav], [nav2])           # fragment-only diff is NOT an edit
+    assert not sk._steps_equal([lit], [slot])       # literal vs parameterized IS an edit
+    assert not sk._steps_equal([send], [submit])    # renamed button IS an edit
+
+
+def test_mark_replay_helpers_on_unknown_are_safe(_isolated_skills):
+    sk.mark_replay_succeeded("shop.com", "never recorded")    # no raise
+    assert sk.mark_replay_failed("shop.com", "never recorded") == "none"
+
+
+def test_demoted_skill_can_be_re_proven(_isolated_skills):
+    sk.record_skill("shop.com", "do a thing now", _log())
+    sk.mark_replay_succeeded("shop.com", "do a thing now")    # trusted
+    sk.mark_replay_failed("shop.com", "do a thing now")
+    sk.mark_replay_failed("shop.com", "do a thing now")       # demoted to probation
+    assert sk.find_skill("shop.com", "do a thing now")["state"] == sk._PROBATION
+    sk.mark_replay_succeeded("shop.com", "do a thing now")    # earns trust back
+    assert sk.find_skill("shop.com", "do a thing now")["state"] == sk._TRUSTED
+
+
+# --- composition: build on what's already proven, propagate staleness -------
+
+def _log_plus():
+    # distills to _log()'s 3 steps PLUS a 4th click -> a strict superset sequence
+    return _log() + [{"tool": "BrowserClickIndex", "input": {}, "ok": True,
+                      "clicked_role": "button", "clicked_name": "Checkout"}]
+
+
+def _trust(host, task, log):
+    sk.record_skill(host, task, log)
+    sk.mark_replay_succeeded(host, task)
+
+
+def test_composition_links_to_trusted_sub_skill(_isolated_skills):
+    _trust("shop.com", "search shoes now", _log())                # trusted foundation
+    sk.record_skill("shop.com", "search shoes and checkout now", _log_plus())
+    c = sk.find_skill("shop.com", "search shoes and checkout now")
+    assert c["composed_of"] == [sk._sig("search shoes now")]
+
+
+def test_composition_ignores_untrusted_foundation(_isolated_skills):
+    sk.record_skill("shop.com", "search shoes now", _log())        # probation, NOT trusted
+    sk.record_skill("shop.com", "search shoes and checkout now", _log_plus())
+    c = sk.find_skill("shop.com", "search shoes and checkout now")
+    assert c["composed_of"] == []          # only a PROVEN sub-skill is built upon
+
+
+def test_deprecating_a_foundation_demotes_everything_built_on_it(_isolated_skills):
+    _trust("shop.com", "search shoes now", _log())
+    _trust("shop.com", "search shoes and checkout now", _log_plus())   # composed + trusted
+    assert sk.find_skill("shop.com", "search shoes and checkout now")["state"] == sk._TRUSTED
+    sk.deprecate_skill("shop.com", "search shoes now")            # foundation pulled
+    # the ghost guard for composition: the dependent must NOT stay trusted on a
+    # foundation that no longer exists; it's knocked back to re-prove
+    assert sk.find_skill("shop.com", "search shoes and checkout now")["state"] == sk._PROBATION
+
+
+def test_demoting_a_foundation_demotes_its_dependents(_isolated_skills):
+    _trust("shop.com", "search shoes now", _log())
+    _trust("shop.com", "search shoes and checkout now", _log_plus())
+    sk.mark_replay_failed("shop.com", "search shoes now")
+    sk.mark_replay_failed("shop.com", "search shoes now")         # foundation demoted
+    assert sk.find_skill("shop.com", "search shoes and checkout now")["state"] == sk._PROBATION
+
+
+def test_editing_a_foundation_demotes_its_dependents(_isolated_skills):
+    _trust("shop.com", "search shoes now", _log())
+    _trust("shop.com", "search shoes and checkout now", _log_plus())
+    edited = _log()[:-1] + [{"tool": "BrowserClickIndex", "input": {}, "ok": True,
+                             "clicked_role": "button", "clicked_name": "Find"}]
+    sk.record_skill("shop.com", "search shoes now", edited)       # foundation changed
+    assert sk.find_skill("shop.com", "search shoes and checkout now")["state"] == sk._PROBATION
+
+
+def test_list_skills_surfaces_state_rev_and_builds_on(_isolated_skills):
+    _trust("shop.com", "search shoes now", _log())
+    sk.record_skill("shop.com", "search shoes and checkout now", _log_plus())
+    listed = {x["task"]: x for x in sk.list_skills("shop.com")}
+    foundation = listed[sk._sig("search shoes now")]
+    composed = listed[sk._sig("search shoes and checkout now")]
+    assert foundation["state"] == sk._TRUSTED and foundation["builds_on"] == []
+    assert composed["builds_on"] == [sk._sig("search shoes now")]
+    assert "rev" in composed and "steps" in composed

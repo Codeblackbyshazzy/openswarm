@@ -395,7 +395,9 @@ async def run_browser_agent(
     if skill and not concrete_steps:
         logger.info(f"[browser-skills] skill matched on {replay_host} but slots unfillable from task; running full agent")
         skill = None
+    replay_attempted = False
     if skill and concrete_steps:
+        replay_attempted = True
         logger.info(f"[browser-skills] REPLAY attempt: {len(concrete_steps)} steps on {replay_host}")
         replay_log: list[dict] = []
         replay_ok = True
@@ -427,10 +429,11 @@ async def run_browser_agent(
             if res.get("url"):
                 last_seen_url = res["url"]
         if replay_ok and replay_log:
-            browser_skills.mark_replayed(replay_host, task)
+            browser_skills.mark_replay_succeeded(replay_host, task)
             summary = browser_metrics.record_task(
                 session_id, browser_id, task, "completed", metrics_started_at,
                 0, replay_log, session.tokens,
+                path="replay", task_sig=browser_skills._sig(task),
             )
             logger.info(f"[browser-skills] REPLAY SUCCEEDED in {summary['total_ms']}ms with 0 LLM calls")
             try:
@@ -451,7 +454,13 @@ async def run_browser_agent(
                 "action_log": replay_log, "final_screenshot": final_screenshot,
                 "replayed": True,
             }
-        # replay didn't fully succeed -> fall through to the full LLM agent
+        # Replay didn't fully succeed. Update the skill's trust BEFORE falling
+        # through: an unproven skill that failed gets quarantined (never replayed
+        # again -> pure-LLM baseline), a proven one tolerates a transient miss.
+        # The full agent below then re-records edit-aware (new steps -> new rev).
+        if not cancel_event.is_set():
+            verdict = browser_skills.mark_replay_failed(replay_host, task)
+            logger.info(f"[browser-skills] replay fell back to full agent (trust verdict: {verdict})")
 
     text_parts = []  # initialized before loop so post-loop summary (line ~1294) has a default
     # Circuit breaker for ReportProgress violations. Some models get stuck
@@ -687,7 +696,13 @@ async def run_browser_agent(
                     if tu.name == "BrowserListSkills":
                         skills = browser_skills.list_skills(cur_host) if cur_host else []
                         if skills:
-                            lines = "\n".join(f"- \"{s['task']}\" ({s['steps']} steps, reused {s['replays']}x)" for s in skills[:20])
+                            _tag = {"trusted": "proven", "probation": "unproven", "quarantine": "disabled"}
+                            def _fmt_skill(s):
+                                line = f"- \"{s['task']}\" ({s['steps']} steps, {_tag.get(s['state'], s['state'])}, reused {s['replays']}x"
+                                if s.get("builds_on"):
+                                    line += f", builds on {len(s['builds_on'])} other shortcut(s)"
+                                return line + ")"
+                            lines = "\n".join(_fmt_skill(s) for s in skills[:20])
                             meta_text = f"Learned shortcuts for {cur_host}:\n{lines}"
                         else:
                             meta_text = f"No learned shortcuts for {cur_host or 'this site'} yet."
@@ -956,7 +971,9 @@ async def run_browser_agent(
 
         session.status = "completed"
         browser_metrics.record_task(session_id, browser_id, task, "completed",
-                                    metrics_started_at, turn + 1, action_log, session.tokens)
+                                    metrics_started_at, turn + 1, action_log, session.tokens,
+                                    path="llm_fallback" if replay_attempted else "llm",
+                                    task_sig=browser_skills._sig(task))
         # Learn this task: distill the successful run into a replayable skill so
         # the next identical task on this host runs via the no-LLM fast path.
         try:

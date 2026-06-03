@@ -8,8 +8,14 @@ recurred. Pure best-effort: every call is wrapped so a metrics failure can
 never break the agent loop.
 
 Files (under DATA_ROOT/browser_metrics/, env-overridable):
-  events.jsonl    one line per tool call
-  tasks.jsonl     one line per finished task (with a recurring-error rollup)
+  events.jsonl        one line per tool call
+  tasks.jsonl         one line per finished task (with a recurring-error rollup)
+  skill_events.jsonl  one line per skill-lifecycle transition (learn / promote /
+                      edit / quarantine / demote / compose / invalidate), so we
+                      can tell whether the skill layer ACTUALLY speeds repeats up
+                      or is silently thrashing (re-learning every run, never
+                      promoting), which is the ghost that "completes" but never
+                      delivers the win.
 """
 
 import json
@@ -101,10 +107,24 @@ def record_tool(session_id, browser_id, turn, tool, elapsed_ms, ok, error,
     )
 
 
+def record_skill_event(kind, host, task_sig, rev=0, state="", extra=None) -> None:
+    """One line per skill-lifecycle transition. Best-effort. `kind` is one of
+    learn / edit / promote / quarantine / demote / compose / invalidate. This is
+    what lets the analyzer prove the skill layer is helping (promotes accumulate,
+    repeats replay) vs. silently thrashing (re-learn loops, never promotes)."""
+    _append("skill_events.jsonl", {
+        "ts": time.time(), "kind": kind, "host": host, "task_sig": task_sig,
+        "rev": rev, "state": state, "extra": extra or {},
+    })
+
+
 def record_task(session_id, browser_id, task, status, started_at, turns,
-                action_log, tokens) -> dict:
+                action_log, tokens, path="llm", task_sig="") -> dict:
     """One summary line per finished task: completion, total time, per-tier
-    latency, token cost, and the recurring-error rollup. Returns the summary."""
+    latency, token cost, and the recurring-error rollup. `path` records HOW the
+    task finished (replay = no-LLM fast path, llm = full agent, llm_fallback =
+    full agent after a replay miss) so we can measure the replay speedup and spot
+    repeats that never reach the fast path. Returns the summary."""
     total_ms = int((time.time() - started_at) * 1000)
     by_tier = {}
     err_counter = Counter()
@@ -125,6 +145,8 @@ def record_task(session_id, browser_id, task, status, started_at, turns,
         "session_id": session_id,
         "browser_id": browser_id,
         "task": (task or "")[:200],
+        "task_sig": task_sig,
+        "path": path,
         "status": status,
         "completed": status == "completed",
         "total_ms": total_ms,
@@ -137,7 +159,7 @@ def record_task(session_id, browser_id, task, status, started_at, turns,
     }
     _append("tasks.jsonl", summary)
     logger.info(
-        f"[browser-metrics] TASK {status} total={total_ms}ms turns={turns} "
+        f"[browser-metrics] TASK {status} path={path} total={total_ms}ms turns={turns} "
         f"tools={len(action_log)} tok_in={summary['tokens_in']} tok_out={summary['tokens_out']} "
         f"recurring_errs={summary['recurring_errors'][:2]}"
     )

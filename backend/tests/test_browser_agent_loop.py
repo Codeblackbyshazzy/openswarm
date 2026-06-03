@@ -268,6 +268,70 @@ def test_replay_falls_back_to_full_agent_when_a_step_fails(monkeypatch):
     assert len(primary.calls) > 0, "fell back to the full LLM agent"
 
 
+def test_replay_success_promotes_skill_to_trusted_through_the_loop(monkeypatch):
+    # The verify gate, end to end: run 1 learns a PROBATION skill; run 2 replays
+    # it successfully, which must PROMOTE it to trusted (proven by a real replay).
+    import backend.apps.agents.browser.browser_skills as SK
+    SK.clear()
+    BH._browser_history.clear(); BH._domain_notes.clear()
+    primary = FakeLLM([
+        Resp([_rp("click submit"), _tu("BrowserListInteractives")]),
+        Resp([_rp("click it"), _tu("BrowserClickIndex", index=1)]),
+        Resp([Blk("text", "Done.")], stop_reason="end_turn"),
+    ])
+    aux = FakeAux()
+    _install(monkeypatch, primary, aux)
+    asyncio.run(BA.run_browser_agent(
+        task="click the Submit button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
+    ))
+    assert SK.find_skill("docs.google.com", "click the Submit button")["state"] == SK._PROBATION
+    r2 = asyncio.run(BA.run_browser_agent(
+        task="click the Submit button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
+    ))
+    assert r2.get("replayed") is True
+    assert SK.find_skill("docs.google.com", "click the Submit button")["state"] == SK._TRUSTED
+
+
+def test_unproven_skill_that_fails_is_quarantined_and_never_retried(monkeypatch):
+    # The anti-ghost guard, end to end: an unproven skill that fails a replay must
+    # be quarantined so the NEXT run does not even attempt the (known-bad) replay,
+    # it goes straight to the pure-LLM baseline. A silent re-fail would be a ghost.
+    import backend.apps.agents.browser.browser_skills as SK
+    SK.clear()
+    BH._browser_history.clear()
+    SK.record_skill("docs.google.com", "click the Save button", [
+        {"tool": "BrowserClickIndex", "input": {"index": 1}, "ok": True,
+         "clicked_role": "button", "clicked_name": "Save"},
+    ])  # probation, unproven
+    primary = FakeLLM([Resp([Blk("text", "full agent handled it")], stop_reason="end_turn")])
+    aux = FakeAux()
+    sent = _install(monkeypatch, primary, aux)
+    orig = BA.ws_manager.send_browser_command
+
+    async def _fail_cbn(request_id, action, browser_id, params, tab_id=""):
+        if action == "click_by_name":
+            sent.append({"action": action, "params": params})
+            return {"error": 'No element matching name="Save" on this page.'}
+        return await orig(request_id, action, browser_id, params, tab_id)
+    monkeypatch.setattr(BA.ws_manager, "send_browser_command", _fail_cbn, raising=False)
+
+    # Run 1: replay is attempted, the step fails -> skill is quarantined.
+    asyncio.run(BA.run_browser_agent(
+        task="click the Save button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
+    ))
+    assert any(c["action"] == "click_by_name" for c in sent), "run 1 DID attempt the replay"
+    assert SK.list_skills("docs.google.com")[0]["state"] == SK._QUARANTINE
+
+    # Run 2: the quarantined skill must NOT be replayed again.
+    sent.clear()
+    r2 = asyncio.run(BA.run_browser_agent(
+        task="click the Save button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
+    ))
+    assert not r2.get("replayed")
+    assert not any(c["action"] == "click_by_name" for c in sent), \
+        "a quarantined skill must never be replayed again (would be a ghost re-fail)"
+
+
 def test_perception_is_frontloaded_into_first_turn(monkeypatch):
     # With a known start URL, the agent should prefetch the element list + page
     # text and put them in the FIRST user message, so the model can act on turn 1

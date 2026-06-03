@@ -24,6 +24,18 @@ Two properties we hold to extreme rigor:
    and never persisted. Only fully non-sensitive skills are written to disk;
    URL userinfo + fragments are stripped before persisting regardless.
 
+3. NOTHING IS TRUSTED UNTIL A REPLAY PROVES IT (the verify gate). A freshly
+   learned or freshly edited skill is PROBATIONARY: it's allowed to replay (that
+   is how it earns trust), but the first time a probationary replay fails it is
+   QUARANTINED, not silently kept; quarantined skills never replay again (the
+   task falls back to the pure-LLM baseline), so a lossy distillation can never
+   make a task slower-than-baseline or ghost-succeed. Only a skill that has
+   replayed end-to-end successfully becomes TRUSTED, and only a trusted skill
+   gets the benefit of the doubt on a one-off transient miss. Re-deriving a task
+   after a failed replay is an EDIT: if the new steps differ from the stored
+   ones the skill is re-versioned (rev++) back to probation; if they're
+   identical the miss was transient and trust is kept. State + rev persist.
+
 Robustness (a stale replay that "succeeds" wrongly is the ghost-failure we must
 avoid): clicks are recorded by (role, name) and re-resolved fresh at replay; a
 skill is only recorded if every productive step is robustly replayable; the
@@ -42,11 +54,33 @@ from urllib.parse import urlparse, urlunparse
 
 logger = logging.getLogger(__name__)
 
+
+def _event(kind: str, host: str, sig: str, rev: int = 0, state: str = "", **extra) -> None:
+    """Mirror a lifecycle transition into the metrics sink so the analyzer can
+    prove the skill layer helps vs. silently thrashes. Lazy + best-effort: this
+    module never hard-depends on metrics, and a metrics failure never propagates."""
+    try:
+        from . import browser_metrics
+        browser_metrics.record_skill_event(kind, host, sig, rev=rev, state=state, extra=extra or None)
+    except Exception:
+        pass
+
+
 # In-memory hot cache: key "host::task_sig" -> skill dict. Bounded.
 _skills: dict[str, dict] = {}
 _MAX_MEM_SKILLS = 200
 _MAX_DISK_SKILLS = 1000          # bound the on-disk library; evict oldest by mtime
 _SKILL_FORMAT_VERSION = 1
+
+# Trust state (the verify gate). A skill moves PROBATION -> TRUSTED only by a
+# successful end-to-end replay; an unproven (probation) skill that fails a replay
+# goes to QUARANTINE and is never replayed again (task falls back to pure LLM).
+_PROBATION = "probation"
+_TRUSTED = "trusted"
+_QUARANTINE = "quarantine"
+# A proven skill tolerates this many consecutive transient replay misses before
+# it's demoted back to probation (forced to re-earn trust).
+_FAIL_DEMOTE_THRESHOLD = 2
 
 # Tools that change page state (worth replaying). Reads/meta are never recorded.
 _PRODUCTIVE = {"BrowserType", "BrowserClickIndex", "BrowserClick", "BrowserPressKey", "BrowserScroll"}
@@ -269,6 +303,34 @@ def steps_are_persistable(steps: list[dict]) -> bool:
     return True
 
 
+def _step_key(s: dict) -> tuple:
+    """Canonical identity of a step, ignoring volatile detail, so we can tell a
+    real EDIT (page changed -> different steps) from a transient re-derivation
+    (same steps, the miss was just a timing blip). A slot and a literal are
+    distinct; a parameter's live value is not part of identity."""
+    p = s.get("params", {})
+    tool = s.get("tool")
+    if tool == "BrowserType":
+        if "value_slot" in p:
+            return (tool, p.get("selector"), "slot", p.get("value_slot"))
+        return (tool, p.get("selector"), "text", p.get("text", ""))
+    if tool == "BrowserClickByName":
+        return (tool, p.get("role", ""), p.get("name", ""))
+    if tool == "BrowserClick":
+        return (tool, p.get("selector"))
+    if tool == "BrowserNavigate":
+        return (tool, _sanitize_url(p.get("url", "")))
+    if tool == "BrowserPressKey":
+        return (tool, p.get("key"))
+    if tool == "BrowserScroll":
+        return (tool, p.get("direction"), p.get("amount"))
+    return (tool, json.dumps(p, sort_keys=True, default=str))
+
+
+def _steps_equal(a: list[dict], b: list[dict]) -> bool:
+    return [_step_key(s) for s in a] == [_step_key(s) for s in b]
+
+
 def _sanitized_steps_for_disk(steps: list[dict]) -> list[dict]:
     """Copy of steps safe to persist: navigate URLs stripped of userinfo+fragment."""
     out = []
@@ -320,6 +382,10 @@ def _persist(host: str, sig: str, skill: dict) -> None:
         "steps": _sanitized_steps_for_disk(skill["steps"]),
         "recorded_at": skill.get("recorded_at", time.time()),
         "replays": skill.get("replays", 0),
+        "rev": skill.get("rev", 1),
+        "state": skill.get("state", _PROBATION),
+        "fails": skill.get("fails", 0),
+        "composed_of": skill.get("composed_of", []),
     }
     try:
         d = os.path.dirname(path)
@@ -362,85 +428,19 @@ def _load_from_disk(host: str, sig: str) -> dict | None:
             "host": data.get("host", host), "task_sig": data.get("task_sig", sig),
             "steps": data["steps"], "recorded_at": data.get("recorded_at", 0),
             "replays": data.get("replays", 0), "persisted": True,
+            "rev": data.get("rev", 1), "state": data.get("state", _PROBATION),
+            "fails": data.get("fails", 0), "composed_of": data.get("composed_of", []),
         }
     except Exception as e:
         logger.debug(f"[browser-skills] load failed: {e}")
         return None
 
 
-def record_skill(host: str, task: str, action_log: list[dict]) -> bool:
-    """Record a replayable skill. Non-sensitive skills persist to disk;
-    sensitive ones stay in-memory only. Returns True if a skill was stored
-    (memory or disk). Best-effort; never raises into the caller."""
-    try:
-        if not host:
-            return False
-        steps = distill_steps(action_log)
-        if not steps:
-            return False
-        sig = _sig(task)
-        if not sig:
-            return False
-        steps = _parameterize(steps, task)  # quoted values -> slots (not stored)
-        persistable = steps_are_persistable(steps)
-        skill = {
-            "host": host, "task_sig": sig, "steps": steps,
-            "recorded_at": time.time(), "replays": 0, "persisted": persistable,
-        }
-        _skills[_key(host, sig)] = skill
-        if len(_skills) > _MAX_MEM_SKILLS:
-            oldest = min(_skills, key=lambda k: _skills[k]["recorded_at"])
-            _skills.pop(oldest, None)
-        if persistable:
-            _persist(host, sig, skill)
-            logger.info(f"[browser-skills] recorded + PERSISTED {len(steps)}-step skill for {host}")
-        else:
-            logger.info(f"[browser-skills] recorded {len(steps)}-step skill for {host} (in-memory only: sensitive)")
-        return True
-    except Exception as e:
-        logger.debug(f"[browser-skills] record failed: {e}")
-        return False
-
-
-def find_skill(host: str, task: str) -> dict | None:
-    """Exact-key lookup: in-memory hot cache first, then a single lazy disk read
-    (no corpus scan). Returns the skill or None. Cheap + flat as the library grows."""
-    if not host:
-        return None
-    sig = _sig(task)
-    if not sig:
-        return None
-    k = _key(host, sig)
-    hit = _skills.get(k)
-    if hit:
-        return hit
-    loaded = _load_from_disk(host, sig)
-    if loaded:
-        _skills[k] = loaded  # warm the hot cache
-        return loaded
-    return None
-
-
-def mark_replayed(host: str, task: str) -> None:
-    s = find_skill(host, task)
-    if s:
-        s["replays"] = s.get("replays", 0) + 1
-        if s.get("persisted"):
-            _persist(host, s["task_sig"], s)  # keep the on-disk count fresh
-
-
-def list_skills(host: str) -> list[dict]:
-    """Compact summaries of the skills learned for a host (task + step count +
-    replay count), NOT full step dumps, so the agent can ask "what shortcuts do
-    I have here?" without pulling a wall of detail into context. Reads in-memory
-    + the on-disk library for this host."""
+def _host_skills(host: str) -> dict[str, dict]:
+    """Every skill for one host, keyed by task_sig, in-memory authoritative over
+    disk. One flat scan of the library dir (same cost list_skills always paid);
+    callers that run per-record gate on cheap pre-checks before calling."""
     out: dict[str, dict] = {}
-    for s in _skills.values():
-        if s.get("host") == host:
-            out[s["task_sig"]] = {
-                "task": s["task_sig"], "steps": len(s.get("steps", [])),
-                "replays": s.get("replays", 0), "persisted": s.get("persisted", False),
-            }
     d = _skills_dir()
     if d:
         try:
@@ -452,22 +452,228 @@ def list_skills(host: str) -> list[dict]:
                         data = json.load(fh)
                 except Exception:
                     continue
-                sig = data.get("task_sig")
-                if data.get("host") == host and sig and sig not in out:
-                    out[sig] = {
-                        "task": sig, "steps": len(data.get("steps", [])),
-                        "replays": data.get("replays", 0), "persisted": True,
-                    }
+                if data.get("host") == host and data.get("task_sig"):
+                    out[data["task_sig"]] = {**data, "persisted": True}
         except Exception:
             pass
-    return sorted(out.values(), key=lambda x: -x["replays"])
+    for s in _skills.values():
+        if s.get("host") == host and s.get("task_sig"):
+            out[s["task_sig"]] = s
+    return out
+
+
+# --- composition (build on what's already proven) --------------------------
+# When a freshly learned skill's steps OPEN with the full step list of an
+# already-TRUSTED skill on the same host, we record that it "builds on" the
+# sub-skill. The big steps stay inline (the skill is self-contained and robust on
+# its own); the link is provenance + a safety wire: if that foundation is later
+# deprecated or goes stale, every skill built on it is knocked back to probation
+# so it must re-prove instead of silently riding a now-broken sub-sequence.
+_COMPOSE_MIN_SUB_STEPS = 2
+
+
+def _detect_composition(host: str, sig: str, steps: list[dict]) -> list[str]:
+    """Sigs of TRUSTED host skills whose full step list is a strict opening
+    prefix of `steps`. Gated: needs a tail, so only runs for >=3-step skills."""
+    if len(steps) < _COMPOSE_MIN_SUB_STEPS + 1:
+        return []
+    keys = [_step_key(s) for s in steps]
+    found: list[str] = []
+    for other_sig, other in _host_skills(host).items():
+        if other_sig == sig or other.get("state") != _TRUSTED:
+            continue
+        osteps = other.get("steps", [])
+        if len(osteps) < _COMPOSE_MIN_SUB_STEPS or len(osteps) >= len(steps):
+            continue
+        if [_step_key(s) for s in osteps] == keys[: len(osteps)]:
+            found.append(other_sig)
+    return found
+
+
+def _invalidate_dependents(host: str, sub_sig: str) -> None:
+    """Knock every skill that builds on `sub_sig` back to probation: its proven
+    foundation just moved (edited/deprecated/demoted), so it must re-earn trust
+    rather than ghost-ride a sub-sequence that may no longer hold."""
+    for dep_sig, dep in _host_skills(host).items():
+        if sub_sig in dep.get("composed_of", []) and dep.get("state") == _TRUSTED:
+            k = _key(host, dep_sig)
+            live = _skills.get(k) or dep
+            live["state"] = _PROBATION
+            live["fails"] = 0
+            _skills[k] = live
+            if live.get("persisted"):
+                _persist(host, dep_sig, live)
+            _event("invalidate", host, dep_sig, rev=live.get("rev", 1), state=_PROBATION, foundation=sub_sig)
+            logger.info(f"[browser-skills] {host}::{dep_sig} knocked to probation "
+                        f"(its foundation {sub_sig} changed)")
+
+
+def record_skill(host: str, task: str, action_log: list[dict]) -> bool:
+    """Record (or EDIT) a replayable skill. Non-sensitive skills persist to disk;
+    sensitive ones stay in-memory only. Edit-aware: if a skill already exists for
+    this (host, task) and the freshly distilled steps DIFFER, this is a real edit
+    (the page changed) so we re-version it (rev++) back to probation; if they're
+    IDENTICAL the prior replay miss was transient, so we keep the existing trust
+    and just clear the fail streak. Returns True if a skill is in place after the
+    call. Best-effort; never raises into the caller."""
+    try:
+        if not host:
+            return False
+        steps = distill_steps(action_log)
+        if not steps:
+            return False
+        sig = _sig(task)
+        if not sig:
+            return False
+        steps = _parameterize(steps, task)  # quoted values -> slots (not stored)
+        persistable = steps_are_persistable(steps)
+        k = _key(host, sig)
+        existing = _skills.get(k) or _load_from_disk(host, sig)
+
+        if existing and _steps_equal(existing.get("steps", []), steps):
+            # Same skill re-derived: the replay that triggered this was a transient
+            # miss, not a stale skill. Keep rev + trust; just clear the fail streak.
+            # If it was quarantined (a known-bad distillation), leave it quarantined
+            # so the task keeps running on the pure-LLM baseline, never re-replayed.
+            existing["fails"] = 0
+            existing["recorded_at"] = time.time()
+            existing["persisted"] = persistable
+            _skills[k] = existing
+            if persistable:
+                _persist(host, sig, existing)
+            logger.info(f"[browser-skills] re-derived identical {len(steps)}-step skill for {host} "
+                        f"(rev {existing.get('rev', 1)}, state={existing.get('state')}, transient miss)")
+            return True
+
+        rev = (existing.get("rev", 1) + 1) if existing else 1
+        skill = {
+            "host": host, "task_sig": sig, "steps": steps,
+            "recorded_at": time.time(), "replays": 0, "persisted": persistable,
+            "rev": rev, "state": _PROBATION, "fails": 0,
+            "composed_of": _detect_composition(host, sig, steps),
+        }
+        _skills[k] = skill
+        if len(_skills) > _MAX_MEM_SKILLS:
+            oldest = min(_skills, key=lambda kk: _skills[kk]["recorded_at"])
+            _skills.pop(oldest, None)
+        if persistable:
+            _persist(host, sig, skill)
+        verb = "EDITED" if existing else "learned"
+        comp = f", builds on {skill['composed_of']}" if skill["composed_of"] else ""
+        logger.info(f"[browser-skills] {verb} {len(steps)}-step skill for {host} "
+                    f"(rev {rev}, probationary{', persisted' if persistable else ', in-memory only: sensitive'}{comp})")
+        _event("edit" if existing else "learn", host, sig, rev=rev, state=_PROBATION,
+               steps=len(steps), composed_of=skill["composed_of"], persisted=persistable)
+        if skill["composed_of"]:
+            _event("compose", host, sig, rev=rev, state=_PROBATION, builds_on=skill["composed_of"])
+        if existing:
+            _invalidate_dependents(host, sig)  # anything built on the OLD version must re-prove
+        return True
+    except Exception as e:
+        logger.debug(f"[browser-skills] record failed: {e}")
+        return False
+
+
+def find_skill(host: str, task: str) -> dict | None:
+    """Exact-key lookup for REPLAY: in-memory hot cache first, then a single lazy
+    disk read (no corpus scan). A QUARANTINED skill (unproven and already failed)
+    is never handed back, so the task runs on the pure-LLM baseline instead of
+    re-attempting a known-bad replay. Cheap + flat as the library grows."""
+    if not host:
+        return None
+    sig = _sig(task)
+    if not sig:
+        return None
+    k = _key(host, sig)
+    hit = _skills.get(k)
+    if not hit:
+        loaded = _load_from_disk(host, sig)
+        if loaded:
+            _skills[k] = loaded  # warm the hot cache (even if quarantined)
+            hit = loaded
+    if not hit or hit.get("state") == _QUARANTINE:
+        return None
+    return hit
+
+
+def mark_replay_succeeded(host: str, task: str) -> None:
+    """A replay ran end to end. Count it and, if the skill was still on
+    probation, PROMOTE it to trusted (the verify gate just passed)."""
+    s = find_skill(host, task)
+    if not s:
+        return
+    s["replays"] = s.get("replays", 0) + 1
+    s["fails"] = 0
+    promoted = s.get("state") != _TRUSTED
+    s["state"] = _TRUSTED
+    if s.get("persisted"):
+        _persist(host, s["task_sig"], s)  # keep the on-disk count + state fresh
+    if promoted:
+        logger.info(f"[browser-skills] {host}::{s['task_sig']} PROVEN by replay (rev {s.get('rev', 1)}) -> trusted")
+        _event("promote", host, s["task_sig"], rev=s.get("rev", 1), state=_TRUSTED, replays=s["replays"])
+
+
+def mark_replay_failed(host: str, task: str) -> str:
+    """A replay failed mid-way. Update trust and report what happened so the
+    caller can log it; the caller then falls through to the full LLM agent (which
+    re-records, edit-aware). Returns one of:
+      'quarantined' - skill was unproven (probation) and failed -> never replay it
+                      again; the task runs on the pure-LLM baseline from now on.
+      'demoted'     - a trusted skill crossed the transient-miss threshold -> back
+                      to probation (must re-earn trust).
+      'kept'        - a trusted skill's first transient miss; left in place.
+      'none'        - no live (non-quarantined) skill for this task."""
+    s = find_skill(host, task)
+    if not s:
+        return "none"
+    sig = s["task_sig"]
+    if s.get("state") != _TRUSTED:
+        s["state"] = _QUARANTINE
+        s["fails"] = s.get("fails", 0) + 1
+        if s.get("persisted"):
+            _persist(host, sig, s)
+        _event("quarantine", host, sig, rev=s.get("rev", 1), state=_QUARANTINE)
+        _invalidate_dependents(host, sig)
+        logger.info(f"[browser-skills] {host}::{sig} (unproven) failed replay -> quarantined (baseline from here)")
+        return "quarantined"
+    s["fails"] = s.get("fails", 0) + 1
+    if s["fails"] >= _FAIL_DEMOTE_THRESHOLD:
+        s["state"] = _PROBATION
+        if s.get("persisted"):
+            _persist(host, sig, s)
+        _event("demote", host, sig, rev=s.get("rev", 1), state=_PROBATION, fails=s["fails"])
+        _invalidate_dependents(host, sig)
+        logger.info(f"[browser-skills] {host}::{sig} failed {s['fails']}x -> demoted to probation")
+        return "demoted"
+    if s.get("persisted"):
+        _persist(host, sig, s)
+    logger.info(f"[browser-skills] {host}::{sig} transient replay miss ({s['fails']}/{_FAIL_DEMOTE_THRESHOLD}), trust kept")
+    return "kept"
+
+
+def list_skills(host: str) -> list[dict]:
+    """Compact summaries of the skills learned for a host (task + step count +
+    replay count + trust state + what it builds on), NOT full step dumps, so the
+    agent can ask "what shortcuts do I have here?" without pulling a wall of
+    detail into context. Reads in-memory + the on-disk library for this host."""
+    out = []
+    for sig, s in _host_skills(host).items():
+        out.append({
+            "task": sig, "steps": len(s.get("steps", [])),
+            "replays": s.get("replays", 0), "persisted": s.get("persisted", False),
+            "state": s.get("state", _PROBATION), "rev": s.get("rev", 1),
+            "builds_on": list(s.get("composed_of", [])),
+        })
+    # trusted first, then most-reused
+    return sorted(out, key=lambda x: (x["state"] != _TRUSTED, -x["replays"]))
 
 
 def deprecate_skill(host: str, task: str) -> bool:
-    """Remove a skill (in-memory + disk) so it stops being replayed. The agent
-    calls this when it judges a saved shortcut is stale / wrong (page changed).
-    Accepts either the raw task or the task_sig from list_skills (sig is
-    idempotent under _sig). Returns True if something was removed."""
+    """Remove a skill (in-memory + disk) so it stops being replayed, and knock
+    any skill that was built on it back to probation. The agent calls this when
+    it judges a saved shortcut is stale / wrong (page changed). Accepts either the
+    raw task or the task_sig from list_skills (sig is idempotent under _sig).
+    Returns True if something was removed."""
     if not host:
         return False
     sig = _sig(task)
@@ -480,6 +686,7 @@ def deprecate_skill(host: str, task: str) -> bool:
         except Exception:
             pass
     if removed:
+        _invalidate_dependents(host, sig)
         logger.info(f"[browser-skills] deprecated skill {host}::{sig}")
     return removed
 
