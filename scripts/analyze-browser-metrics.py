@@ -82,12 +82,72 @@ def ghost_verdict(task, events_for_task):
     return (len(reasons) > 0), reasons
 
 
+def skill_layer_report(tasks, skill_events):
+    """Did the learn/replay/trust layer ACTUALLY help, or is it silently
+    thrashing? Measures the replay speedup on repeated tasks and flags the ghost
+    where a task is done over and over but never reaches the no-LLM fast path."""
+    print("\n=== SKILL LAYER (does learn/replay actually help?) ===")
+    paths = Counter(t.get("path", "llm") for t in tasks)
+    total = sum(paths.values())
+    if total:
+        for p in ("replay", "llm", "llm_fallback"):
+            if paths.get(p):
+                print(f"  {p:<13}{paths[p]:>4}  ({round(100*paths[p]/total)}% of finished tasks)")
+
+    # Repeated tasks: group completed runs by signature, compare replay vs llm time.
+    by_sig = defaultdict(list)
+    for t in tasks:
+        if t.get("completed") and t.get("task_sig"):
+            by_sig[t["task_sig"]].append(t)
+    repeated = {s: r for s, r in by_sig.items() if len(r) >= 2}
+    helped, silent = [], []
+    for sig, runs in repeated.items():
+        rp = [t["total_ms"] for t in runs if t.get("path") == "replay"]
+        lm = [t["total_ms"] for t in runs if t.get("path") in ("llm", "llm_fallback")]
+        if rp and lm:
+            speed = round((sum(lm) / len(lm)) / max(1, (sum(rp) / len(rp))), 1)
+            helped.append((sig, len(runs), speed, round(sum(lm) / len(lm)), round(sum(rp) / len(rp))))
+        elif not rp:
+            silent.append((sig, len(runs)))
+    if helped:
+        print("\n  REPLAY SPEEDUP on repeated tasks (the win, measured):")
+        for sig, n, speed, lm_ms, rp_ms in sorted(helped, key=lambda x: -x[2]):
+            print(f"    {speed}x faster  ({lm_ms}ms LLM -> {rp_ms}ms replay, {n} runs)  {sig[:48]}")
+    if silent:
+        print("\n  ⚠️ SILENT NON-HELP (task repeated but NEVER hit the fast path):")
+        print("     a repeat that never replays = the skill thrashed or won't distill;")
+        print("     it still completes, but the speed win never lands. Investigate.")
+        for sig, n in sorted(silent, key=lambda x: -x[1]):
+            print(f"    x{n}  {sig[:60]}")
+    if not helped and not silent:
+        print("  (no task repeated yet, so no replay measurement available)")
+
+    if not skill_events:
+        return
+    # Lifecycle rollup + thrash detector (re-learn loops that never promote).
+    kinds = Counter(e.get("kind") for e in skill_events)
+    print("\n  lifecycle:", "  ".join(f"{k}={kinds[k]}" for k in
+          ("learn", "edit", "promote", "quarantine", "demote", "compose", "invalidate") if kinds.get(k)))
+    per = defaultdict(Counter)
+    for e in skill_events:
+        per[f"{e.get('host')}::{e.get('task_sig')}"][e.get("kind")] += 1
+    thrash = [(k, c) for k, c in per.items() if c["learn"] + c["edit"] >= 2 and c["promote"] == 0]
+    if thrash:
+        print("\n  ⚠️ THRASH (re-learned/edited >=2x but NEVER promoted to trusted):")
+        for k, c in thrash:
+            print(f"    {k[:60]}  learn={c['learn']} edit={c['edit']} quarantine={c['quarantine']}")
+    if kinds.get("compose"):
+        print(f"\n  composition: {kinds['compose']} skill(s) built on a proven sub-skill, "
+              f"{kinds.get('invalidate', 0)} dependent(s) re-proofed after a foundation changed")
+
+
 def main():
     d = sys.argv[1] if len(sys.argv) > 1 else _default_dir()
     events = _load(os.path.join(d, "events.jsonl"))
     tasks = _load(os.path.join(d, "tasks.jsonl"))
+    skill_events = _load(os.path.join(d, "skill_events.jsonl"))
     print(f"metrics dir: {d}")
-    print(f"events: {len(events)}  tasks: {len(tasks)}\n")
+    print(f"events: {len(events)}  tasks: {len(tasks)}  skill_events: {len(skill_events)}\n")
     if not tasks and not events:
         print("No metrics recorded yet. Run some browser-agent tasks first.")
         return
@@ -145,6 +205,8 @@ def main():
         print(f"avg task time: {avg_ms}ms   avg tokens/task: {avg_tok}")
         print(f"honest completion rate: {round(100*(completed-ghosts)/n,1)}% "
               f"(completed minus ghosts)")
+
+    skill_layer_report(tasks, skill_events)
 
 
 if __name__ == "__main__":
