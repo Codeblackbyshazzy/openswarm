@@ -5,6 +5,7 @@ from backend.apps.agents.browser.browser_loop import (
     _STAGNATION_MAX,
     _looks_like_failure,
     advance_stagnation,
+    completion_is_honest,
     is_unproductive,
     stagnation_exhausted,
     stagnation_nudge,
@@ -99,3 +100,54 @@ def test_advance_fires_again_at_max():
     assert streak == _STAGNATION_MAX
     assert nudge is not None and "RequestHumanIntervention" in nudge
     assert stagnation_exhausted(streak)
+
+
+# --- completion honesty gate ----------------------------------------------
+# Catches the worst measured ghost: multi-minute runs, every tool errored, still
+# reported 'completed'. Must NOT cry wolf on real successes (it overrides status).
+
+def _ok(tool, summary="done"):
+    return {"tool": tool, "ok": True, "result_summary": summary}
+
+
+def _err(tool):
+    return {"tool": tool, "ok": False, "result_summary": "Element not found: '.x'"}
+
+
+def test_completion_honest_when_an_action_succeeded():
+    log = [_ok("BrowserListInteractives", "1 button"), _ok("BrowserClickIndex", "Clicked")]
+    honest, reason = completion_is_honest(log)
+    assert honest and reason == ""
+
+
+def test_completion_ghost_when_every_action_errored():
+    # the exact LinkedIn ghost: 8 tools, all errored, model said 'completed'
+    log = [_err("BrowserClick") for _ in range(8)]
+    honest, reason = completion_is_honest(log)
+    assert not honest and "every state-changing action failed" in reason
+
+
+def test_completion_ghost_when_zero_actions_taken():
+    honest, reason = completion_is_honest([])
+    assert not honest and "without taking a single action" in reason
+
+
+def test_completion_ghost_when_only_looked_around_with_no_content():
+    # screenshot returned but no text, no action -> nothing real happened
+    log = [{"tool": "BrowserScreenshot", "ok": True, "result_summary": ""}]
+    honest, reason = completion_is_honest(log)
+    assert not honest and "only looked around" in reason
+
+
+def test_completion_honest_for_a_read_only_task_that_returned_content():
+    # a legit "tell me what's on the page" task: no action, but a read got content
+    log = [_ok("BrowserGetText", "The page says hello world")]
+    honest, reason = completion_is_honest(log)
+    assert honest and reason == ""
+
+
+def test_completion_honest_when_some_errors_but_an_action_landed():
+    # partial failure is fine as long as a real action ultimately succeeded
+    log = [_err("BrowserClick"), _err("BrowserClick"), _ok("BrowserClickIndex", "Clicked Submit")]
+    honest, reason = completion_is_honest(log)
+    assert honest

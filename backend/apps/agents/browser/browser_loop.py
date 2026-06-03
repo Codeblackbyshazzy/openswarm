@@ -179,3 +179,47 @@ def stagnation_exhausted(streak: int) -> bool:
     """True once deterministic nudging has been exhausted; the caller may then
     escalate to a one-shot aux-LLM adjudication (see browser_validator)."""
     return streak >= _STAGNATION_MAX
+
+
+# --- completion honesty gate ----------------------------------------------
+# A model that ends its turn is NOT proof the goal happened. The worst ghost we
+# measured: multi-minute runs where every tool errored, still reported
+# "completed". This deterministic gate reality-checks the run before we let the
+# status say "done", so a fake success is reported as the failure it actually is.
+
+# State-changing tools: a task that needed to DO something must land one of these.
+_PRODUCTIVE_TOOLS = {
+    "BrowserClick", "BrowserClickIndex", "BrowserType", "BrowserNavigate",
+    "BrowserPressKey", "BrowserScroll", "BrowserBatch",
+}
+# Read/extract tools: a look-only task's evidence is that a read returned content.
+_READ_TOOLS = {
+    "BrowserGetText", "BrowserGetElements", "BrowserListInteractives",
+    "BrowserListRoutes", "BrowserReplayRoute", "BrowserScreenshot", "BrowserEvaluate",
+}
+
+
+def completion_is_honest(action_log: list[dict]) -> tuple[bool, str]:
+    """Reality-check a run the model declared done. Returns (honest, reason).
+
+    Conservative by design (it can flip a 'completed' into an error, so it must
+    not cry wolf on a real success): it flags ONLY the unambiguous ghosts, a run
+    that took zero actions, one whose every state-changing action errored, or one
+    that only looked around (no action and no read returned content). A read-only
+    task stays honest as long as some read came back with content; a partially
+    erroring run that still landed a real action stays honest.
+    """
+    if not action_log:
+        return False, "declared done without taking a single action"
+    actions = [a for a in action_log if a.get("tool") in _PRODUCTIVE_TOOLS]
+    actions_ok = [a for a in actions if a.get("ok")]
+    reads_ok = [
+        a for a in action_log
+        if a.get("tool") in _READ_TOOLS and a.get("ok")
+        and str(a.get("result_summary") or "").strip()
+    ]
+    if actions and not actions_ok:
+        return False, "every state-changing action failed"
+    if not actions and not reads_ok:
+        return False, "only looked around: no action taken and no content read back"
+    return True, ""
