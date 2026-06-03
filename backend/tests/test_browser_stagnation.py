@@ -159,6 +159,11 @@ def test_card_is_unavailable_only_for_unrecoverable_errors():
     # a gone card is unrecoverable (fail fast); a missing selector is not (route around)
     assert card_is_unavailable({"error": "Browser card 'b1' not found or not an Electron webview"})
     assert card_is_unavailable({"error": "No dashboard is connected. Open the dashboard to use browser tools."})
+    # a HUNG card (the 20-min LinkedIn freeze) also counts: commands time out, the
+    # page never responds, retrying is pointless -> same fast-fail streak as gone
+    assert card_is_unavailable({"error": "Browser command timed out"})
+    assert card_is_unavailable({"error": "page unresponsive"})
+    # but normal, recoverable problems do NOT (the agent can route around these)
     assert not card_is_unavailable({"error": "Element not found: '.submit'"})
     assert not card_is_unavailable({"text": "ok", "url": "http://x"})
 

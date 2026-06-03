@@ -200,12 +200,18 @@ _READ_TOOLS = {
 }
 
 
-# A card whose webview is gone is UNRECOVERABLE by the agent (it cannot resurrect
-# the card), unlike a missing selector it could route around. The frontend
-# returns these only AFTER a 2s re-register grace, so they mean the card is truly
-# gone (closed) or the dashboard was never open. Retrying just burns the turn
-# budget (the multi-minute spins we measured), so the caller fails fast instead.
-_CARD_GONE_MARKERS = ("not an electron webview", "no dashboard is connected")
+# A card the agent can't make progress on, EITHER gone (closed/dashboard not open;
+# unrecoverable) OR hung (a wedged tab where every command times out / the page
+# never responds). Both look the same to the agent: retrying just burns time (the
+# 20-minute LinkedIn spin), so we fail fast. The streak (reset on any good result)
+# absorbs a one-off transient; only a SUSTAINED pattern trips it, so a merely-busy
+# page that recovers is never mistaken for dead.
+_CARD_GONE_MARKERS = (
+    "not an electron webview",   # card closed / destroyed
+    "no dashboard is connected", # dashboard view not mounted
+    "command timed out",         # hung: the command never came back
+    "page unresponsive",         # hung: smart-wait gave up probing the tab
+)
 _CARD_GONE_LIMIT = 2  # consecutive misses before we give up (absorbs a transient)
 
 

@@ -1144,12 +1144,14 @@ async def run_browser_agent(
                 )
                 break
 
-            # The card's webview is gone (closed / dashboard not open). The agent
-            # can't bring it back, so stop retrying and report it honestly below.
+            # The card is unusable, gone (closed) OR hung (commands keep timing
+            # out / the page never responds). Either way the agent can't make
+            # progress, so stop retrying after a short streak and report honestly,
+            # instead of the 20-minute spin on a wedged tab.
             if card_gone_streak >= _CARD_GONE_LIMIT:
                 logger.warning(
-                    f"[browser-agent {session_id}] browser card {browser_id} is gone "
-                    f"({card_gone_streak} consecutive misses); aborting fast"
+                    f"[browser-agent {session_id}] browser card {browser_id} is unusable "
+                    f"({card_gone_streak} consecutive gone/hung results); aborting fast"
                 )
                 break
 
@@ -1198,7 +1200,7 @@ async def run_browser_agent(
         # looked around), report the truth instead of a ghost "completed". A gone
         # card gets its own precise reason instead of the generic verdict.
         if card_gone_streak >= _CARD_GONE_LIMIT:
-            honest, dishonest_reason = False, "the browser card is no longer open (it was closed or never opened)"
+            honest, dishonest_reason = False, "the browser became unresponsive (the tab hung or was closed); it needs a fresh browser to continue"
         else:
             honest, dishonest_reason = completion_is_honest(action_log)
         final_status = "completed" if honest else "error"

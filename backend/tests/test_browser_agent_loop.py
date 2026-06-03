@@ -633,7 +633,41 @@ def test_dead_browser_card_aborts_fast_without_spinning(monkeypatch):
     ))
     assert len(primary.calls) <= 3, "a dead card must fail fast, not spin the whole budget"
     assert captured.get("status") == "error"
-    assert "no longer open" in r["summary"].lower()
+    assert "unresponsive" in r["summary"].lower()
+
+
+def test_hung_browser_card_aborts_fast_not_a_20_minute_loop(monkeypatch):
+    # THE regression from the user's 20-min LinkedIn freeze: a HUNG tab returns
+    # "Browser command timed out" on every command (not "card not found"), so the
+    # gone-detector never tripped and the agent spun for minutes. Now a hung card
+    # feeds the same fast-fail streak and aborts in a couple of turns.
+    import backend.apps.agents.browser.browser_skills as SK
+    SK.clear()
+    BH._browser_history.clear()
+    primary = FakeLLM(
+        [Resp([_rp("read"), _tu("BrowserGetText")]) for _ in range(8)]
+        + [Resp([Blk("text", "done")], stop_reason="end_turn")]
+    )
+    _install(monkeypatch, primary, FakeAux())
+
+    async def _hung(request_id, action, browser_id, params, tab_id=""):
+        return {"error": "Browser command timed out"}  # what a wedged tab returns
+    monkeypatch.setattr(BA.ws_manager, "send_browser_command", _hung, raising=False)
+    captured = {}
+    orig = BA.ws_manager.send_to_session
+
+    async def _cap(session_id, event, payload):
+        if event == "agent:status":
+            captured["status"] = payload.get("status")
+        return await orig(session_id, event, payload)
+    monkeypatch.setattr(BA.ws_manager, "send_to_session", _cap, raising=False)
+
+    r = asyncio.run(BA.run_browser_agent(
+        task="Read the page", browser_id="b1", model="sonnet", initial_url=DOC_URL,
+    ))
+    assert len(primary.calls) <= 3, "a hung card must abort fast, not spin for 20 minutes"
+    assert captured.get("status") == "error"
+    assert "unresponsive" in r["summary"].lower()
 
 
 def test_perception_is_frontloaded_into_first_turn(monkeypatch):
