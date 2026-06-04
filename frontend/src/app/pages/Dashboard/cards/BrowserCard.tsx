@@ -686,47 +686,9 @@ const BrowserCard: React.FC<Props> = ({
             },
           },
         }),
-        ...(!isHighlighted && (agentActive || showGlow) && {
-          animation: `agent-glow-${browserId} 2s ease-in-out infinite`,
-          [`@keyframes agent-glow-${browserId}`]: {
-            '0%, 100%': {
-              boxShadow: `0 0 0 2px ${accentColor}40, 0 0 18px ${accentColor}30, 0 0 40px ${accentColor}15${innerGlow}`,
-            },
-            '50%': {
-              boxShadow: `0 0 0 3px ${accentColor}60, 0 0 28px ${accentColor}45, 0 0 56px ${accentColor}25${innerGlow}`,
-            },
-          },
-        }),
+        // No glow pulse on purpose: animated box-shadow repaints card+halo every frame over a webview; the static border and tether arrow say "in use" for free.
       }}
     >
-
-      {showGlow && !agentActive && (
-        <Box
-          sx={{
-            position: 'absolute',
-            inset: 0,
-            borderRadius: 'inherit',
-            zIndex: 20,
-            pointerEvents: 'none',
-            overflow: 'hidden',
-            padding: '3px',
-            mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-            WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-            maskComposite: 'exclude',
-            WebkitMaskComposite: 'xor',
-            '&::before': {
-              content: '""',
-              position: 'absolute',
-              inset: '-50%',
-              background: `conic-gradient(from 0deg, transparent 0%, ${accentColor} 25%, transparent 50%, ${accentColor} 75%, transparent 100%)`,
-              animation: 'rotate-glow 3s linear infinite',
-            },
-            '@keyframes rotate-glow': {
-              '100%': { transform: 'rotate(360deg)' },
-            },
-          }}
-        />
-      )}
 
       {agentActive && (
         <Box
