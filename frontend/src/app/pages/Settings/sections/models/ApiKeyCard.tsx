@@ -23,8 +23,8 @@ export interface ApiKeyConfig {
 
 export const API_KEY_CARDS: ApiKeyConfig[] = [
   { field: 'anthropic_api_key', label: 'Anthropic', desc: 'Claude Sonnet, Opus, Haiku.', placeholder: 'sk-ant-...', href: 'https://console.anthropic.com/settings/keys' },
-  { field: 'openai_api_key', label: 'OpenAI', desc: 'GPT-5.4, GPT-5.4 Mini, o-series reasoning models.', placeholder: 'sk-...', href: 'https://platform.openai.com/api-keys' },
-  { field: 'google_api_key', label: 'Google', desc: 'Gemini 3 Pro, Gemini 3 Flash, Gemini 2.5 Pro.', placeholder: 'AIza...', href: 'https://aistudio.google.com/apikey' },
+  { field: 'openai_api_key', label: 'OpenAI', desc: 'GPT and o-series reasoning models.', placeholder: 'sk-...', href: 'https://platform.openai.com/api-keys' },
+  { field: 'google_api_key', label: 'Google', desc: 'Gemini Pro and Flash models.', placeholder: 'AIza...', href: 'https://aistudio.google.com/apikey' },
   { field: 'openrouter_api_key', label: 'OpenRouter', desc: '300+ models from xAI, Meta, DeepSeek, Mistral, Qwen, and more.', placeholder: 'sk-or-...', href: 'https://openrouter.ai/keys' },
 ];
 
