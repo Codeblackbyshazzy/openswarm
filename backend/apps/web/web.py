@@ -9,6 +9,7 @@ extraction in the MCP process.
 Mounted at `/api/web`.
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -75,6 +76,21 @@ GEMINI_GROUNDING_MODEL = "gemini-2.5-flash"  # cheapest + fastest for grounded c
 
 OPENAI_API_BASE = "https://api.openai.com/v1"
 OPENAI_SEARCH_MODEL = "gpt-5-mini"  # cheapest model that supports web_search_preview
+
+# Per-attempt timeouts for the search/fetch cascade. The fast-first ORDERING is
+# what fixes the ~75s stall (DDG answers in ~1s so the slow grounded backends are
+# rarely reached); these bounds are hang safety-nets, set just ABOVE each path's
+# own httpx timeout so a normally-slow call still completes and only a truly hung
+# provider (no response at all) gets cut. Grounded native search legitimately
+# takes 32-42s (httpx ceiling 45s), so its leash sits at 48s, NOT below 45, or
+# we'd clip the slow tail of a valid paid call.
+_DDG_ATTEMPT_TIMEOUT = 6.0       # DDG answers <1s; >6s is a network hang, fall through
+_GROUNDED_ATTEMPT_TIMEOUT = 48.0  # just above the providers' own 45s httpx timeout
+# Local httpx + trafilatura fetch of a real page; the fast path for /fetch
+# (normal pages return in <2s). Set just above WebFetchTool's own 30s httpx
+# ceiling so a valid-but-slow page still completes locally instead of being
+# clipped down to a grounded summary; only a truly hung server gets cut.
+_LOCAL_FETCH_TIMEOUT = 32.0
 
 
 async def _gemini_grounded_call(api_key: str, prompt: str, *, use_url_context: bool) -> dict:
@@ -430,72 +446,70 @@ async def search(body: SearchBody) -> dict:
             "backend": "openai_subscription",
         }
 
-    # Ordered cascade: primary's native API key first (most direct), then
-    # the user's connected subscriptions (free via OAuth), then the
-    # opposite-provider native key, then DuckDuckGo last as a guaranteed
-    # fallback (which is rate-limit-prone but free).
-    if primary == "openai":
-        cascade = [
-            ("openai_native", try_openai),
-            ("openai_subscription", try_openai_subscription),
-            ("gemini_native", try_gemini),
-            ("gemini_subscription", try_gemini_subscription),
-        ]
-    elif primary in ("gemini", "google"):
-        cascade = [
-            ("gemini_native", try_gemini),
-            ("gemini_subscription", try_gemini_subscription),
-            ("openai_native", try_openai),
-            ("openai_subscription", try_openai_subscription),
-        ]
-    else:
-        cascade = [
-            ("gemini_native", try_gemini),
-            ("gemini_subscription", try_gemini_subscription),
-            ("openai_native", try_openai),
-            ("openai_subscription", try_openai_subscription),
-        ]
-
-    for name, fn in cascade:
+    async def try_ddg():
+        # Fast path: direct HTML search, sub-second when DDG isn't throttling us.
+        # Returns None on a real no-hits OR a 202 throttle so the chain falls
+        # through to the slower-but-grounded backends.
+        from backend.apps.agents.tools.web import WebSearchTool, DDGRateLimited
         try:
-            res = await fn()
+            text = await WebSearchTool._search_ddg(body.query, body.num_results)
+        except DDGRateLimited:
+            # Surface the throttle as a recorded error (not a silent None) so the
+            # caller can see WHY we fell through to a slower backend.
+            raise RuntimeError("DuckDuckGo rate-limited (HTTP 202)") from None
+        if not text:
+            return None
+        return {"query": body.query, "results": text, "backend": "ddg"}
+
+    # Fast-first cascade: DDG leads (~1s = human speed); the 30-42s LLM-grounded
+    # backends are the reliable fallback when DDG is throttled or empty. The
+    # primary hint only reorders the grounded tier (native key before the
+    # same-provider subscription). Every attempt is wait_for-bounded so a slow
+    # or hung provider fails over fast instead of stalling the whole request.
+    grounded = [
+        ("gemini_native", try_gemini),
+        ("gemini_subscription", try_gemini_subscription),
+        ("openai_native", try_openai),
+        ("openai_subscription", try_openai_subscription),
+    ]
+    if primary == "openai":
+        grounded = grounded[2:] + grounded[:2]
+
+    cascade = [("ddg", try_ddg, _DDG_ATTEMPT_TIMEOUT)] + [
+        (name, fn, _GROUNDED_ATTEMPT_TIMEOUT) for name, fn in grounded
+    ]
+
+    for name, fn, timeout in cascade:
+        try:
+            res = await asyncio.wait_for(fn(), timeout=timeout)
             if res is not None:
+                if errors:
+                    res["cascade_errors"] = errors
                 return res
+        except asyncio.TimeoutError:
+            errors.append(f"{name}: timed out after {timeout:.0f}s")
         except Exception as e:
             errors.append(f"{name}: {str(e)[:150]}")
 
-    # DDG fallback.
-    from backend.apps.agents.tools.web import WebSearchTool
-    try:
-        tool = WebSearchTool()
-        parts = await tool.execute(
-            {"query": body.query, "num_results": body.num_results},
-            None,
+    # Everything failed. Be honest about why instead of an empty "no results".
+    connected = await _refresh_9r_connected()
+    has_subscription = bool(connected & {"codex", "antigravity", "gemini-cli"})
+    if not (gemini_key or openai_key or has_subscription):
+        tail = (
+            "No search backend is configured and DuckDuckGo is rate-limiting this "
+            "network. Connect Codex / Antigravity / Gemini CLI in Settings, or add "
+            "an OpenAI / Gemini API key, for reliable search."
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Search failed: {e}")
-
-    text = _join_text(parts)
-    hint = ""
-    if text.startswith("No search results found"):
-        connected = await _refresh_9r_connected()
-        has_subscription = bool(connected & {"codex", "antigravity", "gemini-cli"})
-        if not (gemini_key or openai_key or has_subscription):
-            hint = (
-                "\n\n(DuckDuckGo returned no results; likely rate-limiting this IP. "
-                "Connect Codex / Antigravity / Gemini CLI in Settings, or add an "
-                "OpenAI / Gemini API key, for reliable native search.)"
-            )
-        else:
-            hint = (
-                "\n\n(DuckDuckGo returned no results and the connected providers "
-                "didn't return useful results either; try rephrasing the query.)"
-            )
+    else:
+        tail = (
+            "DuckDuckGo is rate-limiting this network and every configured provider "
+            "errored (see details below). Wait a moment and retry."
+        )
     return {
         "query": body.query,
-        "results": text + hint,
-        "backend": "ddg",
-        **({"cascade_errors": errors} if errors else {}),
+        "results": f"No results for: {body.query}\n\n{tail}",
+        "backend": "none",
+        "cascade_errors": errors,
     }
 
 
@@ -571,28 +585,58 @@ async def fetch(body: FetchBody) -> dict:
             "backend": "openai_subscription",
         }
 
-    if primary == "openai":
-        cascade = [try_openai, try_openai_subscription, try_gemini, try_gemini_subscription]
-    else:
-        cascade = [try_gemini, try_gemini_subscription, try_openai, try_openai_subscription]
+    # Remembered so a thin/errored local read is still returned as the last
+    # resort if every grounded fetcher also fails (never worse than before).
+    local_text: str | None = None
 
-    for fn in cascade:
-        try:
-            res = await fn()
-            if res is not None:
-                return res
-        except Exception:
-            continue
-
-    # Local httpx + trafilatura fallback.
-    from backend.apps.agents.tools.web import WebFetchTool
-    try:
-        tool = WebFetchTool()
-        parts = await tool.execute(
-            {"url": body.url, "prompt": body.prompt or ""},
-            None,
+    async def try_local():
+        # Fast path: direct httpx + trafilatura, sub-second to a few seconds and
+        # returns the page's ACTUAL text (the grounded fetchers summarize, which
+        # is slower and loses detail). Thin/errored reads (JS walls, paywalls,
+        # HTTP errors) fall through to the grounded fetchers that can render them.
+        nonlocal local_text
+        from backend.apps.agents.tools.web import WebFetchTool
+        parts = await WebFetchTool().execute(
+            {"url": body.url, "prompt": body.prompt or ""}, None,
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Fetch failed: {e}")
+        text = _join_text(parts)
+        local_text = text
+        if text.startswith(("HTTP error", "Error fetching", "Refused to fetch")):
+            return None
+        body_text = text.split("\n\n", 1)[-1] if "\n\n" in text else text
+        if len(body_text.strip()) < 200:
+            return None
+        return {"url": body.url, "content": text, "backend": "local"}
 
-    return {"url": body.url, "content": _join_text(parts), "backend": "local"}
+    grounded = [
+        ("gemini_native", try_gemini),
+        ("gemini_subscription", try_gemini_subscription),
+        ("openai_native", try_openai),
+        ("openai_subscription", try_openai_subscription),
+    ]
+    if primary == "openai":
+        grounded = grounded[2:] + grounded[:2]
+
+    cascade = [("local", try_local, _LOCAL_FETCH_TIMEOUT)] + [
+        (name, fn, _GROUNDED_ATTEMPT_TIMEOUT) for name, fn in grounded
+    ]
+
+    errors: list[str] = []
+    for name, fn, timeout in cascade:
+        try:
+            res = await asyncio.wait_for(fn(), timeout=timeout)
+            if res is not None:
+                if errors:
+                    res["cascade_errors"] = errors
+                return res
+        except asyncio.TimeoutError:
+            errors.append(f"{name}: timed out after {timeout:.0f}s")
+        except Exception as e:
+            errors.append(f"{name}: {str(e)[:150]}")
+
+    # Grounded all failed; hand back whatever the local read got (even an error
+    # string is useful signal) rather than nothing.
+    if local_text is not None:
+        return {"url": body.url, "content": local_text, "backend": "local",
+                **({"cascade_errors": errors} if errors else {})}
+    raise HTTPException(status_code=502, detail=f"Fetch failed for {body.url}: " + "; ".join(errors)[:400])
