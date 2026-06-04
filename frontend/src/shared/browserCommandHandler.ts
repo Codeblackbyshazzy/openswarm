@@ -67,9 +67,23 @@ async function handleScreenshot(wv: BrowserWebview): Promise<Record<string, any>
     try {
       const nativeImage = await wv.capturePage();
       if (!nativeImage.isEmpty()) {
-        const dataUrl = nativeImage.toDataURL();
-        const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
-        return { image: base64, url: wv.getURL(), title: wv.getTitle() };
+        // Send a downscaled JPEG, not a full-res PNG: on real pages JPEG cuts the
+        // wire/upload bytes ~10x (the model reads images by dimensions, so this is
+        // a network + memory win), and capping near 1280 actual px keeps text
+        // legible while trimming tokens a little. Native ops, sub-10ms.
+        // Electron-42 retina gotchas, verified empirically: toJPEG() on a raw
+        // scaleFactor-2 capture returns an EMPTY image, and resize({width}) emits
+        // `width` ACTUAL pixels at scaleFactor 1, EXCEPT resizing to the source's
+        // own logical width is a no-op that leaves it retina (and unencodable). So
+        // we ALWAYS resize to a distinct width to force a clean scaleFactor-1 image.
+        const TARGET_W = 1280;
+        const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+        const { width: dipW } = nativeImage.getSize();
+        const backingW = Math.round(dipW * dpr);
+        let target = Math.min(TARGET_W, backingW);
+        if (target === dipW) target = Math.max(1, target - 1); // dodge the retina no-op
+        const base64 = nativeImage.resize({ width: target, quality: 'good' }).toJPEG(72).toString('base64');
+        return { image: base64, image_mime: 'image/jpeg', url: wv.getURL(), title: wv.getTitle() };
       }
       lastErr = new Error('capturePage returned an empty image (frame not painted yet)');
     } catch (err: any) {

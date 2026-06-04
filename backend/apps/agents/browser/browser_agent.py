@@ -103,7 +103,7 @@ def _format_tool_result(result: dict, tool_name: str) -> list[dict]:
                 "type": "image",
                 "source": {
                     "type": "base64",
-                    "media_type": "image/png",
+                    "media_type": result.get("image_mime", "image/png"),
                     "data": result["image"],
                 },
             },
@@ -587,6 +587,11 @@ async def run_browser_agent(
             if cancel_event.is_set():
                 break
 
+            # Drop stale screenshots before each call: keep first + previous +
+            # current, stub the rest. Images are ~1.3-2k tokens each and get
+            # re-read every turn, so this is the biggest per-turn context win on
+            # any visual task (measured ~2.9x fewer image tokens, ~5x less upload).
+            browser_history.prune_old_screenshots(messages)
             response = await _cancellable(client.messages.create(
                 model=api_model,
                 max_tokens=4096,

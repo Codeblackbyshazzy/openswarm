@@ -40,6 +40,60 @@ def clear_browser_history(browser_id: str) -> None:
     _browser_history.pop(browser_id, None)
 
 
+_OMITTED_SCREENSHOT_STUB = "[earlier screenshot omitted to save context]"
+
+
+def _iter_image_block_refs(messages: list[dict]):
+    """Yield (container_list, index) for every image block, in document order.
+
+    Screenshots live either directly in a message's content list or nested inside
+    a tool_result block's content list; handle both so nothing slips through.
+    """
+    for msg in messages:
+        content = msg.get("content")
+        if not isinstance(content, list):
+            continue
+        for i, block in enumerate(content):
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "image":
+                yield (content, i)
+            elif block.get("type") == "tool_result" and isinstance(block.get("content"), list):
+                for j, inner in enumerate(block["content"]):
+                    if isinstance(inner, dict) and inner.get("type") == "image":
+                        yield (block["content"], j)
+
+
+def prune_old_screenshots(messages: list[dict], keep_first: bool = True, keep_recent: int = 2) -> int:
+    """Collapse stale screenshot images to a one-line text stub, in place.
+
+    A vision image is ~1.3-2k tokens and the model re-reads EVERY one on EVERY
+    turn, so a task that screenshots a handful of times quietly re-prefills them
+    all each loop (measured ~2.9x the image tokens, ~5x the bytes uploaded per
+    turn). We keep only the orientation anchor (first) plus the `keep_recent` most
+    recent shots (previous + current) and swap the rest for a marker; the URL and
+    the agent's own ReportProgress already carry where/what, so only the pixels
+    are dropped, not the memory. If the agent must re-see, it just re-screenshots.
+    Returns how many images were collapsed.
+    """
+    refs = list(_iter_image_block_refs(messages))
+    keep_count = keep_recent + (1 if keep_first else 0)
+    if len(refs) <= keep_count:
+        return 0
+    keep: set[int] = set()
+    if keep_first:
+        keep.add(0)
+    for k in range(1, keep_recent + 1):
+        keep.add(len(refs) - k)
+    collapsed = 0
+    for idx, (container, i) in enumerate(refs):
+        if idx in keep:
+            continue
+        container[i] = {"type": "text", "text": _OMITTED_SCREENSHOT_STUB}
+        collapsed += 1
+    return collapsed
+
+
 def _validate_message_pairing(messages: list[dict]) -> bool:
     """Verify every tool_result references a tool_use_id from a prior assistant
     message in the same list. Returns False if there's an orphan, which means

@@ -1,3 +1,18 @@
+// Subset of Electron's NativeImage we actually call. resize() returns another
+// NativeImage, hence the self-reference.
+export interface ElectronNativeImage {
+  toDataURL: () => string;
+  toPNG: () => Buffer;
+  toJPEG: (quality: number) => Buffer;
+  isEmpty: () => boolean;
+  getSize: () => { width: number; height: number };
+  resize: (options: {
+    width?: number;
+    height?: number;
+    quality?: 'good' | 'better' | 'best';
+  }) => ElectronNativeImage;
+}
+
 export interface BrowserWebview extends HTMLElement {
   src: string;
   loadURL: (url: string) => Promise<void>;
@@ -8,11 +23,7 @@ export interface BrowserWebview extends HTMLElement {
   canGoForward: () => boolean;
   getURL: () => string;
   getTitle: () => string;
-  capturePage: (rect?: { x: number; y: number; width: number; height: number }) => Promise<{
-    toDataURL: () => string;
-    toPNG: () => Buffer;
-    isEmpty: () => boolean;
-  }>;
+  capturePage: (rect?: { x: number; y: number; width: number; height: number }) => Promise<ElectronNativeImage>;
   executeJavaScript: (code: string) => Promise<any>;
   sendInputEvent: (event: any) => void;
   getWebContentsId: () => number;
