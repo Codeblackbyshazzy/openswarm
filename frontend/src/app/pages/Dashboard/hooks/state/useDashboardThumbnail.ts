@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, type RefObject } from 'react';
 import { store } from '@/shared/state/store';
 import { useAppSelector } from '@/shared/hooks';
 import { updateDashboardThumbnail } from '@/shared/state/dashboardsSlice';
+import { anyWebviewLoading } from '@/shared/browserRegistry';
+import { isAnyBrowserBusy } from '@/shared/browserCommandHandler';
 import { captureDashboardThumbnail } from '../../geometry/captureDashboardThumbnail';
 
 // Settle window after a card is added/removed before snapshotting, so the new card has a beat to render.
@@ -56,6 +58,7 @@ export function useDashboardThumbnail({
   // Baseline we compare against; seeded from the persisted signature, advanced on each commit.
   const lastSavedSignatureRef = useRef<string | null>(savedSignature);
   const captureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const captureRetriesRef = useRef(0);
 
   const captureNow = useCallback(() => {
     const viewportEl = viewportRef.current;
@@ -69,6 +72,20 @@ export function useDashboardThumbnail({
       pendingSignatureRef.current = '';
       return;
     }
+    // Capturing the dashboard composites live webview pixels; doing it while a
+    // browser webview is mid-navigation OR an agent is actively driving it (its GPU
+    // surface recycling) crashes the renderer (SharedImage 'non-existent mailbox' ->
+    // V8 ToLocalChecked). Wait for it to go quiet; after a few tries, skip this round
+    // and keep the old preview rather than risk the crash.
+    if (anyWebviewLoading() || isAnyBrowserBusy()) {
+      if (captureRetriesRef.current < 6) {
+        captureRetriesRef.current += 1;
+        if (captureTimerRef.current) clearTimeout(captureTimerRef.current);
+        captureTimerRef.current = setTimeout(() => captureNow(), 800);
+      }
+      return;
+    }
+    captureRetriesRef.current = 0;
     const allCards = {
       cards: layoutState.cards,
       viewCards: layoutState.viewCards,
