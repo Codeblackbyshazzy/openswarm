@@ -514,3 +514,14 @@ def test_first_unsafe_step_splits_send_skills():
     assert i == 2 and "irreversible" in why
     safe, _ = replay_safety(send_flow)
     assert not safe
+
+
+def test_template_task_ignores_possessive_apostrophes():
+    from backend.apps.agents.browser.browser_skills import template_task, _sig
+    r14 = "go to tyler chen's linkedin hes in entrepreneurs first and text him '[test] hello world r14-os'"
+    r15 = "go to tyler chen's linkedin hes in entrepreneurs first and text him '[test] hello world r15-os'"
+    t14, v14 = template_task(r14)
+    assert v14 == ["[test] hello world r14-os"]
+    assert "chen's linkedin" in t14
+    assert _sig(r14) == _sig(r15)
+    assert template_task("no quotes here at all") == ("no quotes here at all", [])

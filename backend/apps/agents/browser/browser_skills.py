@@ -160,7 +160,10 @@ def normalize_task(task: str) -> str:
 # value is filled from the LIVE task at replay (so the value is never stored on
 # disk, a redaction win, and the skill generalizes). Quoting is the explicit,
 # high-precision signal that this token is a parameter; we never guess.
-_QUOTE_RE = re.compile(r'["“”‘’\']([^"“”‘’\']{1,200})["“”‘’\']')
+# Lookarounds keep word-internal apostrophes (chen's, don't) from opening a
+# span; without them every possessive made each task wording a unique sig and
+# silently disabled skill matching for those tasks.
+_QUOTE_RE = re.compile(r'(?<!\w)["“”‘’\']([^"“”‘’\']{1,200})["“”‘’\'](?!\w)')
 _SLOT_TOKEN = " slotvalue "
 
 
