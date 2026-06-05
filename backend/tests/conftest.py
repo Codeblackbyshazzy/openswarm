@@ -28,6 +28,13 @@ def _isolate_browser_state(monkeypatch):
                 m.clear(wipe_disk=True)
             except Exception:
                 pass
+        # metrics caches its dir at first use; drop it so each test writes
+        # where ITS env var points, not where the first test's pointed
+        try:
+            from backend.apps.agents.browser import browser_metrics as _bm
+            _bm._metrics_dir_cache = None
+        except Exception:
+            pass
     _reset()
     yield
     _reset()
