@@ -309,7 +309,12 @@ def first_unsafe_step(steps: list[dict]) -> tuple[int, str]:
         p = s.get("params", {}) or {}
         probe = None
         if tool in ("BrowserClickByName", "BrowserClick"):
-            probe = {"action": "click", "name": p.get("name") or p.get("selector") or ""}
+            name = p.get("name") or p.get("selector") or ""
+            # Real Send controls have short names ("Send", "Send InMail"); a
+            # 100ch profile-card blob containing "Send a..." is not one, and
+            # flagging it cut a 6-step prefix to 1 (measured, r19).
+            if len(name) <= 40:
+                probe = {"action": "click", "name": name}
         elif tool == "BrowserType":
             probe = {"action": "type", "selector": p.get("selector") or ""}
         if probe and browser_batch_replay.is_send_step(probe):

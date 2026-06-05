@@ -525,3 +525,17 @@ def test_template_task_ignores_possessive_apostrophes():
     assert "chen's linkedin" in t14
     assert _sig(r14) == _sig(r15)
     assert template_task("no quotes here at all") == ("no quotes here at all", [])
+
+
+def test_long_card_blob_click_names_are_not_send_steps():
+    from backend.apps.agents.browser.browser_skills import first_unsafe_step
+    flow = [
+        {"tool": "BrowserNavigate", "params": {"url": "https://www.linkedin.com/search"}},
+        {"tool": "BrowserClickByName", "params": {"name": (
+            "Tyler Chen Premium • 1st Something Here Irvine, California, United States Send a message to Tyler"
+        )}},
+        {"tool": "BrowserClickByName", "params": {"name": "Message"}},
+        {"tool": "BrowserClickByName", "params": {"name": "Send"}},
+    ]
+    i, why = first_unsafe_step(flow)
+    assert i == 3, f"expected the short Send click flagged, got {i}: {why}"
