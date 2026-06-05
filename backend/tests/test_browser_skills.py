@@ -538,4 +538,6 @@ def test_long_card_blob_click_names_are_not_send_steps():
         {"tool": "BrowserClickByName", "params": {"name": "Send"}},
     ]
     i, why = first_unsafe_step(flow)
-    assert i == 3, f"expected the short Send click flagged, got {i}: {why}"
+    # the blob at step 1 must NOT be flagged; the conservative cut lands on the
+    # short "Message" composer-opener (shared wordlist), keeping sends live
+    assert i == 2, f"expected the Message click flagged, got {i}: {why}"
