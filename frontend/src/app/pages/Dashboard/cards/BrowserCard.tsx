@@ -34,6 +34,7 @@ import {
   reorderBrowserTab,
   type BrowserTab,
 } from '@/shared/state/dashboardLayoutSlice';
+import { createSelector } from '@reduxjs/toolkit';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { handleApproval } from '@/shared/state/agentsSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
@@ -153,14 +154,22 @@ const BrowserCard: React.FC<Props> = ({
   const elementSelectionCtx = useElementSelection();
   const isElementSelectMode = elementSelectionCtx?.selectMode ?? false;
 
-  const browserAgentSession = useAppSelector((state) => {
-    const sessions = state.agents.sessions;
-    const matches = Object.values(sessions).filter(
-      (s) => s.browser_id === browserId && s.mode === 'browser-agent'
-        && (s.status === 'running' || s.status === 'waiting_approval' || s.status === 'completed' || s.status === 'error' || s.status === 'stopped'),
-    );
-    return matches.find((s) => s.status === 'running' || s.status === 'waiting_approval') ?? matches[matches.length - 1] ?? null;
-  });
+  // Memoized so the all-sessions scan reruns only when sessions actually change,
+  // not on every layout/drag dispatch at 60Hz.
+  const selectBrowserAgentSession = React.useMemo(
+    () => createSelector(
+      [(state: { agents: { sessions: Record<string, any> } }) => state.agents.sessions],
+      (sessions) => {
+        const matches = Object.values(sessions).filter(
+          (s: any) => s.browser_id === browserId && s.mode === 'browser-agent'
+            && (s.status === 'running' || s.status === 'waiting_approval' || s.status === 'completed' || s.status === 'error' || s.status === 'stopped'),
+        );
+        return matches.find((s: any) => s.status === 'running' || s.status === 'waiting_approval') ?? matches[matches.length - 1] ?? null;
+      },
+    ),
+    [browserId],
+  );
+  const browserAgentSession = useAppSelector(selectBrowserAgentSession);
 
   const activity = useBrowserActivity(browserId);
   const agentRunning = browserAgentSession?.status === 'running';
