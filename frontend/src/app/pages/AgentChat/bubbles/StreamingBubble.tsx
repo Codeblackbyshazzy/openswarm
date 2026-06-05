@@ -21,7 +21,7 @@ const StreamingBubble: React.FC<Props> = ({ sessionId, activeBranchId, turnLabel
   // same streaming slice, so smoothing here covers all of them at once. Tool-call
   // input is left raw (it's args, not prose). Zero added TTFT (see useSmoothText).
   const isTextRole = streamingMessage?.role !== 'tool_call';
-  const smoothContent = useSmoothText(rawContent, isTextRole);
+  const { text: smoothContent, revealRef } = useSmoothText(rawContent, isTextRole);
   const typedContent = isTextRole ? smoothContent : rawContent;
   // RAF-coalesce so onStreamGrew fires once per frame regardless of token rate.
   const onGrewRef = useRef(onStreamGrew);
@@ -66,6 +66,7 @@ const StreamingBubble: React.FC<Props> = ({ sessionId, activeBranchId, turnLabel
     <MessageBubble
       key={`streaming-${streamingMessage.id}`}
       isStreaming
+      revealRef={revealRef}
       dynamicTurnLabel={turnLabel}
       message={{
         id: streamingMessage.id,

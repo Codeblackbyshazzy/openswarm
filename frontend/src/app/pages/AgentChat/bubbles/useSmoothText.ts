@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 /**
  * Smoothly reveals streamed text at a steady cadence instead of painting bursty
@@ -6,32 +6,37 @@ import { useEffect, useRef, useState } from 'react';
  * claude.ai does, so generated text reads like it's being typed rather than
  * dumped in clumps.
  *
- * Why the old "reveal backlog/4, floor 3 chars/frame" version felt like
- * "pump pump pump": that floor (~180 chars/sec) is FASTER than a model
- * generates (~90 chars/sec), so the display kept sprinting to catch up, then
- * FROZE waiting for the next token. Freeze-sprint-freeze at token frequency is
- * the choppiness.
- *
- * This version is a buffered constant-velocity controller:
+ * Velocity model (unchanged from v1): a buffered constant-velocity controller.
  *   - It deliberately stays ~TARGET_LAG seconds BEHIND the latest text, so there
  *     is always a buffer to reveal and it never runs dry between tokens.
  *   - Reveal is TIME-based (chars = rate * elapsed), so it's frame-rate
  *     independent and survives a dropped frame without a visible jump.
  *   - The reveal RATE is EMA-smoothed, so a burst ramps the speed up gently and
  *     a lull ramps it down gently; the rate never steps, so the flow never pulses.
- * The rAF loop runs only while there's a backlog and parks at zero cost once
- * caught up. Zero added TTFT: the first characters still reveal in-render on the
- * very first frame content exists.
+ *
+ * Render model (v2): the v1 hook setState'd every frame, which re-rendered the
+ * whole bubble and re-parsed the full markdown tree 60x/s for the entire stream.
+ * Now the 60fps motion comes from appending the pending characters straight into
+ * the LAST DOM TEXT NODE under `revealRef` (one block relayout, no React), and
+ * React only re-renders ("commits") when structure can change: every COMMIT_MS,
+ * or immediately when the pending slice contains a newline (new block / list item
+ * / fence line). Inline markers (** ` _) show raw for at most COMMIT_MS before
+ * the parse formats them, which matches how unclosed markers already looked.
  */
 
 const TARGET_LAG_S = 0.35;   // stay this far behind = the buffer that prevents stalls
 const RATE_SMOOTH_S = 0.25;  // how fast the reveal speed eases toward its target
 const MAX_CPS = 1000;        // cap so a huge paste/burst still reveals smoothly, not instantly
 const MAX_DT_S = 0.05;       // clamp elapsed after a frame drop / tab switch so we don't leap
+const COMMIT_MS = 150;       // max staleness of the parsed markdown vs the revealed chars
 
-export function useSmoothText(target: string, enabled: boolean): string {
-  const [shownLen, setShownLen] = useState(enabled ? 0 : target.length);
-  const rafRef = useRef<number | null>(null);
+export function useSmoothText(
+  target: string,
+  enabled: boolean,
+): { text: string; revealRef: React.RefObject<HTMLElement | null> } {
+  const [committedLen, setCommittedLen] = useState(enabled ? 0 : target.length);
+  const revealRef = useRef<HTMLElement | null>(null);
+
   const targetRef = useRef(target);
   targetRef.current = target;
 
@@ -40,22 +45,53 @@ export function useSmoothText(target: string, enabled: boolean): string {
   const posRef = useRef<number>(enabled ? 0 : target.length); // float reveal position
   const cpsRef = useRef<number>(0);                            // current reveal speed
   const lastRef = useRef<number>(0);                           // last frame timestamp
-  const shownRef = useRef<number>(shownLen);
-  shownRef.current = shownLen;
+  const committedRef = useRef<number>(committedLen);
+  const lastCommitAtRef = useRef<number>(0);
+
+  // Imperative-tail bookkeeping: which committedLen the DOM reflects, and the
+  // text node + its committed baseline that per-frame appends write into.
+  const domLenRef = useRef<number>(committedLen);
+  const nodeRef = useRef<Text | null>(null);
+  const baseRef = useRef<string>('');
+
+  const findLastTextNode = (): Text | null => {
+    const root = revealRef.current;
+    if (!root) return null;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let last: Text | null = null;
+    let n: Node | null;
+    while ((n = walker.nextNode())) last = n as Text;
+    return last;
+  };
+
+  // After each committed render, re-anchor the tail on the fresh DOM and
+  // re-apply any chars the reveal position is already past, so a commit never
+  // rewinds visible text.
+  useLayoutEffect(() => {
+    if (!enabled) return;
+    const node = findLastTextNode();
+    nodeRef.current = node;
+    baseRef.current = node ? node.data : '';
+    domLenRef.current = committedLen;
+    const shown = Math.floor(posRef.current);
+    if (node && shown > committedLen) {
+      node.data = baseRef.current + targetRef.current.slice(committedLen, shown);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [committedLen, enabled]);
 
   // ONE persistent loop, keyed only on `enabled`. It must NOT restart per token:
   // an effect that depends on target.length tears the rAF down and rebuilds it on
-  // every delta, and that churn is what stalls the reveal. So the loop runs every
-  // frame for the life of the stream, reads the latest text from a ref, and just
-  // advances by 0 when it happens to be caught up (cheap, no stall, no parking).
+  // every delta, and that churn is what stalls the reveal.
   useEffect(() => {
     if (!enabled) {
-      if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
       posRef.current = targetRef.current.length;
-      setShownLen(targetRef.current.length);
+      committedRef.current = targetRef.current.length;
+      setCommittedLen(targetRef.current.length);
       return;
     }
 
+    let raf: number | null = null;
     const tick = (now: number) => {
       const full = targetRef.current.length;
       const dtRaw = lastRef.current ? (now - lastRef.current) / 1000 : 0.016;
@@ -72,16 +108,29 @@ export function useSmoothText(target: string, enabled: boolean): string {
 
       if (backlog > 0) {
         posRef.current = Math.min(full, posRef.current + cps * dt);
-        const nextLen = Math.floor(posRef.current);
-        if (nextLen !== shownRef.current) setShownLen(nextLen);
       }
-      rafRef.current = requestAnimationFrame(tick); // keep running for the whole stream
+      const shown = Math.floor(posRef.current);
+      const committed = committedRef.current;
+      if (shown > committed) {
+        const pending = targetRef.current.slice(committed, shown);
+        const due = now - lastCommitAtRef.current >= COMMIT_MS;
+        if (pending.includes('\n') || due || nodeRef.current === null) {
+          committedRef.current = shown;
+          lastCommitAtRef.current = now;
+          setCommittedLen(shown);
+        } else if (domLenRef.current === committed) {
+          // DOM is in sync with the last commit; safe to append imperatively.
+          nodeRef.current.data = baseRef.current + pending;
+        }
+        // else: a commit is mid-flight; skip this frame's append (≤1 frame).
+      }
+      raf = requestAnimationFrame(tick); // keep running for the whole stream
     };
 
     lastRef.current = 0;
-    rafRef.current = requestAnimationFrame(tick);
+    raf = requestAnimationFrame(tick);
     return () => {
-      if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+      if (raf != null) cancelAnimationFrame(raf);
     };
   }, [enabled]);
 
@@ -92,15 +141,12 @@ export function useSmoothText(target: string, enabled: boolean): string {
       posRef.current = enabled ? 0 : target.length;
       cpsRef.current = 0;
       lastRef.current = 0;
-      setShownLen(enabled ? 0 : target.length);
+      committedRef.current = enabled ? 0 : target.length;
+      nodeRef.current = null;
+      setCommittedLen(enabled ? 0 : target.length);
     }
   }, [target.length, enabled]);
 
-  // ZERO added TTFT: on the very first frame content exists, reveal a few chars
-  // in-render instead of waiting a frame for the first rAF tick.
-  if (!enabled) return target;
-  const effectiveShown = (shownLen === 0 && target.length > 0)
-    ? Math.min(3, target.length)
-    : shownLen;
-  return target.slice(0, effectiveShown);
+  if (!enabled) return { text: target, revealRef };
+  return { text: target.slice(0, committedLen), revealRef };
 }

@@ -553,7 +553,8 @@ const ThinkingBubble: React.FC<{
   persistedToolCount?: number;
   // Aux-LLM label like "Auditing the pull request"; null falls back to heuristic.
   dynamicLabel?: string | null;
-}> = ({ content, isStreaming, messageId, persistedElapsedMs, persistedTokens, persistedInputTokens, persistedToolCount, dynamicLabel }) => {
+  revealRef?: React.RefObject<HTMLElement | null>;
+}> = ({ content, isStreaming, messageId, persistedElapsedMs, persistedTokens, persistedInputTokens, persistedToolCount, dynamicLabel, revealRef }) => {
   const c = useClaudeTokens();
 
   const turnLabel = useMemo(
@@ -564,20 +565,11 @@ const ThinkingBubble: React.FC<{
   const [startedStreamingAt, setStartedStreamingAt] = useState<number | null>(
     isStreaming ? Date.now() : null
   );
-  const [elapsed, setElapsed] = useState<number>(0);
 
   React.useEffect(() => {
     if (isStreaming && startedStreamingAt === null) {
       setStartedStreamingAt(Date.now());
     }
-  }, [isStreaming, startedStreamingAt]);
-
-  React.useEffect(() => {
-    if (!isStreaming || startedStreamingAt === null) return;
-    const iv = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startedStreamingAt) / 1000));
-    }, 250);
-    return () => clearInterval(iv);
   }, [isStreaming, startedStreamingAt]);
 
   // userOverride pins explicit clicks; default is expanded while streaming, collapsed after.
@@ -774,7 +766,7 @@ const ThinkingBubble: React.FC<{
         >
           {text ? (
             <>
-              {text}
+              <Box component="span" ref={revealRef}>{text}</Box>
               {isStreaming && <StreamingCursor />}
             </>
           ) : (
@@ -841,9 +833,11 @@ interface Props {
   onCancelEdit?: () => void;
   isStreaming?: boolean;
   dynamicTurnLabel?: string | null;
+  /** Streaming only: useSmoothText appends revealed chars into this subtree between parses. */
+  revealRef?: React.RefObject<HTMLElement | null>;
 }
 
-const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, onSaveEdit, onCancelEdit, isStreaming, dynamicTurnLabel }) => {
+const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, onSaveEdit, onCancelEdit, isStreaming, dynamicTurnLabel, revealRef }) => {
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
   const [editText, setEditText] = useState('');
@@ -865,6 +859,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
       <ThinkingBubble
         content={typeof content === 'string' ? content : JSON.stringify(content)}
         isStreaming={isStreaming}
+        revealRef={revealRef}
         timestamp={message.timestamp}
         messageId={message.id}
         persistedElapsedMs={(message as any).elapsed_ms}
@@ -1180,8 +1175,9 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
                     bold is bold, lists/headings format from the first character.
                     Killing the old plain-text -> markdown swap removes the big
                     layout snap at stream end, which was the "glitch" people felt.
-                    Re-parse is memoized on the (smoothed) text and cheap at chat sizes. */}
-                {renderedMarkdown}
+                    While streaming, useSmoothText appends pending chars into this
+                    subtree between parses, so the re-parse runs per commit, not per frame. */}
+                <Box ref={revealRef}>{renderedMarkdown}</Box>
                 {isStreaming && <StreamingCursor />}
               </>
             )}
