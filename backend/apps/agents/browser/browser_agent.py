@@ -147,6 +147,12 @@ _AUTO_STATE_TOOLS = {
 _AUTO_STATE_MAX_LINES = 35
 _AUTO_SETTLE_CAPS_MS = {"BrowserNavigate": 2500, "BrowserBatch": 1500}
 
+# URL shapes that mean "a list of candidates to pick from" (auto candidate scan)
+_RESULTS_URL_RE = re.compile(
+    r"[?&](q|query|keywords|search|search_query|find|term)=|/search\b|/results\b", re.I,
+)
+_AUTO_SCAN_MAX_PER_RUN = 2
+
 
 def _batch_ends_with_read(tool_input: dict) -> bool:
     actions = (tool_input or {}).get("actions") or []
@@ -752,6 +758,21 @@ async def run_browser_agent(
     if replay_prefix_note:
         messages[-1]["content"] = f"{messages[-1]['content']}{replay_prefix_note}"
 
+    # Route hint: replay declined (send-gated, no exact key, or different
+    # wording), but a similar verified route may exist; hand it to the model as
+    # advisory text so it follows a known path instead of re-exploring.
+    route_hint_keys: list[tuple] = []
+    if not replay_prefix_note:
+        _h_skill, _h_score = browser_skills.find_similar_skill(replay_host, skill_key_task)
+        if _h_skill:
+            _hint, route_hint_keys = browser_skills.render_route_hint(_h_skill, skill_key_task, _h_score)
+            if _hint:
+                messages[-1]["content"] = f"{messages[-1]['content']}{_hint}"
+                logger.info(
+                    f"[browser-route {session_id}] hint attached at dispatch: host={replay_host} "
+                    f"sim={_h_score:.2f} steps={len(route_hint_keys)} state={_h_skill.get('state')}"
+                )
+
     text_parts = []  # initialized before loop so post-loop summary (line ~1294) has a default
     # Circuit breaker for ReportProgress violations. Some models get stuck
     # in a loop where they keep calling action tools without the brain-
@@ -773,6 +794,11 @@ async def run_browser_agent(
     multi_action_turns = 0
     batch_calls = 0
     batch_guard_blocks = 0
+    # auto candidate scan: aux-read results pages so pick-a-candidate happens in
+    # the same turn as the landing, not a read-then-decide pair later
+    auto_scanned_urls: set[str] = set()
+    auto_scan_count = 0
+    llm_ms_total = 0
     try:
         for turn in range(MAX_TURNS):
             if cancel_event.is_set():
@@ -785,6 +811,7 @@ async def run_browser_agent(
             browser_history.prune_old_screenshots(messages)
             browser_history.prune_stale_page_state(messages)
             browser_history.place_cache_marker(messages)
+            _llm_t0 = time.monotonic()
             response = await _cancellable(client.messages.create(
                 model=api_model,
                 max_tokens=4096,
@@ -799,6 +826,8 @@ async def run_browser_agent(
             ))
             if response is None:
                 break
+            _llm_ms = int((time.monotonic() - _llm_t0) * 1000)
+            llm_ms_total += _llm_ms
             # Guard against empty content (e.g. upstream API error from
             # 9Router that the SDK parsed into a partial response object).
             if not response.content:
@@ -818,7 +847,7 @@ async def run_browser_agent(
                 # Per-turn OUTPUT tokens are the latency driver (generation is serial,
                 # input is cached), so log every turn: this is how we verify the plan-
                 # once/terse-execution prompt actually shrinks per-turn output live.
-                logger.info(f"[browser-tokens] turn={turn} out={_out} in={_in} cache_read={_cr} cache_write={_cw}")
+                logger.info(f"[browser-tokens] turn={turn} out={_out} in={_in} cache_read={_cr} cache_write={_cw} llm_ms={_llm_ms}")
 
             assistant_content = []
             text_parts = []
@@ -1337,6 +1366,61 @@ async def run_browser_agent(
                     # later solo re-list is still caught as redundant.
                     fresh_state_pending = True
 
+                # Auto candidate scan: landing on a results-shaped page normally
+                # costs a read-then-decide turn pair; the cheap aux model reads it
+                # now so the pick happens on this same turn. Capped, per-URL,
+                # fail-silent (a miss just means the old two-turn dance).
+                if (tu.name in _AUTO_STATE_TOOLS and "error" not in result
+                        and auto_scan_count < _AUTO_SCAN_MAX_PER_RUN):
+                    _scan_url = (result.get("url") or last_seen_url or "").split("#")[0]
+                    if _scan_url and _scan_url not in auto_scanned_urls and _RESULTS_URL_RE.search(_scan_url):
+                        auto_scanned_urls.add(_scan_url)
+                        _sc_t0 = time.time()
+
+                        async def _scan():
+                            page = await _cancellable(execute_browser_tool("BrowserGetText", {}, browser_id, tab_id))
+                            if not isinstance(page, dict) or page.get("error") or not page.get("text"):
+                                return ""
+                            aux_client, aux_model = await _get_aux_client()
+                            return await browser_extract.extract_structured(
+                                aux_client, aux_model, str(page["text"]),
+                                "These are search results. Identify which result(s) match this task: "
+                                f"{task[:400]}\nFor each plausible candidate give its exact displayed name, "
+                                "the distinguishing details shown (role, company, location, etc), and why it "
+                                "does or does not match. If none clearly match, say so in `best`.",
+                                {"candidates": [{"name": "", "details": "", "match": ""}], "best": ""},
+                            )
+
+                        try:
+                            _scan_json = await asyncio.wait_for(_scan(), timeout=8.0)
+                        except Exception:
+                            _scan_json = ""
+                        _sc_ms = int((time.time() - _sc_t0) * 1000)
+                        if _scan_json:
+                            auto_scan_count += 1
+                            result["text"] = (
+                                f"{result.get('text') or ''}\n\n[auto candidate scan] An assistant model read "
+                                f"this results page against the task:\n{_scan_json}\n"
+                                "Treat it as a hint; verify on the page before acting."
+                            )
+                            action_log.append({
+                                "tool": "BrowserExtract", "input": {"instruction": "(auto candidate scan)"},
+                                "result_summary": _scan_json[:200], "elapsed_ms": _sc_ms, "ok": True,
+                            })
+                            browser_metrics.record_tool(
+                                session_id, browser_id, turn, "BrowserExtract", _sc_ms, ok=True,
+                                error="", is_loop=False, stagnation_streak=0, result_len=len(_scan_json),
+                            )
+                            logger.info(
+                                f"[browser-cold {session_id}] auto candidate scan on {_scan_url[:90]} "
+                                f"in {_sc_ms}ms ({len(_scan_json)}ch)"
+                            )
+                        else:
+                            logger.info(
+                                f"[browser-cold {session_id}] auto candidate scan empty on "
+                                f"{_scan_url[:90]} after {_sc_ms}ms"
+                            )
+
                 # Deferred replay re-check: the orchestrator often opens a fresh
                 # card on the wrong host, so the dispatch-time replay missed. Once
                 # a navigation lands us on a host that DOES have a matching skill,
@@ -1355,6 +1439,16 @@ async def run_browser_agent(
                         if replay_prefix_note:
                             result["text"] = f"{result.get('text') or ''}{replay_prefix_note}"
                             replay_prefix_note = ""
+                        elif not route_hint_keys:
+                            _h_skill, _h_score = browser_skills.find_similar_skill(cur_host, skill_key_task)
+                            if _h_skill:
+                                _hint, route_hint_keys = browser_skills.render_route_hint(_h_skill, skill_key_task, _h_score)
+                                if _hint:
+                                    result["text"] = f"{result.get('text') or ''}{_hint}"
+                                    logger.info(
+                                        f"[browser-route {session_id}] hint attached at re-check turn {turn}: "
+                                        f"host={cur_host} sim={_h_score:.2f} steps={len(route_hint_keys)}"
+                                    )
 
                 if tu.name == "BrowserScreenshot" and result.get("image"):
                     final_screenshot = result["image"]
@@ -1600,6 +1694,22 @@ async def run_browser_agent(
             f"nudges={batching_nudges} redundant_reads={redundant_read_nudges} "
             f"guard_blocks={batch_guard_blocks}"
         )
+        # Route-hint adoption: of the hinted steps, how many did the run actually
+        # take? Pure telemetry; this is how we learn whether hints steer or get
+        # ignored (the batching-nudge lesson: measure, don't assume).
+        if route_hint_keys:
+            _adopted = sum(1 for k in route_hint_keys if browser_skills.hint_step_adopted(k, action_log))
+            logger.info(
+                f"[browser-route {session_id}] adoption: {_adopted}/{len(route_hint_keys)} "
+                f"hinted steps matched by executed actions"
+            )
+        _tools_ms_total = sum(int(a.get("elapsed_ms", 0) or 0) for a in action_log)
+        _wall_ms = int((time.time() - metrics_started_at) * 1000)
+        logger.info(
+            f"[browser-time {session_id}] wall={_wall_ms}ms llm={llm_ms_total}ms "
+            f"tools={_tools_ms_total}ms other={max(0, _wall_ms - llm_ms_total - _tools_ms_total)}ms "
+            f"auto_scans={auto_scan_count} hint_steps={len(route_hint_keys)}"
+        )
         browser_metrics.record_task(session_id, browser_id, task, final_status,
                                     metrics_started_at, turn + 1, action_log, session.tokens,
                                     path="llm_fallback" if replay_attempted else "llm",
@@ -1806,18 +1916,24 @@ async def run_browser_agents(
         browser_id = task_def.get("browser_id", "")
         task_text = task_def.get("task", "")
         url = task_def.get("url", "")
+        # advisory deep entry (from the fast-path brief): a NEW card opens on it
+        # directly (no google detour); a REUSED card is never moved by it, so a
+        # warm card's deeper page state always wins
+        entry_url = task_def.get("entry_url", "")
 
         reused = False
         if not browser_id and dashboard_id:
             # the url param is often empty with the target buried in the task
             # text; a url there still names the host we must not duplicate
-            host_src = url or next(iter(re.findall(r"https?://[^\s)\"'<>]+", task_text)), "")
+            host_src = url or entry_url or next(iter(re.findall(r"https?://[^\s)\"'<>]+", task_text)), "")
             async with _card_pick_lock:
                 browser_id = _find_reusable_card(dashboard_id, host_src, parent_session_id)
                 if browser_id:
                     reused = True
                 else:
-                    browser_id = await _create_browser_card(dashboard_id, url, parent_session_id)
+                    browser_id = await _create_browser_card(dashboard_id, url or entry_url, parent_session_id)
+                    if entry_url and not url:
+                        logger.info(f"[browser-cold] new card {browser_id} opens at brief entry {entry_url}")
                 _active_agent_cards.add(browser_id)
             if reused:
                 logger.info(f"[browser-agent] reusing same-host card {browser_id} instead of stacking another webview")
@@ -1833,6 +1949,7 @@ async def run_browser_agents(
             _active_agent_cards.add(browser_id)
 
         is_pre_selected = browser_id in pre_selected
+        _nav_url = url or ("" if reused else entry_url)
         try:
             return await run_browser_agent(
                 task=task_text,
@@ -1840,7 +1957,7 @@ async def run_browser_agents(
                 model=model,
                 dashboard_id=dashboard_id,
                 pre_selected=is_pre_selected,
-                initial_url=url if url and browser_id not in pre_selected else None,
+                initial_url=_nav_url if _nav_url and browser_id not in pre_selected else None,
                 parent_session_id=parent_session_id,
             )
         finally:
