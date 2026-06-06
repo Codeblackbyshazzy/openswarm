@@ -767,6 +767,9 @@ async def run_browser_agent(
     # under-batching telemetry + nudge state
     single_action_streak = 0
     batching_nudges = 0
+    redundant_read_nudges = 0
+    # True after a mutating action attaches fresh state; a solo read next is waste
+    fresh_state_pending = False
     multi_action_turns = 0
     batch_calls = 0
     try:
@@ -1228,6 +1231,9 @@ async def run_browser_agent(
                         continue
 
                 start = time.time()
+                # did the PREVIOUS action already hand us fresh page state? a solo
+                # re-read now is a wasted round-trip; remembered before we overwrite it
+                _had_fresh_state = fresh_state_pending
                 tool_input = tu.input
                 if tu.name == "BrowserListInteractives" and current_next_goal:
                     tool_input = {**tu.input, "goal": current_next_goal}
@@ -1307,6 +1313,9 @@ async def run_browser_agent(
                 )
                 if _auto_state:
                     result["text"] = f"{result.get('text') or ''}{_auto_state}"
+                # mutating actions hand back fresh state; reads don't. drives the
+                # redundant-read nudge below.
+                fresh_state_pending = bool(_auto_state)
 
                 # Deferred replay re-check: the orchestrator often opens a fresh
                 # card on the wrong host, so the dispatch-time replay missed. Once
@@ -1418,6 +1427,23 @@ async def run_browser_agent(
                         "order, settle between steps, and stop safely at the first failure, so a "
                         "conservative batch costs nothing. Keep irreversible steps "
                         "(Send/Submit/Pay/Post) solo."
+                    )}]
+
+                # Redundant-read nudge: the previous action already attached a fresh
+                # element list, and this turn spent a whole round-trip re-reading it.
+                # Reads are the biggest turn sink (measured ~16 of 25 turns).
+                if (tu.name in ("BrowserListInteractives", "BrowserGetText")
+                        and _had_fresh_state and "error" not in result):
+                    redundant_read_nudges += 1
+                    logger.info(
+                        f"[browser-batching {session_id}] redundant-read nudge #{redundant_read_nudges} "
+                        f"({tu.name}) at turn {turn}"
+                    )
+                    content_blocks = content_blocks + [{"type": "text", "text": (
+                        "\n\n⚡ Your PREVIOUS action already ended with a fresh '[page state after "
+                        "action]' element list, so this re-read cost a round-trip for nothing. Act "
+                        "straight from the attached state; only re-read after it says it was truncated "
+                        "or you genuinely changed the page in a way that list wouldn't reflect."
                     )}]
                 # Deterministic nudging exhausted: ONE cheap aux adjudication
                 # to suggest a concrete next step before we keep failing.
@@ -1550,7 +1576,7 @@ async def run_browser_agent(
         logger.info(
             f"[browser-batching {session_id}] run summary: turns={turn + 1} "
             f"multi_action_turns={multi_action_turns} batch_calls={batch_calls} "
-            f"nudges={batching_nudges}"
+            f"nudges={batching_nudges} redundant_reads={redundant_read_nudges}"
         )
         browser_metrics.record_task(session_id, browser_id, task, final_status,
                                     metrics_started_at, turn + 1, action_log, session.tokens,
