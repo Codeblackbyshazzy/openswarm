@@ -937,9 +937,16 @@ async function handleClickByName(wv: BrowserWebview, params: Record<string, any>
   }
   const norm = (s: string) => s.trim().toLowerCase();
   // Exact (role,name) first, then name-only, so we click the most specific match.
+  // Long names are card blobs whose SUFFIX mutates between visits (feed snippets,
+  // counters) while the prefix stays stable; fall back to a 40-char prefix match
+  // so a replayed click survives the churn.
+  const wantPrefix = norm(wantName).slice(0, 40);
   const match =
     candidates.find((c) => (!wantRole || norm(c.role) === norm(wantRole)) && norm(c.name) === norm(wantName)) ||
-    candidates.find((c) => norm(c.name) === norm(wantName));
+    candidates.find((c) => norm(c.name) === norm(wantName)) ||
+    (wantName.length > 40
+      ? candidates.find((c) => (!wantRole || norm(c.role) === norm(wantRole)) && norm(c.name).startsWith(wantPrefix))
+      : undefined);
   if (!match) {
     return { error: `No element matching role="${wantRole}" name="${wantName}" on this page.` };
   }

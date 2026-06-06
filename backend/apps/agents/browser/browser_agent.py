@@ -585,6 +585,19 @@ async def run_browser_agent(
         nonlocal final_screenshot, last_seen_url, replay_attempted, replay_prefix_note
         if not host:
             return None
+
+        async def _exec_step(step: dict) -> dict | None:
+            """One replay step; an off-screen click gets one scroll-and-retry
+            (recorded elements often sit below the fold on a fresh page)."""
+            res = await _cancellable(execute_browser_tool(step["tool"], step.get("params", {}), browser_id, tab_id))
+            if res is not None and "box model" in str(res.get("error", "")):
+                logger.info(f"[browser-skills] replay step off-screen ({step['tool']}); scrolling and retrying once")
+                await _cancellable(execute_browser_tool("BrowserScroll", {"direction": "down"}, browser_id, tab_id))
+                retry = await _cancellable(execute_browser_tool(step["tool"], step.get("params", {}), browser_id, tab_id))
+                if retry is not None:
+                    return retry
+            return res
+
         sk_obj = browser_skills.find_skill(host, skill_key_task)
         steps = browser_skills.rehydrate(sk_obj, skill_key_task) if sk_obj else None
         if sk_obj and not steps:
@@ -611,7 +624,7 @@ async def run_browser_agent(
                 if cancel_event.is_set():
                     return None
                 st = time.time()
-                res = await _cancellable(execute_browser_tool(step["tool"], step.get("params", {}), browser_id, tab_id))
+                res = await _exec_step(step)
                 if res is None:
                     return None
                 el_ms = int((time.time() - st) * 1000)
@@ -657,7 +670,7 @@ async def run_browser_agent(
             if cancel_event.is_set():
                 return None
             st = time.time()
-            res = await _cancellable(execute_browser_tool(step["tool"], step.get("params", {}), browser_id, tab_id))
+            res = await _exec_step(step)
             if res is None:
                 return None
             el_ms = int((time.time() - st) * 1000)
