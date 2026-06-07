@@ -26,6 +26,23 @@ _CHEAP_LAPS = os.environ.get("OSW_BROWSER_CHEAP_LAPS", "") in ("1", "true", "TRU
 # points at Send, it NEVER clicks Send (that stays the model's gated deliberate act).
 _COMPOSE_HELPER = os.environ.get("OSW_BROWSER_COMPOSE_HELPER", "") in ("1", "true", "TRUE")
 
+# Send-timing prior (default ON; OSW_BROWSER_NO_SEND_PRIOR=1 strips it for A/B).
+# A generalizable interaction prior, not site memory: the Send button renders a
+# beat after the text commits, so settle-and-relist instead of hunting; and Enter
+# usually newlines in rich composers, so prefer the Send button. This targets the
+# true-cold tuition turns (the diagnosed find-Send hunt) on ANY site.
+_SEND_PRIOR_ON = os.environ.get("OSW_BROWSER_NO_SEND_PRIOR", "") not in ("1", "true", "TRUE")
+_SEND_PRIOR = (
+    "## Sending into a message composer (interaction priors that save you turns)\n"
+    "After you type into a compose box, the SEND button very often renders a beat "
+    "LATER: it will NOT be in your element list on the same turn you typed. Do NOT "
+    "immediately hunt, scroll, or JS-query for it, that burns 2-4 turns for nothing. "
+    "Instead settle briefly (a short BrowserWait, ~1s) and re-list; the Send control "
+    "appears within a second or two and will then be in the list at its index. Prefer "
+    "clicking that Send button over pressing Enter: in rich-text composers Enter "
+    "usually just inserts a newline and does NOT send.\n\n"
+) if _SEND_PRIOR_ON else ""
+
 _THINK_SHORTER = (
     "Do NOT also write a free-text sentence next to your action tools: your ReportProgress "
     "fields ARE your thinking, and a separate prose explanation just repeats them and slows "
@@ -675,6 +692,8 @@ SYSTEM_PROMPT = (
     "second time unless you have verified the first did NOT go through. This is how you "
     "avoid both ghost-successes and double-sends.\n"
     + _MERGE_VERIFY + "\n"
+
+    + _SEND_PRIOR +
 
     "## Loop awareness\n"
     "If you see a tool result containing 'LOOP DETECTED' or '⚠️', it means you "
