@@ -170,3 +170,20 @@ async def test_forget_and_list_hosts_for_ux():
     assert pb.get_playbook("a.com") == []
     assert {h["host"] for h in pb.list_hosts()} == {"b.com"}
     assert pb.forget("never.com") is False
+
+
+def test_seed_playbook_fallback_and_supersede():
+    from backend.apps.agents.browser.seed_playbooks import seed_for
+    # pure lookup: www-normalized, canonical key, unknown -> empty
+    assert seed_for("www.amazon.com") == seed_for("amazon.com") != []
+    assert seed_for("x.com")
+    assert seed_for("totally-unknown-zzz.com") == []
+    # a fresh install (no learned file) gets the seed through get_playbook
+    pb.clear(wipe_disk=True)
+    seeded = pb.get_playbook("github.com")
+    assert seeded and any("github.com/search" in b for b in seeded)
+    # a learned playbook supersedes the seed (real usage wins)
+    pb.clear(wipe_disk=True)
+    pb._persist("github.com", ["learned: use the org filter"])
+    pb._cache.clear()
+    assert pb.get_playbook("github.com") == ["learned: use the org filter"]

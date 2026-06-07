@@ -34,6 +34,8 @@ import tempfile
 import time
 from urllib.parse import urlparse
 
+from backend.apps.agents.browser.seed_playbooks import seed_for
+
 logger = logging.getLogger(__name__)
 
 _PLAYBOOK_FORMAT_VERSION = 1
@@ -145,12 +147,17 @@ def _load(host: str) -> list[str]:
 
 
 def get_playbook(host: str) -> list[str]:
-    """Durable strategy bullets for a host (cheap, no LLM). For seeding + UX."""
+    """Durable strategy bullets for a host (cheap, no LLM). For seeding + UX.
+
+    Falls back to a shipped seed when the user has no learned playbook yet, so a
+    fresh install isn't fully cold on a popular site's first task. The seed is
+    advisory like any bullet; the next verified run reconciles against it and
+    writes a learned playbook that supersedes it."""
     if not host:
         return []
     if host in _cache:
         return _cache[host]
-    bullets = _load(host)
+    bullets = _load(host) or seed_for(host)
     _cache[host] = bullets
     return bullets
 
