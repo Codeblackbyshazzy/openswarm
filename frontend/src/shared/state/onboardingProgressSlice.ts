@@ -5,7 +5,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 const STORAGE_KEY = 'openswarm.onboarding.v2';
 const SCHEMA_VERSION = 2 as const;
 
-export type PanelMode = 'pill' | 'expanded' | 'roadmap' | 'docked' | 'hidden';
+export type PanelMode = 'pill' | 'expanded' | 'roadmap' | 'hidden';
 
 export interface PerStepState {
   lastViewedAt: number;
@@ -43,7 +43,8 @@ export function loadFromStorage(): OnboardingProgressState | null {
       startedAt: typeof parsed.startedAt === 'number' ? parsed.startedAt : Date.now(),
       completedSteps: Array.isArray(parsed.completedSteps) ? parsed.completedSteps : [],
       currentStepId: typeof parsed.currentStepId === 'string' ? parsed.currentStepId : null,
-      panelMode: parsed.panelMode ?? 'expanded',
+      // Old skips parked the tour in the now-removed 'docked' tab; resolve them to hidden.
+      panelMode: (parsed.panelMode as string) === 'docked' ? 'hidden' : (parsed.panelMode ?? 'expanded'),
       dismissedAt: typeof parsed.dismissedAt === 'number' ? parsed.dismissedAt : null,
       perStepState: (parsed.perStepState as Record<string, PerStepState>) ?? {},
       running: false,
