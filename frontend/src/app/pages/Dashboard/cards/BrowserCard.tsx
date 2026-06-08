@@ -74,29 +74,51 @@ const HANDLE_DEFS: { dir: ResizeDir; sx: Record<string, any> }[] = [
   { dir: 'se', sx: { bottom: -EDGE_THICKNESS / 2, right: -EDGE_THICKNESS / 2, width: CORNER_SIZE, height: CORNER_SIZE } },
 ];
 
-// Windows forces the iframe fallback: the <webview> tag mount segfaults the
-// renderer during Chromium's commit phase on the CastLabs build (added 1.1.55,
-// same commit-phase crash family as the ablated <input type=file> and the
-// Onboarding Framer-Motion subtrees). The Electron 42 bump brought its own
-// Windows native crash (the en-US.pak locale fix) and never re-verified this
-// one, so the guard stays until a real Windows run proves the webview survives.
+// Windows defaults to the iframe fallback: the <webview> tag mount used to segfault
+// the renderer during Chromium's commit phase on the CastLabs build (since 1.1.55,
+// same crash family as the ablated <input type=file> and Framer-Motion subtrees).
+// The Electron 42 bump never re-verified it. Mac is unaffected and always gets the
+// full webview + CDP agent. An iframe can't be scripted (no CDP, most sites send
+// X-Frame-Options), so the agent literally can't drive a page on Windows until the
+// real webview is proven safe.
 //
-// One-shot trial switch to do exactly that test (can't be tested on Mac): in
-// DevTools run localStorage.setItem('openswarm_try_win_webview','1') then
-// reload. The flag is CONSUMED on read, so if the webview still segfaults on
-// commit the crash-reload lands back on the safe iframe path instead of
-// boot-looping. Mac is unaffected (always gets the full webview + CDP agent).
-function windowsWebviewTrialArmed(): boolean {
+// Opt-in to test that (can't be reproduced on Mac): in DevTools run
+//   localStorage.setItem('openswarm_try_win_webview','1')
+// then reload. The opt-in PERSISTS across reloads/restarts so a whole task can run
+// on the real webview, but it's crash-safe: each armed boot marks a pending flag
+// that's only cleared once a webview reaches dom-ready (proof it survived commit).
+// If a boot crashes before that, the next boot sees the stale pending flag, stands
+// down to the safe iframe, and records _crashed, so it can never boot-loop. Clear
+// _crashed and re-arm to retry.
+const WIN_WV_OPT_IN = 'openswarm_try_win_webview';
+const WIN_WV_PENDING = 'openswarm_win_webview_pending';
+const WIN_WV_CRASHED = 'openswarm_win_webview_crashed';
+
+function windowsWebviewArmed(): boolean {
   try {
-    if (localStorage.getItem('openswarm_try_win_webview') === '1') {
-      localStorage.removeItem('openswarm_try_win_webview');
-      return true;
+    if (localStorage.getItem(WIN_WV_OPT_IN) !== '1') return false;
+    if (localStorage.getItem(WIN_WV_PENDING)) {
+      localStorage.removeItem(WIN_WV_OPT_IN);
+      localStorage.removeItem(WIN_WV_PENDING);
+      localStorage.setItem(WIN_WV_CRASHED, String(Date.now()));
+      console.warn('[win-webview-trial] webview crashed on commit last boot; reverted to the safe iframe. Re-arm to retry.');
+      return false;
     }
-  } catch {}
-  return false;
+    localStorage.setItem(WIN_WV_PENDING, String(Date.now()));
+    console.info('[win-webview-trial] armed: mounting the real webview on Windows (Electron 42 commit-crash test).');
+    return true;
+  } catch {
+    return false;
+  }
 }
+
+// Clears the pending flag once a webview survives to dom-ready; no-op on Mac (never set).
+function markWindowsWebviewSurvived(): void {
+  try { localStorage.removeItem(WIN_WV_PENDING); } catch {}
+}
+
 const isWindows = navigator.userAgent.includes('Windows');
-const isElectron = navigator.userAgent.includes('Electron') && (!isWindows || windowsWebviewTrialArmed());
+const isElectron = navigator.userAgent.includes('Electron') && (!isWindows || windowsWebviewArmed());
 
 const chromeUserAgent = navigator.userAgent
   .replace(/\s*Electron\/\S+/, '')
@@ -224,6 +246,12 @@ const BrowserCard: React.FC<Props> = ({
         initializedTabs.current.add(tabId);
         const targetUrl = tab.url;
         const doLoad = () => {
+          // Reaching dom-ready means the webview survived Chromium's commit phase,
+          // the crash the Windows opt-in is testing for. Clear the pending flag.
+          if (isWindows) {
+            markWindowsWebviewSurvived();
+            console.info('[win-webview-trial] webview survived commit on Electron 42 (dom-ready reached).');
+          }
           wv.loadURL(targetUrl).catch(() => {});
           // Lock guest zoom at 1.0 so ctrl+wheel never triggers Chromium's in-page zoom; canvas zoom takes over (issue #27).
           try {
