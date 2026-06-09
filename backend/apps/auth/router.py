@@ -47,6 +47,17 @@ def _proxy_url() -> str:
     return url.rstrip("/")
 
 
+async def _sync_pro_routing(settings_obj) -> None:
+    """Mirror connection state into 9Router's Claude lane; sign-in can flip a
+    paying user into pro mode and sign-out must tear the lane down so a
+    revoked bearer doesn't linger in the router."""
+    try:
+        from backend.apps.nine_router import sync_pro_routing
+        await sync_pro_routing(settings_obj)
+    except Exception as e:
+        logger.debug("pro routing sync skipped: %s", e)
+
+
 def _sync_identity_to_service(settings_obj) -> None:
     """Push user_id + email + signin_method into the service-sync identify
     pipeline so every event from this user has the right Person properties."""
@@ -147,6 +158,7 @@ async def signin_activate(body: SigninActivateRequest):
 
     await save_settings_async(settings_obj)
     _sync_identity_to_service(settings_obj)
+    await _sync_pro_routing(settings_obj)
 
     return {
         "ok": True,
@@ -234,4 +246,5 @@ async def signout():
     settings_obj.openswarm_usage_cached = None
     await save_settings_async(settings_obj)
     _sync_identity_to_service(settings_obj)
+    await _sync_pro_routing(settings_obj)
     return {"ok": True}

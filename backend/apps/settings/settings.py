@@ -114,11 +114,31 @@ async def get_settings():
     return load_settings().model_dump()
 
 
+# Written only by their dedicated flows (Stripe activate, sign-in, signout, OAuth connects);
+# a full-object PUT from a stale renderer snapshot must never revert or forge them.
+SERVER_OWNED_FIELDS = (
+    "connection_mode",
+    "openswarm_bearer_token",
+    "openswarm_proxy_url",
+    "openswarm_subscription_plan",
+    "openswarm_subscription_expires",
+    "openswarm_usage_cached",
+    "user_id",
+    "signin_method",
+    "installation_id",
+    "claude_subscription_token",
+    "openai_subscription_token",
+    "gemini_subscription_token",
+)
+
+
 @settings.router.put("")
 async def update_settings(body: AppSettings):
     from backend.apps.service.client import sync as _sync
 
     old = load_settings()
+    for k in SERVER_OWNED_FIELDS:
+        setattr(body, k, getattr(old, k, None))
 
     secret_keys = {"anthropic_api_key", "openai_api_key", "google_api_key", "openrouter_api_key",
                    "claude_subscription_token", "openai_subscription_token", "gemini_subscription_token",
@@ -219,22 +239,6 @@ async def update_settings(body: AppSettings):
             custom_providers_changed,
             any_keyed_added,
         ))
-
-    # On pro-mode/bearer change, register a `claude` apikey connection in 9Router so CLI WebSearch works on non-Claude primaries.
-    pro_mode_old = getattr(old, "connection_mode", None) == "openswarm-pro"
-    pro_mode_new = getattr(body, "connection_mode", None) == "openswarm-pro"
-    bearer_old = getattr(old, "openswarm_bearer_token", None)
-    bearer_new = getattr(body, "openswarm_bearer_token", None)
-    if pro_mode_old != pro_mode_new or bearer_old != bearer_new:
-        try:
-            from backend.apps.nine_router import sync_openswarm_pro_as_claude
-            proxy_url = getattr(body, "openswarm_proxy_url", None) or "https://api.openswarm.com"
-            await sync_openswarm_pro_as_claude(
-                bearer_new if pro_mode_new else None,
-                proxy_url if pro_mode_new else None,
-            )
-        except Exception as e:
-            logger.warning(f"OpenSwarm-Pro → Claude sync failed: {e}")
 
     return {"ok": True, "settings": body.model_dump()}
 

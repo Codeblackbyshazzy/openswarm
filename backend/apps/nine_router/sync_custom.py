@@ -323,3 +323,20 @@ async def sync_openswarm_pro_as_claude(bearer_token: str | None, proxy_url: str 
                     logger.info("9Router: removed OpenSwarm Pro → Claude connection")
     except Exception as e:
         logger.warning(f"9Router OpenSwarm-Pro Claude sync failed: {e}")
+
+
+async def sync_pro_routing(settings_obj) -> None:
+    """Mirror the settings' pro-mode state into the 9Router Claude lane.
+    Call after any flow that changes connection_mode or the bearer
+    (activate, sign-in, sign-out, disconnect). Never raises."""
+    try:
+        pro = getattr(settings_obj, "connection_mode", None) == "openswarm-pro"
+        bearer = getattr(settings_obj, "openswarm_bearer_token", None)
+        proxy = getattr(settings_obj, "openswarm_proxy_url", None) or "https://api.openswarm.com"
+        active = bool(pro and bearer)
+        await sync_openswarm_pro_as_claude(
+            bearer if active else None,
+            proxy if active else None,
+        )
+    except Exception as e:
+        logger.warning(f"OpenSwarm-Pro → Claude sync failed: {e}")

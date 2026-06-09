@@ -46,6 +46,7 @@ from .sync_custom import (
     normalize_openai_compat_base_url,
     sync_custom_providers,
     sync_openswarm_pro_as_claude,
+    sync_pro_routing,
 )
 from .oauth import (
     exchange_oauth,
@@ -81,5 +82,6 @@ __all__ = [
     "sync_openrouter_api_key",
     "sync_custom_providers",
     "sync_openswarm_pro_as_claude",
+    "sync_pro_routing",
     "normalize_openai_compat_base_url",
 ]

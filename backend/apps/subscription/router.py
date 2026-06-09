@@ -36,6 +36,17 @@ def _proxy_url() -> str:
     return url.rstrip("/")
 
 
+async def _sync_pro_routing(settings_obj) -> None:
+    """Mirror connection state into 9Router's Claude lane (WebSearch on
+    non-Claude primaries). PUT /api/settings no longer carries these fields,
+    so the state-change endpoints here are the only trigger left."""
+    try:
+        from backend.apps.nine_router import sync_pro_routing
+        await sync_pro_routing(settings_obj)
+    except Exception as e:
+        logger.debug("pro routing sync skipped: %s", e)
+
+
 async def _clear_subscription(settings_obj, *, drop_bearer: bool = True) -> None:
     """Revert to own_key mode and drop OpenSwarm Pro routing state.
 
@@ -57,6 +68,7 @@ async def _clear_subscription(settings_obj, *, drop_bearer: bool = True) -> None
     settings_obj.openswarm_usage_cached = None
     await save_settings_async(settings_obj)
     _sync_subscription_identity(settings_obj)
+    await _sync_pro_routing(settings_obj)
 
 
 def _sync_subscription_identity(settings_obj) -> None:
@@ -155,6 +167,7 @@ async def activate(body: ActivateRequest):
 
     await save_settings_async(settings_obj)
     _sync_subscription_identity(settings_obj)
+    await _sync_pro_routing(settings_obj)
     return {"ok": True, "plan": settings_obj.openswarm_subscription_plan}
 
 
