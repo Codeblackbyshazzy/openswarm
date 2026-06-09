@@ -237,6 +237,13 @@ class WebSocketManager {
     this.ws.onmessage = (event) => {
       try {
         const msg: WSEvent = JSON.parse(event.data);
+        // Pong bypasses the rAF coalescer: rAF stalls when the window gets no
+        // frames (minimized, display asleep) while ping timers keep firing, so
+        // a buffered pong read as silence and a healthy socket got killed.
+        if (msg.event === 'server:pong') {
+          this.clearPongTimeout();
+          return;
+        }
         // Buffer incoming messages and flush them per animation frame
         // in a single React batch. With N concurrent agents/browsers
         // streaming, each WS instance used to trigger its own React
