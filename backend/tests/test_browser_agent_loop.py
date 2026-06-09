@@ -282,6 +282,27 @@ def test_run_that_never_calls_done_is_not_a_clean_success(monkeypatch):
     assert result.get("done") is False  # no explicit Done -> not a clean success
 
 
+def test_send_shortcut_does_not_arm_on_a_gather_task(monkeypatch):
+    # The Airbnb bug: a send-class click (here the index-99 sentinel = "Send", same
+    # as a cookie "Accept all" tripping the detector) on a FIND/gather task must NOT
+    # arm the send-completion shortcut, there is no send to confirm. If it did, the
+    # run cuts at the 2-turn post-send limit and leaks the canned "message went
+    # through" line. On a gather task it should run the full perception budget.
+    BH._browser_history.clear(); BH._domain_notes.clear()
+    primary = FakeLLM([
+        Resp([_rp("dismiss the cookie banner"), _tu("BrowserClickIndex", index=99)]),
+        *[Resp([_rp("keep reading the list"), _tu("BrowserScreenshot")]) for _ in range(8)],
+        Resp([_tu("Done", message="Here are the top items: a, b, c")]),
+    ])
+    aux = FakeAux()
+    _install(monkeypatch, primary, aux)
+    result = asyncio.run(BA.run_browser_agent(task="find me the top 10 repos", browser_id="b1", model="sonnet"))
+    # the send shortcut never armed: it ran past the 2-turn post-send cutoff toward
+    # the 6-turn perception budget, and no send-confirmation line leaked
+    assert primary.turn >= 6, f"gather task cut short at turn {primary.turn} (send shortcut wrongly armed)"
+    assert "went through" not in result["summary"]
+
+
 def test_early_perception_is_not_cut_short_before_any_action(monkeypatch):
     # Orienting on a cold/slow page can take several look-only turns; the stall
     # backstop must NOT fire before the agent has done anything (it only bounds a

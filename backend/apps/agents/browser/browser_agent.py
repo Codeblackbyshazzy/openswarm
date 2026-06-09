@@ -935,7 +935,10 @@ async def run_browser_agent(
     # (measured: send done at turn ~11, then ~12 wasted perception turns). We drive
     # it to the OUTCOME and, if it keeps re-perceiving, end the run. A genuine
     # multi-send task issues its NEXT send (an action) which resets the stall, so
-    # only true spinning ends here.
+    # only true spinning ends here. This whole shortcut is meaningless for a
+    # gather/read task (no send to confirm), and arming it there let a cookie
+    # 'Accept all' click masquerade as the task's send, so we gate it on intent.
+    task_is_send = not deliverable_is_informational("", task)
     send_confirmed = False
     perception_stall = 0           # consecutive turns the model only LOOKED (no action)
     _POST_SEND_STALL_LIMIT = 2     # once the send registered, finish fast
@@ -1495,7 +1498,7 @@ async def run_browser_agent(
                 # across nodes, or scrolled off, so the text-probe is unreliable, which
                 # is exactly what left the model stalling to "double-check". A clean
                 # send click is proof enough; drive to the OUTCOME.
-                if not send_confirmed and "error" not in result and tu.name in _CONFIRM_TOOLS:
+                if task_is_send and not send_confirmed and "error" not in result and tu.name in _CONFIRM_TOOLS:
                     _cn = result.get("clickedName") or ""
                     _send_click = browser_batch_replay.is_replay_boundary(
                         {"action": "click", "name": _cn}) or any(
