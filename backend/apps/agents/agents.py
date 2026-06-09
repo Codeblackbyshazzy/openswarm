@@ -618,6 +618,11 @@ async def list_models():
                     r["label"] += " (API key)"
                 r["billing_kind"] = "api_key"
                 r["is_free"] = False
+            # Models that only exist on the API-key route (Fable 5, whose sub route 404s
+            # on our pinned 9Router) have no adaptive twin to relabel, so add them or they vanish.
+            adaptive_ids = {m.get("model_id") for m in adaptive}
+            api_only = [m for m in api_variants if m.get("model_id") not in adaptive_ids]
+            rows = _serialize(api_only) + rows
         elif has_claude_sub:
             # Only a sub: the adaptive rows route through 9router's cc/ lane, so they're covered
             # by the subscription, not pay-per-use.

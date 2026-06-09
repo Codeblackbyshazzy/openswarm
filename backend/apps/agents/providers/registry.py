@@ -406,6 +406,7 @@ COST_PER_1M_TOKENS: dict[tuple[str, str], tuple[float, float]] = {
     ("Anthropic", "opus"): (5.0, 25.0),
     ("Anthropic", "opus-4-7"): (5.0, 25.0),
     ("Anthropic", "opus-4-8"): (5.0, 25.0),
+    ("Anthropic", "fable-5-api"): (10.0, 50.0),
     ("Anthropic", "haiku"): (1.0, 5.0),
     # OpenAI; Codex subscription path, user pays nothing per token
     ("OpenAI", "gpt-5.5"): (0.0, 0.0),
