@@ -4,6 +4,37 @@ import Typography from '@mui/material/Typography';
 import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import ChatBubbleTeardrop from '../ChatBubbleTeardrop';
 
+const SHIMMER_PERIOD_S = 6;
+
+/* Letters brighten as a wave passes: per-letter opacity keyframes are GPU-composited, unlike the old background-position gradient that repainted the text every frame. */
+const GlintText: React.FC<{ text: string; slotOffset: number; totalSlots: number }> = ({ text, slotOffset, totalSlots }) => (
+  <>
+    {Array.from(text).map((ch, i) => (
+      <Box
+        key={i}
+        component="span"
+        sx={{
+          opacity: 0.4,
+          animation: `empty-state-glint ${SHIMMER_PERIOD_S}s linear infinite`,
+          animationDelay: `${(((slotOffset + i) / totalSlots) * SHIMMER_PERIOD_S).toFixed(2)}s`,
+          whiteSpace: 'pre',
+          '@keyframes empty-state-glint': {
+            '0%, 8%, 100%': { opacity: 0.4 },
+            '4%': { opacity: 1 },
+          },
+          '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+        }}
+      >
+        {ch}
+      </Box>
+    ))}
+  </>
+);
+
+const HINT_BEFORE = 'Click the ';
+const HINT_AFTER = ' below to launch your first agent';
+const HINT_SLOTS = HINT_BEFORE.length + 1 + HINT_AFTER.length;
+
 const DashboardEmptyState: React.FC<{ c: ClaudeTokens }> = ({ c }) => (
   <Box
     sx={{
@@ -24,33 +55,14 @@ const DashboardEmptyState: React.FC<{ c: ClaudeTokens }> = ({ c }) => (
         fontSize: '0.9rem',
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 0.7,
         color: c.text.primary,
-        position: 'relative',
-        overflow: 'hidden',
       }}
     >
-      Click the
-      <Box component="span" sx={{ display: 'inline-flex', color: c.text.tertiary }}>
+      <GlintText text={HINT_BEFORE} slotOffset={0} totalSlots={HINT_SLOTS} />
+      <Box component="span" sx={{ display: 'inline-flex', color: c.text.tertiary, mx: 0.35 }}>
         <ChatBubbleTeardrop sx={{ fontSize: 15 }} />
       </Box>
-      below to launch your first agent
-      {/* Sheen sweeps via transform only: the layer rasters once and the GPU slides it, unlike the old background-position shimmer that repainted every frame. */}
-      <Box
-        component="span"
-        aria-hidden
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          pointerEvents: 'none',
-          background: 'linear-gradient(105deg, transparent 42%, rgba(255,255,255,0.14) 50%, transparent 58%)',
-          transform: 'translateX(-100%)',
-          animation: 'empty-state-sheen 6s linear infinite',
-          willChange: 'transform',
-          '@keyframes empty-state-sheen': { to: { transform: 'translateX(100%)' } },
-          '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
-        }}
-      />
+      <GlintText text={HINT_AFTER} slotOffset={HINT_BEFORE.length + 1} totalSlots={HINT_SLOTS} />
     </Typography>
   </Box>
 );
