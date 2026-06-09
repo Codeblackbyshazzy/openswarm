@@ -11,16 +11,16 @@ purpose because it is one cohesive data blob, not multiple responsibilities.
 # ~28% and roughly halved narration turns. MERGE_VERIFY (a confirmed `expect` is the
 # proof, skip the re-check) drops a wasted round-trip at the end.
 _THINK_SHORTER = (
-    "Do NOT also write a free-text sentence next to your action tools: your ReportProgress "
+    "Do NOT write a free-text sentence next to your action tools: your ReportProgress "
     "fields ARE your thinking, and a separate prose explanation just repeats them and slows "
-    "the turn (it is shown to the user twice). The ONLY time to write a plain message is your "
-    "FINAL turn, when the task is done and you call no action tool: that message is your "
-    "answer to the user (the OUTCOME line). Every other turn: ReportProgress + tools, no prose.\n"
+    "the turn. Don't narrate to the user as you go either. When the task is done you finish by "
+    "calling the Done tool (never by typing a sentence); every other turn is ReportProgress + "
+    "tools, no prose.\n"
 )
 
 _MERGE_VERIFY = (
     "When that `expect` CONFIRMS (the result says 'Confirmed: ...'), that IS your "
-    "verification: go STRAIGHT to your final OUTCOME line and cite it. Do NOT spend an "
+    "verification: go STRAIGHT to calling Done. Do NOT spend an "
     "extra screenshot or read turn to re-check what the confirmation already proved, that "
     "is a wasted round-trip. Only take a separate verification step when `expect` came "
     "back 'NOT confirmed' or you forgot to pass one.\n"
@@ -86,6 +86,39 @@ BROWSER_TOOLS_SCHEMA = [
                 },
             },
             "required": ["working_memory", "next_goal"],
+        },
+    },
+    {
+        "name": "Done",
+        "description": (
+            "Call this the moment the task is finished (or you've hit a wall you "
+            "can't get past) to deliver your final reply to the user. This ends the "
+            "run. Do NOT type a sentence to finish, always finish by calling Done."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "description": (
+                        "What the user reads, so write it like a quick text to a friend: "
+                        "what you did and the proof a person actually cares about (the name, "
+                        "the time, what's now on screen). One or two plain sentences. Use ZERO "
+                        "interface words, no 'button', 'box', 'textbox', 'composer', 'field', "
+                        "'element', index numbers, or coordinates, and don't mechanically repeat "
+                        "the task back. If you couldn't finish, say what's missing in that same "
+                        "plain voice and set success to false."
+                    ),
+                },
+                "success": {
+                    "type": "boolean",
+                    "description": (
+                        "true if you accomplished what the user asked, false if you couldn't "
+                        "(login wall, missing info, something blocked you). Default true."
+                    ),
+                },
+            },
+            "required": ["message"],
         },
     },
     {
@@ -792,16 +825,13 @@ SYSTEM_PROMPT = (
     "- Anything genuinely ambiguous about user intent\n"
     "Don't use it for normal tool failures; try a different approach first.\n\n"
 
-    "Complete the task autonomously. Your FINAL message is ONE line and ONLY that line: "
-    "'OUTCOME: DONE - <result>' (or 'OUTCOME: NOT DONE - <what is missing and why>'). Write "
-    "NOTHING before it and NOTHING after it, no recap sentence, no narration of the steps. "
-    "The 'OUTCOME: DONE - ' prefix is a tag another agent reads; everything after the dash "
-    "is shown straight to the PERSON who asked, so write THAT as one plain, friendly "
-    "sentence: what got done plus the human proof (the name, the time). Use ZERO interface "
-    "words, no 'composer', 'box', 'textbox', element numbers, coordinates, 'field cleared', "
-    "'value now empty', and don't say the same thing twice. Say it the way a helpful "
-    "assistant would tell a friend. For irreversible actions, DONE still requires real proof "
-    "you observed (the name and where/when you saw it), just phrased for a human."
+    "Complete the task autonomously. When you're finished, end the run by calling the Done "
+    "tool, never by typing a sentence. Put your reply to the user in Done's `message`, "
+    "written like a normal chat reply: what got done plus the human proof (the name, the "
+    "time, what's now on screen), in one or two plain sentences with zero interface words. "
+    "Set `success` false if you couldn't finish. For irreversible actions, only report "
+    "success with real proof you actually observed (the name and where/when you saw it), "
+    "just phrased for a person, not for a machine."
 )
 
 MAX_TURNS = 40

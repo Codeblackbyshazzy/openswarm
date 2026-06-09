@@ -62,16 +62,16 @@ def test_compose_task_keeps_user_words_first():
 
 
 def test_dispatch_failure_detection_is_fail_closed():
-    assert dispatch_failed("")
-    assert dispatch_failed("Error: browser card was deleted")
-    assert dispatch_failed("Could not find the thread. OUTCOME: NOT DONE - login wall")
-    assert dispatch_failed(
-        "I was not able to complete this task (the browser became unresponsive "
-        "(the tab hung or was closed); it needs a fresh browser to continue)."
-    )
-    assert dispatch_failed("Found the page and clicked around a bit.")
-    assert not dispatch_failed("Sent it. OUTCOME: DONE - bubble visible at 12:05 PM")
-    assert not dispatch_failed("Completed via learned skill replay (3 steps, no LLM).")
+    # The result dict's structured `done` is the signal now (set true only when
+    # the sub-agent called Done with success AND the honesty gate agreed).
+    assert dispatch_failed({})
+    assert dispatch_failed(None)
+    assert dispatch_failed({"summary": "Error: browser card was deleted"})
+    assert dispatch_failed({"summary": "couldn't find the thread", "done": False})
+    assert dispatch_failed({"summary": "the browser became unresponsive", "error": "x"})
+    assert dispatch_failed({"summary": "clicked around a bit"})  # no done -> failed
+    assert not dispatch_failed({"summary": "Sent it, it's in the thread now.", "done": True})
+    assert not dispatch_failed({"summary": "Done, I took care of that for you.", "done": True})
 
 
 def test_recovery_task_verifies_before_repeating():
@@ -107,7 +107,7 @@ def test_dispatch_refused_when_no_dashboard_connected(monkeypatch):
     results = asyncio.run(run_browser_agents(tasks=[{"task": "go to example.com"}], model="sonnet"))
     assert len(results) == 1
     assert results[0]["summary"].startswith("Error: no dashboard window is connected")
-    assert dispatch_failed(results[0]["summary"])
+    assert dispatch_failed(results[0])
 
 
 def test_send_probe_verdict_parsing_order_and_fail_closed():

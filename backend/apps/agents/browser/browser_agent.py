@@ -844,10 +844,11 @@ async def run_browser_agent(
             })
             return {
                 "session_id": session_id, "browser_id": browser_id,
-                # Same OUTCOME shape the LLM path emits, so the parent translates it
-                # into a plain human confirmation instead of leaking the replay
-                # mechanics ('skill replay / N steps / no LLM') to the user.
-                "summary": f"OUTCOME: DONE - {task}",
+                # Clean human confirmation, never the replay mechanics ('skill
+                # replay / N steps / no LLM'); `done` is the structured success
+                # signal the parent reads instead of grepping for a tag.
+                "summary": "Done, I took care of that for you.",
+                "done": True,
                 "action_log": rlog, "final_screenshot": final_screenshot,
                 "replayed": True,
             }
@@ -923,6 +924,12 @@ async def run_browser_agent(
 
     text_parts = []  # initialized before loop so post-loop summary (line ~1294) has a default
     rp_violations = 0  # turns the model acted without ReportProgress (now accepted + reminded, not rejected)
+    # The model finishes by calling the Done tool; `message` is the clean human
+    # reply, `success` whether the goal was met. Falls back to terminal text on
+    # the rare run that stops without calling Done.
+    done_called = False
+    done_message = ""
+    done_success = True
     # Completion detection: once an irreversible SEND has confirmed, the goal is
     # met. The model otherwise stalls re-verifying what the confirm already proved
     # (measured: send done at turn ~11, then ~12 wasted perception turns). We drive
@@ -1121,12 +1128,13 @@ async def run_browser_agent(
                         f"[browser-agent {session_id}] ending: {perception_stall} pure-perception "
                         f"turns (send_confirmed={send_confirmed}); not letting it spin further"
                     )
-                    # if the send registered, hand the parent a real DONE; otherwise just
+                    # if the send registered, hand the parent a real done; otherwise just
                     # end the spin and let the honesty gate decide from the action log
                     if send_confirmed:
                         # plain confirmation; the raw action-log proof (indices, coords)
                         # is machine-speak, so we do NOT splice it into the user's line
-                        text_parts = ["OUTCOME: DONE - the task is complete and was confirmed on the page."]
+                        done_called = True
+                        done_message = "All set, your message went through and it's showing in the conversation now."
                     break
             else:
                 perception_stall = 0
@@ -1321,6 +1329,21 @@ async def run_browser_agent(
                     })
                     continue
 
+                # Handle Done: the model's typed-field finish. The `message` is
+                # the clean human reply (no OUTCOME tag, no UI mechanics), so it
+                # goes to the user as-is. Add its tool_result here (the post-loop
+                # integrity backfill pairs the rest + appends), set the flag, and
+                # break; the outer loop exits on done_called right after.
+                if tu.name == "Done":
+                    done_called = True
+                    done_message = (tu.input.get("message") or "").strip()
+                    done_success = tu.input.get("success", True) is not False
+                    tool_results.append({
+                        "type": "tool_result", "tool_use_id": tu.id,
+                        "content": [{"type": "text", "text": "ok"}],
+                    })
+                    break
+
                 # Handle RequestHumanIntervention; pause and wait for user
                 if tu.name == "RequestHumanIntervention":
                     problem = tu.input.get("problem", "")
@@ -1482,8 +1505,8 @@ async def run_browser_agent(
                     if _send_click:
                         send_confirmed = True
                         result["text"] = (f"{result.get('text') or ''}\n\n[task complete] The send "
-                            "went through (the composer cleared). Don't re-check it. Give your "
-                            "final answer now, your OUTCOME line.")
+                            "went through (the composer cleared). Don't re-check it. Finish now by "
+                            "calling Done with your reply to the user.")
 
                 action_log.append({
                     "tool": tu.name,
@@ -1815,6 +1838,9 @@ async def run_browser_agent(
                     })
             messages.append({"role": "user", "content": tool_results})
 
+            if done_called:
+                break
+
             if cancelled:
                 break
 
@@ -1857,8 +1883,14 @@ async def run_browser_agent(
                 "final_screenshot": final_screenshot,
             }
 
-        summary_parts = text_parts if text_parts else ["Task completed."]
-        summary = "\n".join(summary_parts)
+        # The model finishes through Done, so its `message` IS the user's reply
+        # (clean, conversational, no tag). The rare run that stops without calling
+        # Done falls back to its own terminal text, which is plain prose since no
+        # prompt asks for a machine tag anymore.
+        if done_called:
+            summary = done_message or "Done."
+        else:
+            summary = "\n".join(text_parts).strip() if text_parts else "Task completed."
 
         if not final_screenshot:
             try:
@@ -2005,6 +2037,10 @@ async def run_browser_agent(
             "session_id": session_id,
             "browser_id": browser_id,
             "summary": summary,
+            # structured success signal the parent reads (replaces grepping the
+            # summary for a tag): true only if the run is honest AND, when the
+            # model called Done, it reported success. No-Done runs lean on honest.
+            "done": honest and (done_success if done_called else True),
             # surface the honest failure to the parent so it doesn't treat a
             # did-nothing run as a success it can build on
             **({} if honest else {"error": summary}),

@@ -4,8 +4,8 @@ Browser fast path: skip the orchestrator for plainly browser-only requests.
 The orchestrator LLM is ~2/3 of the token bill on a single-browser task and
 adds two model turns of latency, all to decide "delegate this to a browser
 agent" and then restate the agent's own outcome. When the request is clearly
-just browsing, dispatch the browser sub-agent directly and let its OUTCOME
-line be the reply.
+just browsing, dispatch the browser sub-agent directly and let its Done
+message (a clean human reply already) be the reply.
 
 Three gates, all conservative; any miss falls through to the orchestrator:
 1. eligibility: first message of an agent session on a dashboard, no
@@ -128,13 +128,12 @@ def compose_task(prompt: str, brief: str) -> str:
     )
 
 
-def dispatch_failed(summary: str) -> bool:
-    """Fail-closed: only an explicit DONE line or a skill replay counts as
-    success; framework failures ('I was not able to complete this task (the
-    browser became unresponsive...)') carry no OUTCOME line at all, and the
+def dispatch_failed(result: dict) -> bool:
+    """Fail-closed: a real completion sets done=True (the sub-agent called Done
+    with success, and the honesty gate agreed). Anything else, a hung/errored
+    dispatch or the model reporting it couldn't, means recovery should run. The
     recovery task's verify-first wording makes a rare redundant retry safe."""
-    s = (summary or "").strip()
-    return not ("OUTCOME: DONE" in s.upper() or "learned skill replay" in s)
+    return not (isinstance(result, dict) and result.get("done", False))
 
 
 NO_DASHBOARD_REPLY = (

@@ -3413,7 +3413,7 @@ class AgentManager:
                     "session_id": session_id, "message": _tc.model_dump(mode="json")})
                 first = await _dispatch(browser_fast_path.compose_task(prompt, brief))
                 text = _summary(first)
-                if browser_fast_path.dispatch_failed(text):
+                if browser_fast_path.dispatch_failed(first):
                     # Retry only transient failures; a dead dashboard fails the
                     # retry identically, so skip it and tell the user instead.
                     if not ws_manager.global_connections:

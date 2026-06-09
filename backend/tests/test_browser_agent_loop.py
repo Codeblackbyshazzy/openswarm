@@ -230,7 +230,41 @@ def test_confirmed_send_ends_the_run_instead_of_stalling(monkeypatch):
     # consuming all 8 scripted stall turns
     assert any(c["action"] == "click_index" and c["params"].get("index") == 99 for c in sent)
     assert primary.turn <= 4, f"run stalled {primary.turn} turns after a confirmed send"
-    assert result["summary"].startswith("OUTCOME: DONE") or "DONE" in result["summary"]
+    # structured success + a clean human summary, never the internal tag
+    assert result.get("done") is True
+    assert "OUTCOME" not in result["summary"]
+    assert result["summary"].strip()
+
+
+def test_done_tool_delivers_a_clean_human_summary(monkeypatch):
+    # Canonical finish: the model calls Done(message); that message is the user's
+    # reply verbatim (no OUTCOME tag, no UI mechanics) and `done` is True.
+    BH._browser_history.clear(); BH._domain_notes.clear()
+    primary = FakeLLM([
+        Resp([_rp("open profile + send"), _tu("BrowserClickIndex", index=5, expect="Sent")]),
+        Resp([_tu("Done", message="Sent your message to Tyler, it's in the thread now.")]),
+    ])
+    aux = FakeAux()
+    _install(monkeypatch, primary, aux)
+    result = asyncio.run(BA.run_browser_agent(task="text Tyler hello", browser_id="b1", model="sonnet"))
+    assert result["summary"] == "Sent your message to Tyler, it's in the thread now."
+    assert result.get("done") is True
+    assert "OUTCOME" not in result["summary"]
+
+
+def test_done_tool_success_false_marks_not_done(monkeypatch):
+    # Done(success=false) is the honest "couldn't finish": done is False so the
+    # fast path knows to recover, and the message still reads like a person wrote it.
+    BH._browser_history.clear(); BH._domain_notes.clear()
+    primary = FakeLLM([
+        Resp([_rp("look for thread"), _tu("BrowserClickIndex", index=3)]),
+        Resp([_tu("Done", message="I hit a login wall, so I couldn't open the chat.", success=False)]),
+    ])
+    aux = FakeAux()
+    _install(monkeypatch, primary, aux)
+    result = asyncio.run(BA.run_browser_agent(task="text Tyler hello", browser_id="b1", model="sonnet"))
+    assert result.get("done") is False
+    assert "login wall" in result["summary"]
 
 
 def test_early_perception_is_not_cut_short_before_any_action(monkeypatch):
