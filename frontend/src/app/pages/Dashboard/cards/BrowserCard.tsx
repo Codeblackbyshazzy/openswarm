@@ -921,7 +921,6 @@ const BrowserCard: React.FC<Props> = ({
                 py: 0.25,
                 borderRadius: '6px',
                 bgcolor: `${accentColor}18`,
-                border: `1px solid ${accentColor}30`,
                 animation: 'badge-fade-in 0.25s ease-out',
                 '@keyframes badge-fade-in': {
                   '0%': { opacity: 0, transform: 'scale(0.85)' },
