@@ -1602,7 +1602,7 @@ class AgentManager:
                     "ANTHROPIC_BASE_URL": proxy_url,
                     # Pin subagent ids; CLI default 'claude-haiku-4-5-20251001'
                     # gets rejected by Pro's surface as "No credentials for provider: anthropic".
-                    # (Free-trial down-routes all of these to Haiku server-side.)
+                    # (Free-trial clamps to its allowed Claude set + weights credits server-side.)
                     "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-4-6",
                     "ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
                     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",

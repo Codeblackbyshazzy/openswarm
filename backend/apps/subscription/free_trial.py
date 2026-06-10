@@ -74,7 +74,7 @@ def _fingerprint(settings_obj) -> str | None:
 
 
 def _has_own_model(s) -> bool:
-    """True if the user already has any real model path; never shadow it."""
+    """True if the user already has any real model path in settings; never shadow it."""
     if any(getattr(s, k, None) for k in (
         "anthropic_api_key", "openai_api_key", "google_api_key", "openrouter_api_key",
         "claude_subscription_token", "openai_subscription_token", "gemini_subscription_token",
@@ -88,6 +88,23 @@ def _has_own_model(s) -> bool:
         if (name or "").strip() and (base or "").strip():
             return True
     return False
+
+
+async def _has_connected_subscription() -> bool:
+    """True if 9Router holds a live Claude/ChatGPT/Gemini subscription. Those
+    connections live in 9Router, not settings, so the sync check above misses
+    them; this catches a sub connected while the trial was armed."""
+    try:
+        from backend.apps.nine_router import is_running as _9r_running, get_providers as _9r_providers
+        if not _9r_running():
+            return False
+        conns = await _9r_providers()
+        return any(
+            c.get("isActive") and c.get("provider") in ("claude", "codex", "gemini-cli")
+            for c in conns
+        )
+    except Exception:
+        return False
 
 
 def _proxy_base(settings_obj) -> str:
@@ -117,9 +134,14 @@ async def arm_free_trial(settings_obj) -> dict:
     free-trial mode. Guarded: never arms over a real key/subscription."""
     if not _enabled():
         return {"armed": False, "reason": "disabled"}
-    if getattr(settings_obj, "connection_mode", "own_key") not in ("own_key", "free-trial"):
+    mode = getattr(settings_obj, "connection_mode", "own_key")
+    if mode not in ("own_key", "free-trial"):
         return {"armed": False, "reason": "other_mode"}
-    if _has_own_model(settings_obj):
+    if _has_own_model(settings_obj) or await _has_connected_subscription():
+        # A real model exists now (key, custom provider, or a 9Router sub). If we
+        # were on the free lane, hand the wheel back instead of re-arming.
+        if mode == "free-trial":
+            await clear_free_trial(settings_obj)
         return {"armed": False, "reason": "has_model"}
 
     fp = _fingerprint(settings_obj)

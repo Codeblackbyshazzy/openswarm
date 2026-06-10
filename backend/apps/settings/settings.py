@@ -143,6 +143,23 @@ async def update_settings(body: AppSettings):
     for k in SERVER_OWNED_FIELDS:
         setattr(body, k, getattr(old, k, None))
 
+    # If the user connects their own model while the free trial is armed, hand
+    # the wheel back to their provider. Without this, connection_mode (server-
+    # owned, so the loop above just restored it to "free-trial") would keep them
+    # pinned to the forced Haiku lane even though they pasted a real key.
+    if getattr(old, "connection_mode", "own_key") == "free-trial":
+        from backend.apps.subscription.free_trial import _has_own_model
+        if _has_own_model(body):
+            body.connection_mode = "own_key"
+            body.free_trial_token = None
+            body.free_trial_remaining = None
+            try:
+                import asyncio as _aio
+                from backend.apps.nine_router import sync_pro_routing as _spr
+                _aio.create_task(_spr(body))  # drop the now-stale free-trial 9router node
+            except Exception:
+                pass
+
     secret_keys = {"anthropic_api_key", "openai_api_key", "google_api_key", "openrouter_api_key",
                    "claude_subscription_token", "openai_subscription_token", "gemini_subscription_token",
                    "openswarm_bearer_token", "free_trial_token", "installation_id"}
