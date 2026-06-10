@@ -489,6 +489,7 @@ const DashboardOutputPreview: React.FC<{
   backendResult: any;
 }> = ({ previewRef, output, inputData, backendResult }) => {
   const tokens = useClaudeTokens();
+  const dispatch = useAppDispatch();
   const workspaceId = output.workspace_id ?? null;
   const { frontendUrl, isNewMode, isHydrating } = useRuntimePreviewUrl({
     workspaceId,
@@ -500,6 +501,58 @@ const DashboardOutputPreview: React.FC<{
     frontendUrl,
     isNewMode,
   });
+
+  // An orphaned record (files deleted on disk) used to render the raw 404 JSON
+  // inside the card, or spin on "Starting preview" forever; probe once instead.
+  const [filesMissing, setFilesMissing] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const tok = getAuthToken();
+    const headers: Record<string, string> = tok ? { Authorization: `Bearer ${tok}` } : {};
+    const probe = workspaceId
+      ? `${API_BASE}/outputs/workspace/${workspaceId}`
+      : `${SERVE_BASE}/${output.id}/serve/index.html`;
+    fetch(probe, { headers })
+      .then((r) => {
+        if (!cancelled && r.status === 404) setFilesMissing(true);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [workspaceId, output.id]);
+
+  if (filesMissing) {
+    return (
+      <Box
+        sx={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 1.5,
+          px: 2,
+          textAlign: 'center',
+        }}
+      >
+        <Typography sx={{ color: tokens.text.secondary, fontSize: '0.9rem' }}>
+          This app's files are missing.
+        </Typography>
+        <Typography
+          onClick={() => dispatch(removeViewCard(output.id))}
+          sx={{
+            color: tokens.accent.primary,
+            fontSize: '0.85rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+            '&:hover': { textDecoration: 'underline' },
+          }}
+        >
+          Remove card
+        </Typography>
+      </Box>
+    );
+  }
 
   // Blank body during hydration so warm runtimes don't flash "Starting preview..."
   if (isHydrating && !frontendUrl) {
