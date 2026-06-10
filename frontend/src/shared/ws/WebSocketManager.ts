@@ -812,7 +812,6 @@ class WebSocketManager {
   }
 
   stopAgent(sessionId: string) {
-    console.warn(`[ux-trace] STOP-SENT sid=${sessionId.slice(0, 8)}\n${new Error().stack}`);
     this.send('agent:stop', { session_id: sessionId });
   }
 
