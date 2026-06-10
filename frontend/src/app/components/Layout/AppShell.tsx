@@ -77,6 +77,13 @@ const AppShell: React.FC = () => {
     return fn as typeof navigateRaw;
   }, [navigateRaw]);
   const location = useLocation();
+  // React Router (HashRouter) stores a monotonic index in history state. location
+  // re-renders on every nav, by which point window.history.state.idx is updated.
+  const historyIdx = (window.history.state?.idx as number | undefined) ?? 0;
+  const maxHistoryIdx = useRef(0);
+  maxHistoryIdx.current = Math.max(maxHistoryIdx.current, historyIdx);
+  const canGoBack = historyIdx > 0;
+  const canGoForward = historyIdx < maxHistoryIdx.current;
   const [dashboardsExpanded, setDashboardsExpanded] = useState(true);
   const [appsExpanded, setAppsExpanded] = useState(true);
   const [customizationExpanded, setCustomizationExpanded] = useState(true);
@@ -400,34 +407,40 @@ const AppShell: React.FC = () => {
           </IconButton>
         </Tooltip>
         <Tooltip title="Back">
-          <IconButton
-            size="small"
-            onClick={() => navigate(-1)}
-            sx={{
-              WebkitAppRegion: 'no-drag',
-              color: c.text.tertiary,
-              p: 0.5,
-              borderRadius: 1,
-              '&:hover': { color: c.text.secondary, bgcolor: `${c.text.tertiary}14` },
-            }}
-          >
-            <ArrowBackOutlinedIcon sx={{ fontSize: 18 }} />
-          </IconButton>
+          <span>
+            <IconButton
+              size="small"
+              onClick={() => navigate(-1)}
+              disabled={!canGoBack}
+              sx={{
+                WebkitAppRegion: 'no-drag',
+                color: c.text.tertiary,
+                p: 0.5,
+                borderRadius: 1,
+                '&:hover': { color: c.text.secondary, bgcolor: `${c.text.tertiary}14` },
+              }}
+            >
+              <ArrowBackOutlinedIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </span>
         </Tooltip>
         <Tooltip title="Forward">
-          <IconButton
-            size="small"
-            onClick={() => navigate(1)}
-            sx={{
-              WebkitAppRegion: 'no-drag',
-              color: c.text.tertiary,
-              p: 0.5,
-              borderRadius: 1,
-              '&:hover': { color: c.text.secondary, bgcolor: `${c.text.tertiary}14` },
-            }}
-          >
-            <ArrowForwardOutlinedIcon sx={{ fontSize: 18 }} />
-          </IconButton>
+          <span>
+            <IconButton
+              size="small"
+              onClick={() => navigate(1)}
+              disabled={!canGoForward}
+              sx={{
+                WebkitAppRegion: 'no-drag',
+                color: c.text.tertiary,
+                p: 0.5,
+                borderRadius: 1,
+                '&:hover': { color: c.text.secondary, bgcolor: `${c.text.tertiary}14` },
+              }}
+            >
+              <ArrowForwardOutlinedIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </span>
         </Tooltip>
 
         <DynamicIsland />
