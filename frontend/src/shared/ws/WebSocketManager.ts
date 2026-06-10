@@ -22,7 +22,7 @@ import {
   setTurnLabel,
   clearTurnLabel,
 } from '../state/agentsSlice';
-import { streamStart, streamDelta, streamEnd } from '../state/streamingSlice';
+import { streamStart, streamDelta, streamEnd, clearStreamingForSession } from '../state/streamingSlice';
 import { addBrowserCardFromBackend, removeBrowserCard, setBrowserCardPosition, setGlowingBrowserCards, GRID_GAP } from '../state/dashboardLayoutSlice';
 import { upsertOutput } from '../state/outputsSlice';
 import { getAuthToken } from '../config';
@@ -493,6 +493,7 @@ class WebSocketManager {
           // before its own aux call lands.
           if (session_id && (data.status === 'completed' || data.status === 'error' || data.status === 'stopped')) {
             store.dispatch(clearTurnLabel(session_id));
+            store.dispatch(clearStreamingForSession(session_id));
           }
         }
         // Clean spawned browser cards when the PARENT finishes, never per
