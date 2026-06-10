@@ -11,7 +11,7 @@ import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
-import CircularProgress from '@mui/material/CircularProgress';
+import { Skeleton } from '@/app/components/feedback/Loading';
 import IconButton from '@mui/material/IconButton';
 import Breadcrumbs from '@mui/material/Breadcrumbs';
 import Link from '@mui/material/Link';
@@ -242,8 +242,11 @@ const DirectoryBrowser: React.FC<DirectoryBrowserProps> = ({ open, onClose, onSe
           scrollbarColor: `${c.border.medium} transparent`,
         }}>
           {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-              <CircularProgress size={24} sx={{ color: c.accent.primary }} />
+            // Row-shaped skeletons instead of a spinner: the list keeps its silhouette while loading.
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, px: 1.5, py: 1.5 }}>
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={i} variant="line" width={`${72 - i * 12}%`} height={18} />
+              ))}
             </Box>
           ) : !hasEntries ? (
             <Box sx={{ py: 4, textAlign: 'center' }}>
