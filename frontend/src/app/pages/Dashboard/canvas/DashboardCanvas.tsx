@@ -73,6 +73,8 @@ interface DashboardCanvasProps {
   onNewAgent: () => void;
   onToolbarCancel: () => void;
   onToolbarSend: (...args: any[]) => void;
+  onStarterPrefill: (prompt: string) => void;
+  toolbarPrefill?: string;
   onAddView: (outputId: string) => void;
   onHistoryResume: (sessionId: string) => void;
   onAddBrowser: () => void;
@@ -130,6 +132,8 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
   onNewAgent,
   onToolbarCancel,
   onToolbarSend,
+  onStarterPrefill,
+  toolbarPrefill,
   onAddView,
   onHistoryResume,
   onAddBrowser,
@@ -215,7 +219,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
         />
 
         {sessionList.length === 0 && Object.keys(viewCards).length === 0 && Object.keys(browserCards).length === 0 ? (
-          <DashboardEmptyState c={c} onLaunch={onToolbarSend} />
+          <DashboardEmptyState c={c} onLaunch={onToolbarSend} onPrefill={onStarterPrefill} />
         ) : (
           <div
             ref={canvas.contentRef}
@@ -289,6 +293,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
         onFitToView={onFitToView}
         onTidy={onTidy}
         onSearchPaletteClose={onSearchPaletteClose}
+        toolbarPrefill={toolbarPrefill}
       />
     </Box>
     </>

@@ -57,6 +57,8 @@ interface Props {
   dashboardId?: string;
   newAgentBounce?: boolean;
   onNewAgentBounceEnd?: () => void;
+  // Text to seed the composer with when it opens (starter-prompt click).
+  prefillPrompt?: string;
 }
 
 const TOOLBAR_OWNER_ID = '__toolbar__';
@@ -100,7 +102,7 @@ function formatRelativeTime(dateStr: string | null): string {
 }
 
 const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
-  ({ inputOpen, onNewAgent, onCancel, onSend, onAddView, onHistoryResume, onAddBrowser, onAddNote, dashboardId, newAgentBounce, onNewAgentBounceEnd }, ref) => {
+  ({ inputOpen, onNewAgent, onCancel, onSend, onAddView, onHistoryResume, onAddBrowser, onAddNote, dashboardId, newAgentBounce, onNewAgentBounceEnd, prefillPrompt }, ref) => {
     const c = useClaudeTokens();
     const dispatch = useAppDispatch();
     const elementSelection = useElementSelection();
@@ -434,6 +436,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
               sessionId={TOOLBAR_OWNER_ID}
               thinkingLevel={thinkingLevel}
               onThinkingLevelChange={handleThinkingLevelChange}
+              prefillPrompt={prefillPrompt}
             />
           </div>
         ) : historyOpen ? (

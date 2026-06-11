@@ -42,9 +42,12 @@ interface Props {
   thinkingLevel?: 'off' | 'low' | 'medium' | 'high' | 'auto';
   onThinkingLevelChange?: (level: 'off' | 'low' | 'medium' | 'high' | 'auto') => void;
   onActivityLabelChange?: (label: string | null) => void;
+  // Seed the composer with this text (unsent), so a starter-prompt click opens
+  // the chat with the message already typed, ready for the user to hit send.
+  prefillPrompt?: string;
 }
 
-const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, onModeChange, model, onModelChange, provider, onProviderChange, isRunning, onStop, autoRunMode, contextEstimate, embedded, autoFocus, sessionId, queueLength = 0, thinkingLevel = 'auto', onThinkingLevelChange, onActivityLabelChange }, ref) => {
+const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, onModeChange, model, onModelChange, provider, onProviderChange, isRunning, onStop, autoRunMode, contextEstimate, embedded, autoFocus, sessionId, queueLength = 0, thinkingLevel = 'auto', onThinkingLevelChange, onActivityLabelChange, prefillPrompt }, ref) => {
   const c = useClaudeTokens();
   const editorRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -58,6 +61,19 @@ const ChatInput = forwardRef<ChatInputHandle, Props>(({ onSend, disabled, mode, 
   useEffect(() => {
     if (autoFocus) editorRef.current?.focus();
   }, [autoFocus]);
+
+  // Drop the seeded prompt into the editor when it arrives (starter-prompt click).
+  const prefilledRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!prefillPrompt || prefilledRef.current === prefillPrompt) return;
+    const editor = editorRef.current;
+    if (!editor) return;
+    if (editor.tagName === 'TEXTAREA') (editor as unknown as HTMLTextAreaElement).value = prefillPrompt;
+    else editor.textContent = prefillPrompt;
+    setHasContent(true);
+    prefilledRef.current = prefillPrompt;
+    editor.focus();
+  }, [prefillPrompt]);
 
   useDraftLoad(editorRef, ownerId);
 

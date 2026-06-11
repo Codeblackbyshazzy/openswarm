@@ -62,7 +62,9 @@ const STARTER_CATEGORIES: StarterCategory[] = [
 const DashboardEmptyState: React.FC<{
   c: ClaudeTokens;
   onLaunch?: (prompt: string, mode: string, model: string) => void;
-}> = ({ c, onLaunch }) => {
+  // Open the composer with the prompt typed in (unsent) so the user hits send.
+  onPrefill?: (prompt: string) => void;
+}> = ({ c, onLaunch, onPrefill }) => {
   // The host hides Dashboard with visibility:hidden (not display:none), which keeps
   // CSS animations ticking; gate on active so the shimmer only burns while watched.
   const active = useDashboardActive();
@@ -72,7 +74,6 @@ const DashboardEmptyState: React.FC<{
   const navigate = useNavigate();
   const [launching, setLaunching] = React.useState(false);
   const [expanded, setExpanded] = React.useState<string | null>(null);
-  const [hoveredPrompt, setHoveredPrompt] = React.useState<string | null>(null);
   const currentCategory = STARTER_CATEGORIES.find((cat) => cat.id === expanded);
   const currentPrompts = currentCategory?.prompts ?? [];
 
@@ -85,6 +86,12 @@ const DashboardEmptyState: React.FC<{
     // Build prompts open the App Builder (live preview) with the prompt auto-sent.
     if (currentCategory?.target === 'app-builder') {
       navigate(`/apps/new?prompt=${encodeURIComponent(prompt)}`);
+      return;
+    }
+    // Open the composer with the prompt typed in, unsent: the user sees the chat
+    // open with their message ready and clicks send. Falls back to direct launch.
+    if (onPrefill) {
+      onPrefill(prompt);
       return;
     }
     if (!onLaunch) return;
@@ -194,16 +201,12 @@ const DashboardEmptyState: React.FC<{
                 >
                   <ArrowLeft size={15} /> back
                 </Box>
-                <Box
-                  onMouseLeave={() => setHoveredPrompt(null)}
-                  sx={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 0.9, width: '100%', maxWidth: 480 }}
-                >
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.9, width: '100%', maxWidth: 480 }}>
                   {currentPrompts.map((prompt) => (
                     <Box
                       component="button"
                       key={prompt}
                       onClick={() => launch(prompt)}
-                      onMouseEnter={() => setHoveredPrompt(prompt)}
                       disabled={launching}
                       sx={{
                         textAlign: 'left',
@@ -223,45 +226,6 @@ const DashboardEmptyState: React.FC<{
                       {prompt}
                     </Box>
                   ))}
-
-                  {/* Hover preview: a translucent ghost of the chat that would open,
-                      so the user sees their message land before committing. Pure
-                      divs (not the heavy AgentChat), so it costs nothing to render. */}
-                  <AnimatePresence>
-                    {hoveredPrompt && (
-                      <Box
-                        component={motion.div}
-                        key="ghost"
-                        initial={{ opacity: 0, x: -8 }}
-                        animate={{ opacity: 0.72, x: 0 }}
-                        exit={{ opacity: 0, x: -8 }}
-                        transition={{ duration: 0.16 }}
-                        sx={{
-                          position: 'absolute',
-                          left: '100%', top: '50%', ml: 3,
-                          transform: 'translateY(-50%)',
-                          width: 300,
-                          pointerEvents: 'none',
-                          bgcolor: c.bg.surface,
-                          border: `1px solid ${c.border.medium}`,
-                          borderRadius: 3,
-                          boxShadow: c.shadow.md,
-                          p: 1.5,
-                        }}
-                      >
-                        <Typography sx={{ fontSize: '0.8rem', fontWeight: 600, color: c.text.tertiary, mb: 1.2 }}>
-                          New chat
-                        </Typography>
-                        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                          <Box sx={{ maxWidth: '88%', bgcolor: c.bg.elevated, borderRadius: 2.5, px: 1.4, py: 0.9 }}>
-                            <Typography sx={{ fontSize: '0.85rem', color: c.text.primary, lineHeight: 1.4 }}>
-                              {hoveredPrompt}
-                            </Typography>
-                          </Box>
-                        </Box>
-                      </Box>
-                    )}
-                  </AnimatePresence>
                 </Box>
               </motion.div>
             )}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useElementSelection } from '@/app/components/editor/ElementSelectionContext';
 import { useCanvasControls } from '../interaction/useCanvasControls';
@@ -159,6 +159,18 @@ export function useDashboardController(dashboardId: string, isActive: boolean) {
     setSearchPaletteOpen,
   });
 
+  // Starter-prompt prefill: opens the composer with the prompt typed in (unsent),
+  // so the user reviews and hits send. Bump a nonce so re-clicking the same prompt
+  // (after editing/clearing) still re-seeds. Cleared when the composer closes.
+  const [toolbarPrefill, setToolbarPrefill] = useState<string | undefined>(undefined);
+  const handleStarterPrefill = useCallback((prompt: string) => {
+    setToolbarPrefill(prompt);
+    setToolbarOpen(true);
+  }, [setToolbarOpen]);
+  useEffect(() => {
+    if (!toolbarOpen && toolbarPrefill) setToolbarPrefill(undefined);
+  }, [toolbarOpen, toolbarPrefill]);
+
   useDashboardClipboard({
     isActive,
     dashboardId,
@@ -253,6 +265,8 @@ export function useDashboardController(dashboardId: string, isActive: boolean) {
     focusedCardId, pendingFocusNoteId, multiDragDelta, shakeDirection,
     neighborDirections, toolbarOpen, searchPaletteOpen, newAgentBounce,
     toolbarRef, spawnOriginsRef, revealSpawnedRef, measuredHeightsRef, getCanvasState,
+    toolbarPrefill,
+    onStarterPrefill: handleStarterPrefill,
     onViewportMouseDown: handleViewportMouseDown,
     onViewportMouseMove: handleViewportMouseMove,
     onViewportMouseUp: handleViewportMouseUp,
