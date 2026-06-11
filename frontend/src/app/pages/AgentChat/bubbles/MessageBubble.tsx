@@ -101,6 +101,16 @@ function parseOpenSwarmError(text: string, ctx?: OverflowContext): OpenSwarmErro
       ctaAction: 'upgrade',
     };
   }
+  if (/free_trial_exhausted|used your free|free OpenSwarm runs/i.test(text)) {
+    return {
+      kind: 'cap',
+      title: "You've used your free runs",
+      detail:
+        'Connect a model to keep going: your own API key, an AI subscription you already pay for, or OpenSwarm Pro.',
+      ctaLabel: 'Connect a model',
+      ctaAction: 'settings',
+    };
+  }
   if (/unknown model|check the model code|\b1211\b|model_not_found/i.test(text)) {
     return {
       kind: 'auth',

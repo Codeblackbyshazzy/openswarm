@@ -4,13 +4,14 @@ import { isYoutubeEnabled } from './skipPredicates';
 
 export const step02: OnboardingStep = {
   id: 'enable_actions',
-  stage: 'get_started',
-  index: 2,
+  // Demoted out of the first-run path: a feature to discover after the first win.
+  stage: 'learn_features',
+  index: 3,
   title: 'Enable agentic actions',
   description: 'Allow agents to work across your apps.',
   videoSrc: './onboarding-videos/v2/02.mp4',
   videoDurationLabel: '0:24',
-  // Narrowed to YouTube so users with other tools still get walked; step 3 needs YouTube on.
+  // Narrowed to YouTube so users with other tools still get walked.
   skipIf: isYoutubeEnabled,
   ops: [
     { kind: 'move_to', target: S.sidebarActions },

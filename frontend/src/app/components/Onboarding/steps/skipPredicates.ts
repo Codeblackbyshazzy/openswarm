@@ -26,6 +26,20 @@ export function hasModelConnected(s: RootState): boolean {
   return false;
 }
 
+/** True while the server-funded free trial is armed (no key needed yet). */
+export function hasFreeTrialActive(s: RootState): boolean {
+  const d = s.settings.data as any;
+  return !!(d && d.connection_mode === 'free-trial' && d.free_trial_token);
+}
+
+/** True when free runs are running out (or already armed-and-spent). Surfaces the connect-model step. */
+export function freeRunsLow(s: RootState): boolean {
+  const d = s.settings.data as any;
+  if (!d) return false;
+  const remaining = d.free_trial_remaining;
+  return typeof remaining === 'number' && remaining <= 2;
+}
+
 export function hasAnyToolEnabled(s: RootState): boolean {
   const items = s.tools?.items ?? {};
   // Match Tools.tsx Switch read: enabled !== false; pre-field tools treat undefined as on.

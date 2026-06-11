@@ -45,7 +45,7 @@ async def settings_lifespan():
                 getattr(s, "google_api_key", None),
                 getattr(s, "openai_api_key", None),
                 getattr(s, "openrouter_api_key", None),
-                getattr(s, "connection_mode", None) == "openswarm-pro",
+                getattr(s, "connection_mode", None) in ("openswarm-pro", "free-trial"),
                 bool(getattr(s, "custom_providers", None) or []),
             ])
             if needs_router:
@@ -59,11 +59,11 @@ async def settings_lifespan():
                 await sync_openai_api_key(s.openai_api_key)
             if getattr(s, "openrouter_api_key", None):
                 await sync_openrouter_api_key(s.openrouter_api_key)
-            if getattr(s, "connection_mode", None) == "openswarm-pro":
-                bearer = getattr(s, "openswarm_bearer_token", None)
-                proxy = getattr(s, "openswarm_proxy_url", None) or "https://api.openswarm.com"
+            if getattr(s, "connection_mode", None) in ("openswarm-pro", "free-trial"):
+                from backend.apps.settings.credentials import proxy_auth
+                bearer, base = proxy_auth(s)
                 if bearer:
-                    await sync_openswarm_pro_as_claude(bearer, proxy)
+                    await sync_openswarm_pro_as_claude(bearer, base)
             await sync_custom_providers(getattr(s, "custom_providers", None) or [])
 
         _asyncio.create_task(_boot_router_then_sync())
@@ -123,6 +123,9 @@ SERVER_OWNED_FIELDS = (
     "openswarm_subscription_plan",
     "openswarm_subscription_expires",
     "openswarm_usage_cached",
+    "free_trial_token",
+    "free_trial_remaining",
+    "free_trial_runs_limit",
     "user_id",
     "signin_method",
     "installation_id",
@@ -140,9 +143,26 @@ async def update_settings(body: AppSettings):
     for k in SERVER_OWNED_FIELDS:
         setattr(body, k, getattr(old, k, None))
 
+    # If the user connects their own model while the free trial is armed, hand
+    # the wheel back to their provider. Without this, connection_mode (server-
+    # owned, so the loop above just restored it to "free-trial") would keep them
+    # pinned to the forced Haiku lane even though they pasted a real key.
+    if getattr(old, "connection_mode", "own_key") == "free-trial":
+        from backend.apps.subscription.free_trial import _has_own_model
+        if _has_own_model(body):
+            body.connection_mode = "own_key"
+            body.free_trial_token = None
+            body.free_trial_remaining = None
+            try:
+                import asyncio as _aio
+                from backend.apps.nine_router import sync_pro_routing as _spr
+                _aio.create_task(_spr(body))  # drop the now-stale free-trial 9router node
+            except Exception:
+                pass
+
     secret_keys = {"anthropic_api_key", "openai_api_key", "google_api_key", "openrouter_api_key",
                    "claude_subscription_token", "openai_subscription_token", "gemini_subscription_token",
-                   "openswarm_bearer_token", "installation_id"}
+                   "openswarm_bearer_token", "free_trial_token", "installation_id"}
     safe = {k: v for k, v in body.model_dump().items() if k not in secret_keys}
     _sync(safe)
 

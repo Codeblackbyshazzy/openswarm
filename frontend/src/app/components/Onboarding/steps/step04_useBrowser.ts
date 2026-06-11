@@ -4,7 +4,7 @@ import { hasAnyBrowserSpawned } from './skipPredicates';
 
 export const step04: OnboardingStep = {
   id: 'use_browser',
-  stage: 'get_started',
+  stage: 'learn_features',
   index: 4,
   title: 'Use the built-in browser',
   description:

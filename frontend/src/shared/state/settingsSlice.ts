@@ -57,9 +57,13 @@ export interface AppSettings {
   dev_mode: boolean;
   allow_experimental_updates: boolean;
   /** Managed subscription state; surfaces only when user has subscribed via cloud. */
-  connection_mode?: 'own_key' | 'openswarm-pro';
+  connection_mode?: 'own_key' | 'openswarm-pro' | 'free-trial';
   openswarm_bearer_token?: string | null;
   openswarm_proxy_url?: string | null;
+  /** Zero-config free trial: server-owned, set by the cloud mint. remaining drives the onboarding "runs low" nudge. */
+  free_trial_token?: string | null;
+  free_trial_remaining?: number | null;
+  free_trial_runs_limit?: number | null;
   openswarm_subscription_plan?: string | null;
   openswarm_subscription_expires?: string | null;
   openswarm_usage_cached?: SubscriptionUsage | null;

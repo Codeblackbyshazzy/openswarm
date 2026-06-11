@@ -10,6 +10,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 import { useOnboardingProgress } from './hooks/useOnboardingProgress';
 import { STAGE_GROUPS, STEPS, findStepById } from './steps';
+import { useUnlockedStepIds, unlockHintFor } from './steps/stepUnlock';
 import { STAGE_LABELS } from './steps/types';
 import { onboardingDirector } from './OnboardingDirector';
 import { report } from './telemetry';
@@ -20,13 +21,16 @@ const OnboardingRoadmapModal: React.FC = () => {
   const open = progress.panelMode === 'roadmap';
   const close = () => progress.setPanelMode('expanded');
 
-  const stage1Done = STAGE_GROUPS[0].steps.every((s) =>
-    progress.completedSteps.includes(s.id),
-  );
+  const unlockedIds = useUnlockedStepIds();
 
-  const currentStep = progress.currentStepId
-    ? findStepById(progress.currentStepId)
-    : STEPS.find((s) => !progress.completedSteps.includes(s.id));
+  // Current = first unlocked, not-yet-done step (locked ones wait their turn).
+  const currentStep = (() => {
+    const explicit = progress.currentStepId ? findStepById(progress.currentStepId) : null;
+    if (explicit && !progress.completedSteps.includes(explicit.id) && unlockedIds.has(explicit.id)) {
+      return explicit;
+    }
+    return STEPS.find((s) => !progress.completedSteps.includes(s.id) && unlockedIds.has(s.id));
+  })();
 
   const totalDone = progress.completedSteps.length;
   const total = STEPS.length;
@@ -120,13 +124,8 @@ const OnboardingRoadmapModal: React.FC = () => {
             const stageDone = group.steps.filter((s) =>
               progress.completedSteps.includes(s.id),
             ).length;
-            const isLocked = gi === 1 && !stage1Done;
-            const isInProgress = !isLocked && stageDone < group.steps.length;
-            const stageLabel = isLocked
-              ? 'LOCKED'
-              : isInProgress
-                ? 'IN PROGRESS'
-                : 'COMPLETE';
+            const isInProgress = stageDone < group.steps.length;
+            const stageLabel = isInProgress ? 'IN PROGRESS' : 'COMPLETE';
             return (
               <Box key={group.stage} sx={{ mb: 2 }}>
                 <Box
@@ -143,11 +142,7 @@ const OnboardingRoadmapModal: React.FC = () => {
                         fontSize: 10.5,
                         fontWeight: 700,
                         letterSpacing: '0.08em',
-                        color: isLocked
-                          ? c.text.tertiary
-                          : isInProgress
-                            ? c.accent.primary
-                            : c.text.secondary,
+                        color: isInProgress ? c.accent.primary : c.text.secondary,
                       }}
                     >
                       STAGE {gi + 1} · {stageLabel}
@@ -162,7 +157,7 @@ const OnboardingRoadmapModal: React.FC = () => {
                     fontSize: 14,
                     fontWeight: 600,
                     mb: 0.8,
-                    color: isLocked ? c.text.tertiary : c.text.primary,
+                    color: c.text.primary,
                   }}
                 >
                   {STAGE_LABELS[group.stage]}
@@ -170,12 +165,15 @@ const OnboardingRoadmapModal: React.FC = () => {
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.6 }}>
                   {group.steps.map((step) => {
                     const isDone = progress.completedSteps.includes(step.id);
-                    const isCurrent = currentStep?.id === step.id && !isDone;
+                    const isStepLocked = !isDone && !unlockedIds.has(step.id);
+                    const isCurrent =
+                      currentStep?.id === step.id && !isDone && !isStepLocked;
+                    const lockHint = isStepLocked ? unlockHintFor(step.id) : null;
                     return (
                       <Box
                         key={step.id}
                         onClick={() => {
-                          if (isLocked) return;
+                          if (isStepLocked) return;
                           // Abort mid-flow step before jumping; otherwise AC keeps animating for a step the user no longer sees.
                           if (progress.running) {
                             onboardingDirector.cancelStep();
@@ -194,15 +192,15 @@ const OnboardingRoadmapModal: React.FC = () => {
                           py: 0.45,
                           px: 0.4,
                           borderRadius: `${c.radius.sm}px`,
-                          cursor: isLocked ? 'default' : 'pointer',
-                          opacity: isLocked ? 0.55 : 1,
+                          cursor: isStepLocked ? 'default' : 'pointer',
+                          opacity: isStepLocked ? 0.55 : 1,
                           transition: 'background 0.12s',
-                          '&:hover': isLocked
+                          '&:hover': isStepLocked
                             ? {}
                             : { bgcolor: c.bg.secondary },
                         }}
                       >
-                        {isLocked ? (
+                        {isStepLocked ? (
                           <LockIcon sx={{ fontSize: 16, color: c.text.tertiary }} />
                         ) : isDone ? (
                           <CheckCircleIcon
@@ -231,7 +229,7 @@ const OnboardingRoadmapModal: React.FC = () => {
                         >
                           {step.title}
                         </Typography>
-                        {isCurrent && (
+                        {isCurrent ? (
                           <Typography
                             sx={{
                               fontSize: 10.5,
@@ -243,7 +241,13 @@ const OnboardingRoadmapModal: React.FC = () => {
                           >
                             current
                           </Typography>
-                        )}
+                        ) : lockHint ? (
+                          <Typography
+                            sx={{ fontSize: 10.5, color: c.text.tertiary, whiteSpace: 'nowrap' }}
+                          >
+                            {lockHint}
+                          </Typography>
+                        ) : null}
                       </Box>
                     );
                   })}

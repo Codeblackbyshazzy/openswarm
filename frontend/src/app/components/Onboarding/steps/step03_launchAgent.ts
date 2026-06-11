@@ -1,6 +1,6 @@
 import type { OnboardingStep } from './types';
 import { S } from '../selectors';
-import { hasAnyAgentLaunched, isYoutubeEnabled } from './skipPredicates';
+import { hasAnyAgentLaunched, isYoutubeEnabled, hasModelConnected, hasFreeTrialActive } from './skipPredicates';
 
 // Primary: YouTube summary (needs MCP from step 2). Fallback uses built-in web tools (no MCP).
 const YOUTUBE_PROMPT =
@@ -11,12 +11,15 @@ const FALLBACK_PROMPT =
 export const step03: OnboardingStep = {
   id: 'launch_agent',
   stage: 'get_started',
-  index: 3,
+  // Value first: this leads WHEN there's a way to run (free trial armed, or a
+  // model connected). With nothing to run on, it skips so connect-model leads
+  // instead, which restores today's flow exactly (no trial = no regression).
+  index: 1,
   title: 'Launch your first Agent',
   description: 'Click the chat bubble to fire up a new Agent in a dashboard.',
   videoSrc: './onboarding-videos/v2/03.mp4',
   videoDurationLabel: '0:24',
-  skipIf: hasAnyAgentLaunched,
+  skipIf: (s) => hasAnyAgentLaunched(s) || (!hasModelConnected(s) && !hasFreeTrialActive(s)),
   requiresDashboard: true,
   ops: [
     { kind: 'move_to', target: S.newAgentButton },

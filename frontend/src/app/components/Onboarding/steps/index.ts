@@ -8,10 +8,13 @@ import { step06 } from './step06_agentControlAgents';
 import { step07 } from './step07_installSkill';
 import { step08 } from './step08_makeApp';
 
+// Value-first order: launch an agent (step03) FIRST so a brand-new user sees
+// the product work on the free trial, then connect-your-own-model (step01).
+// Everything else is "learn the features", revealed after the first win.
 export const STEPS: OnboardingStep[] = [
+  step03,
   step01,
   step02,
-  step03,
   step04,
   step05,
   step06,

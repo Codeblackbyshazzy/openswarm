@@ -14,6 +14,7 @@ import { useAppDispatch } from '@/shared/hooks';
 import { useOnboardingProgress } from './hooks/useOnboardingProgress';
 import { clearJustCompleted } from '@/shared/state/onboardingProgressSlice';
 import { STEPS, findStepById } from './steps';
+import { useUnlockedStepIds } from './steps/stepUnlock';
 import { STAGE_LABELS } from './steps/types';
 import { onboardingDirector } from './OnboardingDirector';
 import { report } from './telemetry';
@@ -59,13 +60,26 @@ const OnboardingPanel: React.FC = () => {
   // Cooldown so rapid double-clicks don't fire parallel step starts; each one re-triggers in-flight backend seed/launch calls.
   const lastShowMeClickRef = useRef<number>(0);
 
+  const unlockedIds = useUnlockedStepIds();
   const currentStep = useMemo(() => {
+    // Spotlight only lands on an unlocked, not-yet-done step, so we never tell
+    // the user to "Show me" something they haven't unlocked yet.
     const explicit = progress.currentStepId
       ? findStepById(progress.currentStepId)
       : null;
-    if (explicit && !progress.completedSteps.includes(explicit.id)) return explicit;
-    return STEPS.find((s) => !progress.completedSteps.includes(s.id)) ?? null;
-  }, [progress.currentStepId, progress.completedSteps]);
+    if (
+      explicit &&
+      !progress.completedSteps.includes(explicit.id) &&
+      unlockedIds.has(explicit.id)
+    ) {
+      return explicit;
+    }
+    return (
+      STEPS.find(
+        (s) => !progress.completedSteps.includes(s.id) && unlockedIds.has(s.id),
+      ) ?? null
+    );
+  }, [progress.currentStepId, progress.completedSteps, unlockedIds]);
 
   // Stage name labels the panel; the count + bar stay global so progress never resets between stages.
   const stageOf = currentStep?.stage ?? 'get_started';

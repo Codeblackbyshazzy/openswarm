@@ -232,7 +232,16 @@ const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) =
       .then((r) => {
         if (r.ok) dispatch(fetchSettings());
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        // Arm the zero-config free trial when nothing is connected so a brand-new
+        // user can run an agent immediately. The backend no-ops if a real key or
+        // subscription exists, so this is safe to fire on every launch.
+        fetch(`${API_BASE}/subscription/free-trial/mint`, { method: 'POST' })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => { if (data && data.armed) dispatch(fetchSettings()); })
+          .catch(() => {});
+      });
   }, [dispatch]);
 
   useEffect(() => {
