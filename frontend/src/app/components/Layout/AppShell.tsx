@@ -367,12 +367,12 @@ const AppShell: React.FC = () => {
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: c.bg.page }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', bgcolor: c.bg.secondary }}>
       <Box
         sx={{
           height: 38,
           flexShrink: 0,
-          bgcolor: c.bg.secondary,
+          bgcolor: 'transparent',
           display: 'flex',
           alignItems: 'center',
           position: 'relative',
@@ -1084,7 +1084,19 @@ const AppShell: React.FC = () => {
       </>
       )}
 
-      <Box sx={{ flex: 1, overflow: 'hidden', bgcolor: c.bg.page, position: 'relative' }}>
+      <Box sx={{
+        flex: 1,
+        overflow: 'hidden',
+        bgcolor: c.bg.page,
+        position: 'relative',
+        // Float the content as a rounded inset panel ("column pill"): the chrome
+        // (bg.secondary) frames it, so there are no divider lines, just air + radius.
+        mt: '6px',
+        mr: '6px',
+        mb: '6px',
+        ml: '6px',
+        borderRadius: '14px',
+      }}>
         {/* Hidden (not unmounted) when the dashboard view is active so the persistent Dashboard layered above can take over. */}
         <Box
           sx={{
