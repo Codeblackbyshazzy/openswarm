@@ -23,7 +23,8 @@ import { LayoutGrid } from 'lucide-react';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { Settings as LucideSettings } from 'lucide-react';
 import { Palette } from 'lucide-react';
-import { PanelLeft, ArrowLeft, ArrowRight, Plus } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { AnimatedPanelLeft, AnimatedPlus } from './animatedIcons';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
 import CloseIcon from '@mui/icons-material/Close';
@@ -392,12 +393,10 @@ const AppShell: React.FC = () => {
               color: c.text.tertiary,
               p: 0.5,
               borderRadius: 1,
-              '& svg': { transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)' },
               '&:hover': { color: c.text.secondary, bgcolor: `${c.text.tertiary}14` },
-              '&:hover svg': { transform: 'translateX(-1.5px) scale(1.08)' },
             }}
           >
-            <PanelLeft size={18} />
+            <AnimatedPanelLeft size={18} />
           </IconButton>
         </Tooltip>
         <Tooltip title="Back">
@@ -680,12 +679,10 @@ const AppShell: React.FC = () => {
                     p: 0.25,
                     mr: 0.25,
                     borderRadius: 1,
-                    '& svg': { transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)' },
                     '&:hover': { color: c.accent.primary, bgcolor: `${c.accent.primary}14` },
-                    '&:hover svg': { transform: 'rotate(90deg)' },
                   }}
                 >
-                  <Plus size={15} />
+                  <AnimatedPlus size={15} />
                 </IconButton>
               </Tooltip>
               {dashboardList.length > 0 && (
@@ -939,12 +936,10 @@ const AppShell: React.FC = () => {
                     p: 0.25,
                     mr: 0.25,
                     borderRadius: 1,
-                    '& svg': { transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)' },
                     '&:hover': { color: c.accent.primary, bgcolor: `${c.accent.primary}14` },
-                    '&:hover svg': { transform: 'rotate(90deg)' },
                   }}
                 >
-                  <Plus size={15} />
+                  <AnimatedPlus size={15} />
                 </IconButton>
               </Tooltip>
               {appsList.length > 0 && (
