@@ -2,11 +2,14 @@ import React from 'react';
 import SelectionOverlay from '@/app/components/editor/SelectionOverlay';
 import { ElementSelectionProvider } from '@/app/components/editor/ElementSelectionContext';
 import { useDomElementSelector } from '@/app/components/editor/useDomElementSelector';
+import { useDashboardActive } from '@/shared/hooks/useDashboardActive';
 import { useDashboardController } from './hooks/state/useDashboardController';
 import DashboardCanvas from './canvas/DashboardCanvas';
 
 const DashboardSelectionOverlay: React.FC = () => {
+  const active = useDashboardActive();
   const { overlay, dragRect, dragPreview } = useDomElementSelector();
+  if (!active) return null;
   return <SelectionOverlay overlay={overlay} dragRect={dragRect} dragPreview={dragPreview} />;
 };
 
