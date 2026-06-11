@@ -159,28 +159,15 @@ export function useDashboardController(dashboardId: string, isActive: boolean) {
     setSearchPaletteOpen,
   });
 
-  // Starter-prompt preview: HOVER opens the composer with the prompt typed in
-  // (translucent, unsent); leaving closes it again; CLICK locks it open so the
-  // user can move to the send button without it vanishing. Then they hit send.
+  // Starter-prompt click: opens the composer with the prompt typed in (translucent,
+  // unsent), so the user reviews and hits send. Cleared when the composer closes.
   const [toolbarPrefill, setToolbarPrefill] = useState<string | undefined>(undefined);
-  const starterLockedRef = useRef(false);
-  const handleStarter = useCallback((action: 'hover' | 'leave' | 'commit', prompt?: string) => {
-    if (action === 'hover' && prompt) {
-      setToolbarPrefill(prompt);
-      setToolbarOpen(true);
-    } else if (action === 'commit' && prompt) {
-      starterLockedRef.current = true;
-      setToolbarPrefill(prompt);
-      setToolbarOpen(true);
-    } else if (action === 'leave' && !starterLockedRef.current) {
-      setToolbarOpen(false);
-    }
+  const handleStarter = useCallback((prompt: string) => {
+    setToolbarPrefill(prompt);
+    setToolbarOpen(true);
   }, [setToolbarOpen]);
   useEffect(() => {
-    if (!toolbarOpen) {
-      starterLockedRef.current = false;
-      if (toolbarPrefill) setToolbarPrefill(undefined);
-    }
+    if (!toolbarOpen && toolbarPrefill) setToolbarPrefill(undefined);
   }, [toolbarOpen, toolbarPrefill]);
 
   useDashboardClipboard({

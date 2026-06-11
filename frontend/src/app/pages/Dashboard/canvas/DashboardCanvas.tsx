@@ -73,7 +73,7 @@ interface DashboardCanvasProps {
   onNewAgent: () => void;
   onToolbarCancel: () => void;
   onToolbarSend: (...args: any[]) => void;
-  onStarter: (action: 'hover' | 'leave' | 'commit', prompt?: string) => void;
+  onStarter: (prompt: string) => void;
   toolbarPrefill?: string;
   onAddView: (outputId: string) => void;
   onHistoryResume: (sessionId: string) => void;
