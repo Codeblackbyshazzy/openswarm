@@ -77,31 +77,14 @@ const AppShell: React.FC = () => {
     };
     return fn as typeof navigateRaw;
   }, [navigateRaw]);
-  // Rapid app-list clicks each mount a fresh ViewEditor (its WebGL placeholder + preview webview); churning heavy WebGL apps faster than the GPU recycles surfaces kills the GPU/host renderer and takes the whole app down. Open the first click at once (idle = no click in 400ms), then during a burst fire NOTHING until the clicks stop, so a spam-burst lands on at most two apps instead of a dozen.
-  const lastAppClickAt = useRef(0);
-  const pendingAppNav = useRef<string | null>(null);
-  const appNavTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const APP_NAV_IDLE_MS = 400;
-  const APP_NAV_TRAILING_MS = 320;
+  // Navigate to an app instantly on click. The old debounce here swallowed clicks the
+  // user could see (felt broken) and never actually fixed the crash, since letting each
+  // app load defeats the debounce anyway. The real GPU-churn source (the WebGL loading
+  // placeholder) is now CSS, and the 250ms preview gate still skips webviews for apps
+  // switched-past too fast, so instant navigation is safe.
   const navigateToApp = useCallback((id: string) => {
-    const now = Date.now();
-    const idle = now - lastAppClickAt.current >= APP_NAV_IDLE_MS;
-    lastAppClickAt.current = now;
-    if (appNavTimer.current) clearTimeout(appNavTimer.current);
-    if (idle) {
-      pendingAppNav.current = null;
-      navigate(`/apps/${id}`);
-      return;
-    }
-    pendingAppNav.current = id;
-    appNavTimer.current = setTimeout(() => {
-      appNavTimer.current = null;
-      const target = pendingAppNav.current;
-      pendingAppNav.current = null;
-      if (target) navigate(`/apps/${target}`);
-    }, APP_NAV_TRAILING_MS);
+    navigate(`/apps/${id}`);
   }, [navigate]);
-  useEffect(() => () => { if (appNavTimer.current) clearTimeout(appNavTimer.current); }, []);
   const location = useLocation();
   // React Router (HashRouter) stores a monotonic index in history state. location
   // re-renders on every nav, by which point window.history.state.idx is updated.

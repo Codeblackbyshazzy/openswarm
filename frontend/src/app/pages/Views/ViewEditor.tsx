@@ -906,7 +906,7 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
     return () => window.clearTimeout(t);
   }, [captureAppThumbnail]);
 
-  // Keep PixelBlast mounted across transient gate flips; unmounting rebuilds the GL context and the user reads it as the animation restarting.
+  // Keep the placeholder mounted across transient gate flips so the loading animation doesn't flicker/restart.
   const placeholderVisible = showInstallPlaceholder || !iframePainted;
   const [placeholderMounted, setPlaceholderMounted] = useState(placeholderVisible);
   useEffect(() => {
@@ -1261,7 +1261,7 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
                   onContentLoad={onIframeContentLoad}
                 />
               )}
-              {/* previewSettled gate: PixelBlast spins up a WebGL2 context, and spinning one up per fast-switched-past app churns GL contexts faster than the renderer can recycle them, which crashes the host renderer (and the whole app) under app-list spam. Same 250ms gate as the webview. */}
+              {/* previewSettled gate: skip mounting the preview webview for apps the user switches past faster than 250ms, so blowing through the app list never spawns a pile of webview renderers. (The loading placeholder is CSS now, so it no longer churns GL contexts.) */}
               {previewSettled && placeholderMounted && (
                 <Box
                   sx={{
