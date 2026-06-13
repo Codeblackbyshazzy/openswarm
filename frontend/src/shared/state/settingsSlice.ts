@@ -105,6 +105,11 @@ interface SettingsState {
   draft: AppSettings | null;
   /** Tab the user was on when they closed the modal with unsaved edits. */
   draftTab: string | null;
+  /** Newest settings-write requestId. A stale GET that resolves after a newer
+   *  fetch/PUT is dropped, so a slow boot fetch can't clobber the free-trial arm. */
+  latestWriteId: string | null;
+  /** False until the boot free-trial mint attempt settles; gates the no-model banner. */
+  freeTrialArmSettled: boolean;
 }
 
 const initialState: SettingsState = {
@@ -132,6 +137,8 @@ const initialState: SettingsState = {
   initialTab: null,
   draft: null,
   draftTab: null,
+  latestWriteId: null,
+  freeTrialArmSettled: false,
 };
 
 export const fetchSettings = createAsyncThunk('settings/fetch', async () => {
@@ -249,15 +256,24 @@ const settingsSlice = createSlice({
       state.draft = null;
       state.draftTab = null;
     },
+    /** Boot sets this once the free-trial mint attempt returns (armed or not). Until then
+     *  we hold the "No AI model connected" banner so a new user never sees it flash. */
+    markFreeTrialArmSettled(state) {
+      state.freeTrialArmSettled = true;
+    },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchSettings.pending, (state) => {
+      .addCase(fetchSettings.pending, (state, action) => {
         state.loading = true;
+        state.latestWriteId = action.meta.requestId;
       })
       .addCase(fetchSettings.fulfilled, (state, action) => {
         state.loading = false;
         state.loaded = true;
+        // Drop a stale response: on boot three fetches race (initial, sub-sync, free-trial
+        // mint); if the pre-mint one resolves last it would wipe the armed trial. Newest wins.
+        if (state.latestWriteId && action.meta.requestId !== state.latestWriteId) return;
         // Skip ref-assignment when byte-identical; keeps background refetch polls from re-firing every effect.
         const next = JSON.stringify(action.payload);
         const prev = JSON.stringify(state.data);
@@ -270,12 +286,15 @@ const settingsSlice = createSlice({
         state.loaded = true;
       })
       .addCase(updateSettings.fulfilled, (state, action) => {
+        // A user save is authoritative; claim newest so an in-flight GET can't overwrite it.
+        state.latestWriteId = action.meta.requestId;
         state.data = action.payload;
         // Save consumes the draft so reopening doesn't restore stale edits.
         state.draft = null;
         state.draftTab = null;
       })
       .addCase(resetSystemPrompt.fulfilled, (state, action) => {
+        state.latestWriteId = action.meta.requestId;
         state.data = action.payload;
         state.draft = null;
         state.draftTab = null;
@@ -283,5 +302,5 @@ const settingsSlice = createSlice({
   },
 });
 
-export const { openSettingsModal, closeSettingsModal, setDraft, clearDraft } = settingsSlice.actions;
+export const { openSettingsModal, closeSettingsModal, setDraft, clearDraft, markFreeTrialArmSettled } = settingsSlice.actions;
 export default settingsSlice.reducer;

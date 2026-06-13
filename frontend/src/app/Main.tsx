@@ -8,7 +8,7 @@ import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import { store } from '../shared/state/store';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
-import { fetchSettings, updateSettings } from '@/shared/state/settingsSlice';
+import { fetchSettings, updateSettings, markFreeTrialArmSettled } from '@/shared/state/settingsSlice';
 import { fetchModels } from '@/shared/state/modelsSlice';
 import { API_BASE } from '@/shared/config';
 import {
@@ -233,7 +233,8 @@ const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) =
         fetch(`${API_BASE}/subscription/free-trial/mint`, { method: 'POST' })
           .then((r) => (r.ok ? r.json() : null))
           .then((data) => { if (data && data.armed) dispatch(fetchSettings()); })
-          .catch(() => {});
+          .catch(() => {})
+          .finally(() => { dispatch(markFreeTrialArmSettled()); });
       });
   }, [dispatch]);
 

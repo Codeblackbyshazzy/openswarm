@@ -151,8 +151,10 @@ const AppShell: React.FC = () => {
     const d = s.settings.data as any;
     return !!(d && d.connection_mode === 'free-trial' && d.free_trial_token);
   });
-  // Wait for initial fetch to land before flashing the banner.
-  const showWarningBanner = !isOnline || (modelsLoaded && !hasModelConnected && !freeTrialActive);
+  // Hold the banner until the boot free-trial mint settles, else a brand-new user sees it
+  // flash red for the ~1-3s the trial takes to arm. (Offline shows immediately, it's its own signal.)
+  const freeTrialArmSettled = useAppSelector((s) => s.settings.freeTrialArmSettled);
+  const showWarningBanner = !isOnline || (modelsLoaded && freeTrialArmSettled && !hasModelConnected && !freeTrialActive);
 
   const bannerDismissedForVersion = availableVersion != null && dismissedVersion === availableVersion;
   const isUpdateActionable = updateStatus === 'available' || updateStatus === 'downloaded' || updateStatus === 'downloading';
