@@ -1650,6 +1650,11 @@ class AgentManager:
                     "ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4-5-20251001",
                     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5-20251001",
                 }
+                # Free lane meters one run per agent session: tag every call to the cloud with the
+                # session id so 1 task = 1 run (without it the cloud falls back to token-coarse runs).
+                # The base goes straight to the cloud here (no 9Router), so the header rides through.
+                if getattr(global_settings, "connection_mode", "own_key") == "free-trial":
+                    options_kwargs["env"]["ANTHROPIC_CUSTOM_HEADERS"] = f"X-Openswarm-Task-Id: {session.id}"
                 logger.info(f"[MCP-DEBUG] Using OpenSwarm cloud proxy at {proxy_url}")
             elif api_type == "anthropic" and not resolved_is_9router and global_settings.anthropic_api_key:
                 options_kwargs["env"] = {"ANTHROPIC_API_KEY": global_settings.anthropic_api_key}
