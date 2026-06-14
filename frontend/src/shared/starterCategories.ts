@@ -33,7 +33,7 @@ export const STARTER_CATEGORIES: StarterCategory[] = [
       'Build a working expense tracker app with live charts',
       'Make a Snake game I can actually play right now',
       'Build a habit tracker that remembers my streaks between visits',
-      'Create a little 3D block world I can walk around in',
+      'Build a mini Minecraft I can walk around in',
     ],
   },
   {
