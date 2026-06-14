@@ -4,6 +4,7 @@ headers, and only ever writes into a throwaway sandbox dir (never a real store).
 pack re-checks that no secret slipped past redaction before writing a byte."""
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
@@ -25,6 +26,17 @@ class BundleError(Exception):
     """Bundle is malformed or unsafe. Message is safe to show the user."""
 
 
+def _content_digest(entries: dict[str, bytes]) -> str:
+    """Order-independent sha256 over every non-manifest entry (path + bytes)."""
+    h = hashlib.sha256()
+    for path in sorted(entries):
+        h.update(path.encode("utf-8"))
+        h.update(b"\0")
+        h.update(entries[path])
+        h.update(b"\0")
+    return h.hexdigest()
+
+
 def pack(manifest: dict, payloads: dict[str, dict], files: dict[str, bytes]) -> bytes:
     """payloads: bundle_id -> JSON payload (-> entities/<bid>/payload.json).
     files: full zip path -> bytes (e.g. entities/<bid>/files/<rel>)."""
@@ -34,14 +46,44 @@ def pack(manifest: dict, payloads: dict[str, dict], files: dict[str, bytes]) -> 
             raise BundleError(
                 f"refusing to export: secret-shaped field(s) in {bid}: {leaked[:3]}"
             )
+    entries: dict[str, bytes] = {}
+    for bid, payload in payloads.items():
+        entries[f"entities/{bid}/payload.json"] = json.dumps(payload, indent=2).encode("utf-8")
+    for path, data in files.items():
+        entries[path] = data
+    manifest = {**manifest, "checksum": _content_digest(entries)}
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr(MANIFEST_NAME, json.dumps(manifest, indent=2))
-        for bid, payload in sorted(payloads.items()):
-            zf.writestr(f"entities/{bid}/payload.json", json.dumps(payload, indent=2))
-        for path, data in sorted(files.items()):
-            zf.writestr(path, data)
+        for path in sorted(entries):
+            zf.writestr(path, entries[path])
     return buf.getvalue()
+
+
+def _sandbox_entries(sandbox: str) -> dict[str, bytes]:
+    """Every file under the sandbox except the manifest, keyed by forward-slash
+    relpath so it matches the keys pack() hashed (cross-platform)."""
+    out: dict[str, bytes] = {}
+    root = os.path.realpath(sandbox)
+    for base, _dirs, fnames in os.walk(root):
+        for fn in fnames:
+            full = os.path.join(base, fn)
+            rel = os.path.relpath(full, root).replace(os.sep, "/")
+            if rel == MANIFEST_NAME:
+                continue
+            with open(full, "rb") as f:
+                out[rel] = f.read()
+    return out
+
+
+def verify_checksum(sandbox: str, manifest: dict) -> None:
+    """Reject an archive whose contents don't match the checksum the author
+    recorded (corruption or tampering). Older bundles without one are allowed."""
+    expected = manifest.get("checksum")
+    if not expected:
+        return
+    if _content_digest(_sandbox_entries(sandbox)) != expected:
+        raise BundleError("this .swarm looks corrupted or was modified")
 
 
 def _safe_member_path(name: str, sandbox: str) -> str:

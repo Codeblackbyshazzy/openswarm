@@ -76,6 +76,17 @@ class SkillExportable:
         return slug
 
 
+    @classmethod
+    def rollback(cls, local_id: str) -> None:
+        fpath = os.path.join(store.SKILLS_DIR, f"{local_id}.md")
+        if os.path.exists(fpath):
+            os.remove(fpath)
+        index = store._load_index()
+        if local_id in index:
+            index.pop(local_id, None)
+            store._save_index(index)
+
+
 def _slug_taken(slug: str) -> bool:
     return slug in store._load_index() or os.path.isfile(
         os.path.join(store.SKILLS_DIR, f"{slug}.md")

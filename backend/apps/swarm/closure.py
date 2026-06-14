@@ -28,7 +28,7 @@ from .models import (
 )
 from .redact import scrub_payload
 from .registry import IMPORT_ORDER, get_exportable
-from .ziputil import MANIFEST_NAME, BundleError, has_member, is_zip, pack, read_manifest, unpack
+from .ziputil import MANIFEST_NAME, BundleError, has_member, is_zip, pack, read_manifest, unpack, verify_checksum
 
 
 def _now() -> str:
@@ -176,7 +176,9 @@ def stage_upload(raw: bytes, filename: str) -> tuple[str, Manifest, list[str]]:
         if has_member(raw, MANIFEST_NAME):
             sandbox = unpack(raw)
             try:
-                manifest = Manifest(**read_manifest(sandbox))
+                raw_manifest = read_manifest(sandbox)
+                verify_checksum(sandbox, raw_manifest)
+                manifest = Manifest(**raw_manifest)
             except BundleError:
                 shutil.rmtree(sandbox, ignore_errors=True)
                 raise
@@ -325,13 +327,29 @@ def _topo_order(manifest: Manifest) -> list[EntityRef]:
 def commit(sandbox: str, manifest: Manifest, accept_requirements: list[str]):
     remap = RemapTable()
     created: dict[str, list[str]] = {}
-    for e in _topo_order(manifest):
-        cls = get_exportable(e.type)
-        if cls is None:
-            raise BundleError(f"can't import a {e.type.value} yet")
-        new_id = cls.import_(_read_payload(sandbox, e), _read_files(sandbox, e), remap)
-        remap.assign(e.bundle_id, new_id)
-        created.setdefault(e.type.value, []).append(new_id)
+    trail: list[tuple] = []  # (impl_cls, new_local_id) for rollback, newest last
+    try:
+        for e in _topo_order(manifest):
+            cls = get_exportable(e.type)
+            if cls is None:
+                raise BundleError(f"can't import a {e.type.value} yet")
+            new_id = cls.import_(_read_payload(sandbox, e), _read_files(sandbox, e), remap)
+            remap.assign(e.bundle_id, new_id)
+            created.setdefault(e.type.value, []).append(new_id)
+            trail.append((cls, new_id))
+    except Exception as ex:
+        # All-or-nothing: undo whatever already landed so a failed import never
+        # leaves half a dashboard behind.
+        for cls, nid in reversed(trail):
+            rb = getattr(cls, "rollback", None)
+            if rb:
+                try:
+                    rb(nid)
+                except Exception:
+                    pass
+        if isinstance(ex, BundleError):
+            raise
+        raise BundleError("import failed and was rolled back")
     accepted = set(accept_requirements)
     unresolved = [r for r in manifest.requirements if r.key not in accepted]
     return manifest.root.type, remap.local(manifest.root.bundle_id), created, unresolved

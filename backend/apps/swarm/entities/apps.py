@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from backend.apps.outputs.models import Output
 from backend.apps.outputs.workspace_io import _WALK_SKIP_DIRS, _save, load_output
-from backend.config.paths import OUTPUTS_WORKSPACE_DIR
+from backend.config.paths import OUTPUTS_DIR, OUTPUTS_WORKSPACE_DIR
 
 from ..exportable import DepRef, ExportContext, RemapTable
 from ..models import EntityType, Requirement
@@ -104,6 +104,15 @@ class AppExportable:
         )
         _save(o)
         return o.id
+
+    @classmethod
+    def rollback(cls, local_id: str) -> None:
+        o = load_output(local_id)
+        if o and o.workspace_id:
+            shutil.rmtree(os.path.join(OUTPUTS_WORKSPACE_DIR, o.workspace_id), ignore_errors=True)
+        p = os.path.join(OUTPUTS_DIR, f"{local_id}.json")
+        if os.path.exists(p):
+            os.remove(p)
 
 
 def _safe_join(folder: str, rel: str) -> str:

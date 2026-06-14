@@ -217,6 +217,56 @@ def test_dashboard_import_remaps_to_fresh_local_ids(monkeypatch):
     assert L["expanded_session_ids"] == ["newsess"]  # the dangling ref is dropped
 
 
+def test_checksum_rejects_tampering(skill_store):
+    _make_skill(skill_store, "tmp", "Tmp", "# original")
+    raw, _ = closure.build_bundle(EntityType.skill, "tmp")
+    # Rebuild the zip with the same manifest (old checksum) but an edited payload.
+    src = zipfile.ZipFile(io.BytesIO(raw))
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as out:
+        for n in src.namelist():
+            data = src.read(n)
+            if n.endswith("payload.json"):
+                d = json.loads(data)
+                d["content"] = "TAMPERED"
+                data = json.dumps(d, indent=2).encode("utf-8")
+            out.writestr(n, data)
+    with pytest.raises(BundleError):
+        closure.stage_upload(buf.getvalue(), "tmp.swarm")
+
+
+def test_skill_rollback_removes_it(skill_store):
+    from backend.apps.swarm.entities.skills import SkillExportable
+    from backend.apps.swarm.exportable import RemapTable
+    sid = SkillExportable.import_({"slug": "rbk", "name": "Rbk", "content": "x"}, {}, RemapTable())
+    assert (skill_store / f"{sid}.md").exists()
+    SkillExportable.rollback(sid)
+    assert not (skill_store / f"{sid}.md").exists()
+    assert sid not in store._load_index()
+
+
+def test_commit_rolls_back_created_on_failure(skill_store, tmp_path):
+    # A bundle of [skill, workflow]: skill imports first, then the workflow import
+    # fails (no workflow store on this branch), so the skill must be rolled back.
+    from backend.apps.swarm.models import BundlePreview, EntityRef, Manifest
+
+    sb = tmp_path / "sb"
+    skill_ref = EntityRef(type=EntityType.skill, bundle_id="s1", name="S", path="entities/s1")
+    wf_ref = EntityRef(type=EntityType.workflow, bundle_id="w1", name="W", path="entities/w1")
+    for ref, payload in ((skill_ref, {"slug": "rollme", "name": "Rollme", "content": "hi"}), (wf_ref, {"title": "W"})):
+        d = sb / "entities" / ref.bundle_id
+        d.mkdir(parents=True)
+        (d / "payload.json").write_text(json.dumps(payload), encoding="utf-8")
+    manifest = Manifest(
+        bundle_id="b", root=skill_ref, entities=[skill_ref, wf_ref],
+        preview=BundlePreview(root_type=EntityType.skill, root_name="S"),
+    )
+    with pytest.raises(BundleError):
+        closure.commit(str(sb), manifest, [])
+    assert "rollme" not in store._load_index()
+    assert not (skill_store / "rollme.md").exists()
+
+
 def _zip_with(name, data=b"x"):
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:

@@ -103,6 +103,15 @@ class WorkflowExportable:
         store.save_workflow(wf)
         return wf.id
 
+    @classmethod
+    def rollback(cls, local_id: str) -> None:
+        store = _store()
+        if store is not None:
+            try:
+                store.delete_workflow(local_id)
+            except Exception:
+                pass
+
 
 def _store():
     try:

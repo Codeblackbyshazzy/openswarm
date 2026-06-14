@@ -105,6 +105,15 @@ class DashboardExportable:
         _retag_sessions(cards.keys(), new_did)
         return new_did
 
+    @classmethod
+    def rollback(cls, local_id: str) -> None:
+        import os
+        d = _dash_dir()
+        if d:
+            p = os.path.join(d, f"{local_id}.json")
+            if os.path.exists(p):
+                os.remove(p)
+
 
 def _dash_dir() -> str | None:
     try:
@@ -130,9 +139,13 @@ def _write(did: str, doc: dict) -> None:
 
 
 def _retag_sessions(session_ids, dashboard_id: str) -> None:
+    # Best-effort: a hiccup here must not orphan the just-written dashboard.
     from backend.apps.agents.manager.session.session_store import _load_session_data, _save_session
     for sid in session_ids:
-        d = _load_session_data(sid)
-        if d is not None:
-            d["dashboard_id"] = dashboard_id
-            _save_session(sid, d)
+        try:
+            d = _load_session_data(sid)
+            if d is not None:
+                d["dashboard_id"] = dashboard_id
+                _save_session(sid, d)
+        except Exception:
+            pass

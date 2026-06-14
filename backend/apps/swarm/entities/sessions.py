@@ -93,3 +93,8 @@ class SessionExportable:
         }
         _save_session(sid, doc)
         return sid
+
+    @classmethod
+    def rollback(cls, local_id: str) -> None:
+        from backend.apps.agents.manager.session.session_store import _delete_session_file
+        _delete_session_file(local_id)
