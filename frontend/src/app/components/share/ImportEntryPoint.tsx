@@ -1,36 +1,108 @@
-// The one global import affordance: a hidden file picker plus a window-wide
-// drag-and-drop overlay. Mount once near the app root. A sidebar/page button
-// opens the picker by dispatching IMPORT_OPEN_EVENT, so there's a single owner
-// of the ImportModal (no duplicate modals).
+// The one global import affordance. Drop a .swarm anywhere (or pick it): a
+// GPU-safe pixel "digest" flash plays where you dropped it WHILE the preflight
+// runs underneath, then it resolves straight into the import for safe bundles or
+// a short confirm for ones that carry code/actions. Mount once near the app root.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
 import Fade from '@mui/material/Fade';
 import Typography from '@mui/material/Typography';
+import Snackbar from '@mui/material/Snackbar';
+import Alert from '@mui/material/Alert';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import { useNavigate } from 'react-router-dom';
 
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 
+import ImportDigest, { DigestHandle } from './ImportDigest';
 import ImportModal from './ImportModal';
+import { importCommit, importPreflight } from './shareApi';
+import { ImportPreflight } from './shareTypes';
 
 export const IMPORT_OPEN_EVENT = 'openswarm:import-open';
-
 const ACCEPT = '.swarm,.md,.zip';
+const DIGEST_MS = 700;
+
+const DEST: Record<string, (id: string) => string | null> = {
+  app: (id) => `/apps/${id}`,
+  dashboard: (id) => `/dashboard/${id}`,
+};
 
 function looksImportable(name: string): boolean {
   const n = name.toLowerCase();
   return n.endsWith('.swarm') || n.endsWith('.md') || n.endsWith('.zip');
 }
 
+// A bundle needs a confirm only if it can run code (an app) or wants actions
+// connected; everything else is inert data and imports straight away.
+function needsConfirm(pf: ImportPreflight): boolean {
+  const s = pf.summary;
+  const hasApp = s.root.type === 'app' || s.includes.some((i) => i.type === 'app');
+  const hasAction = s.requirements.some((r) => r.kind === 'mcp_action');
+  const risky = !!pf.review && pf.review.verdict !== 'clean';
+  return hasApp || hasAction || risky;
+}
+
+const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 const ImportEntryPoint: React.FC = () => {
   const c = useClaudeTokens();
+  const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const [pending, setPending] = useState<File | null>(null);
-  const [dragging, setDragging] = useState(false);
+  const digestRef = useRef<DigestHandle | null>(null);
   const depth = useRef(0);
+  const [dragging, setDragging] = useState(false);
+  const [confirm, setConfirm] = useState<ImportPreflight | null>(null);
+  const [committing, setCommitting] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; sev: 'success' | 'error' } | null>(null);
+  const confirmRef = useRef(false); // ignore new drops while a confirm is up
 
-  const take = useCallback((f: File | null) => {
-    if (f && looksImportable(f.name)) setPending(f);
-  }, []);
+  const finish = useCallback(
+    (rootType: string, rootId: string, name: string) => {
+      setToast({ msg: `Added ${name}`, sev: 'success' });
+      const to = DEST[rootType]?.(rootId);
+      if (to) navigate(to);
+    },
+    [navigate],
+  );
+
+  const commitAndFinish = useCallback(
+    async (pf: ImportPreflight) => {
+      setCommitting(true);
+      try {
+        const res = await importCommit(pf.staging_token);
+        finish(res.root_type, res.root_id, pf.summary.root.name);
+        setConfirm(null);
+        confirmRef.current = false;
+      } catch (e: any) {
+        setToast({ msg: e?.message || "We couldn't finish the import.", sev: 'error' });
+      } finally {
+        setCommitting(false);
+      }
+    },
+    [finish],
+  );
+
+  const handleFile = useCallback(
+    async (file: File | null, x: number, y: number) => {
+      if (!file || !looksImportable(file.name) || confirmRef.current) return;
+      // The digest doubles as the spam guard: it refuses to start while busy.
+      if (!digestRef.current?.play(x, y)) return;
+      let pf: ImportPreflight;
+      try {
+        [, pf] = await Promise.all([delay(DIGEST_MS), importPreflight(file)]);
+      } catch (e: any) {
+        setToast({ msg: e?.message || "We couldn't read this file.", sev: 'error' });
+        return;
+      }
+      if (needsConfirm(pf)) {
+        confirmRef.current = true;
+        setConfirm(pf);
+      } else {
+        commitAndFinish(pf);
+      }
+    },
+    [commitAndFinish],
+  );
 
   useEffect(() => {
     const openPicker = () => inputRef.current?.click();
@@ -40,9 +112,7 @@ const ImportEntryPoint: React.FC = () => {
 
   useEffect(() => {
     const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types || []).includes('Files');
-    // Webviews are a separate compositor layer; ignore drops landing on one.
     const onWebview = (t: EventTarget | null) => (t as HTMLElement)?.tagName === 'WEBVIEW';
-
     const onEnter = (e: DragEvent) => {
       if (!hasFiles(e) || onWebview(e.target)) return;
       depth.current += 1;
@@ -62,10 +132,9 @@ const ImportEntryPoint: React.FC = () => {
       const f = e.dataTransfer?.files?.[0];
       if (f) {
         e.preventDefault();
-        take(f);
+        void handleFile(f, e.clientX, e.clientY);
       }
     };
-
     window.addEventListener('dragenter', onEnter);
     window.addEventListener('dragleave', onLeave);
     window.addEventListener('dragover', onOver);
@@ -76,7 +145,7 @@ const ImportEntryPoint: React.FC = () => {
       window.removeEventListener('dragover', onOver);
       window.removeEventListener('drop', onDrop);
     };
-  }, [take]);
+  }, [handleFile]);
 
   return (
     <>
@@ -86,10 +155,11 @@ const ImportEntryPoint: React.FC = () => {
         accept={ACCEPT}
         style={{ display: 'none' }}
         onChange={(e) => {
-          take(e.target.files?.[0] || null);
+          void handleFile(e.target.files?.[0] || null, window.innerWidth / 2, window.innerHeight / 2);
           e.target.value = '';
         }}
       />
+      <ImportDigest ref={digestRef} color={c.accent.primary} />
       <Fade in={dragging} timeout={{ enter: 200, exit: 220 }} unmountOnExit>
         <Box
           sx={{
@@ -108,11 +178,35 @@ const ImportEntryPoint: React.FC = () => {
         >
           <FileDownloadIcon sx={{ fontSize: 40, color: c.accent.primary }} />
           <Typography sx={{ fontSize: '1rem', fontWeight: 600, color: c.text.primary }}>
-            Drop to import into OpenSwarm
+            Drop to add to OpenSwarm
           </Typography>
         </Box>
       </Fade>
-      <ImportModal file={pending} open={!!pending} onClose={() => setPending(null)} />
+      <ImportModal
+        preflight={confirm}
+        open={!!confirm}
+        committing={committing}
+        onConfirm={() => confirm && commitAndFinish(confirm)}
+        onClose={() => {
+          setConfirm(null);
+          confirmRef.current = false;
+        }}
+      />
+      <Snackbar
+        open={!!toast}
+        autoHideDuration={3500}
+        onClose={() => setToast(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity={toast?.sev || 'success'}
+          variant="outlined"
+          onClose={() => setToast(null)}
+          sx={{ bgcolor: c.bg.surface, color: c.text.primary, border: `1px solid ${c.border.medium}` }}
+        >
+          {toast?.msg}
+        </Alert>
+      </Snackbar>
     </>
   );
 };
