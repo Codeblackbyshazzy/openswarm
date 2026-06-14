@@ -46,6 +46,7 @@ import { fetchModes } from '@/shared/state/modesSlice';
 import { createSessionWs, acquireSessionWs, releaseSessionWs } from '@/shared/ws/WebSocketManager';
 import StreamingBubble from './bubbles/StreamingBubble';
 import WelcomeQuickReplies from './WelcomeQuickReplies';
+import { useWelcomeGreeting } from './useWelcomeGreeting';
 import MessageBubble from './bubbles/MessageBubble';
 import { estimateRenderedTextHeight, RECHECK_VISIBILITY_EVENT } from './bubbles/markdownMeasure';
 import CompactionMarker from './bubbles/CompactionMarker';
@@ -326,6 +327,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
 
   const isDraft = session?.status === 'draft';
+  const { greetingDone: welcomeGreetingDone } = useWelcomeGreeting(session, isDraft);
 
   useEffect(() => {
     if (!id || isDraft) return;
@@ -1527,15 +1529,6 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
             }}
           >
             <Box>
-            {/* First-run welcome: the greeting streams in, the chips pop in; vanishes the
-                moment a user message exists (i.e. once they answer). Pure UI, no run. */}
-            {session.is_welcome_draft && isDraft && !session.messages.some((m) => m.role === 'user') && (
-              <WelcomeQuickReplies
-                c={c}
-                onPick={(p) => handleSend(p)}
-                onPickBuilder={(p) => chatInputRef.current?.setContent(p)}
-              />
-            )}
             {(session.mcp_suggestions && session.mcp_suggestions.length > 0) && (
               <Box sx={{
                 mt: 1,
@@ -1828,6 +1821,15 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                   onStreamGrew={stickToBottomIfNeeded}
                 />
               </Box>
+            )}
+            {/* First-run welcome chips: sit UNDER the streamed greeting, appear once it finishes,
+                vanish the moment the user answers. The greeting itself is a real assistant bubble. */}
+            {session.is_welcome_draft && isDraft && welcomeGreetingDone && !session.messages.some((m) => m.role === 'user') && (
+              <WelcomeQuickReplies
+                c={c}
+                onPick={(p) => handleSend(p)}
+                onPickBuilder={(p) => chatInputRef.current?.setContent(p)}
+              />
             )}
             {(preSendActivityLabel || awaitingResponse || (session.status === 'running' && !streamingMessageId)) && (
               <Box sx={{ overflowAnchor: 'none' }}>
