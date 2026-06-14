@@ -273,19 +273,31 @@ def _warm_cache_dir() -> str:
     return os.path.join(base, _warm_cache_digest())
 
 
+def _warm_cache_is_complete(cache_modules: str) -> bool:
+    """A populated node_modules/ dir is not proof of a *finished* install.
+    npm links package bins (node_modules/.bin/*) in the final phase, so an
+    install killed partway (e.g. Electron quit mid-warm) leaves the package
+    trees on disk but no .bin/. The old `os.path.isdir(node_modules)` check
+    then trusted that half-tree forever, every app symlinked to it, and
+    `npm run dev` died with `vite: command not found`. Require the one bin
+    every webapp-template app actually launches with so a partial cache is
+    treated as not-ready and repopulated instead of cached as good."""
+    return os.path.exists(os.path.join(cache_modules, ".bin", "vite"))
+
+
 def _ensure_warm_cache() -> str | None:
-    """Populate the warm-cache node_modules if missing. Returns the
-    absolute path to the populated `node_modules` directory, or None on
-    failure. Thread-safe; concurrent callers block on a single install
-    instead of racing. Idempotent and fast after the first call."""
+    """Populate the warm-cache node_modules if missing or incomplete.
+    Returns the absolute path to the populated `node_modules` directory, or
+    None on failure. Thread-safe; concurrent callers block on a single
+    install instead of racing. Idempotent and fast after the first call."""
     cache_dir = _warm_cache_dir()
     cache_modules = os.path.join(cache_dir, "node_modules")
 
-    if os.path.isdir(cache_modules):
+    if _warm_cache_is_complete(cache_modules):
         return cache_modules
 
     with _warm_cache_lock:
-        if os.path.isdir(cache_modules):
+        if _warm_cache_is_complete(cache_modules):
             return cache_modules
         # Fast path: pre-built archive shipped inside the release. The
         # build script generates this so users hitting OpenSwarm for the

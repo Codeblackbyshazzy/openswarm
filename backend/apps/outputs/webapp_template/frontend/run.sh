@@ -43,8 +43,13 @@ fi
 # to vite. Only run npm install when node_modules is genuinely missing
 # or empty — e.g. a workspace seeded before the warm-cache existed, or
 # the user's cache was cleared.
-if [ -d node_modules ] && [ -n "$(ls -A node_modules 2>/dev/null)" ]; then
-    echo "Dependencies already present — skipping install."
+# A non-empty node_modules is NOT proof of a finished install. 
+# non-empty -> skip" check then trusted that, and `npm run dev` died with
+# `vite: command not found`. Gate on the bin we actually launch with so a
+# broken/partial tree self-heals via install instead of being skipped.
+#So thats why i  explicitly have "/.bin/vite"
+if [ -e node_modules/.bin/vite ]; then
+    echo "Dependencies already present - skipping install."
 else
     echo "Installing dependencies..."
     "$NPM" install --prefer-offline --no-audit --no-fund
