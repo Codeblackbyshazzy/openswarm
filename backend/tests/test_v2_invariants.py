@@ -514,8 +514,6 @@ def test_resolve_sdk_gemini_prefers_antigravity_over_api_key():
     with patch.object(registry, "_antigravity_connected", return_value=True):
         # flash IS AG-serveable -> AG wins over the key
         assert registry.resolve_model_id_for_sdk("gemini-3-flash", s) == "ag/gemini-3-flash"
-        # pro is NOT AG-serveable (404/400 on AG) -> falls back to the key
-        assert registry.resolve_model_id_for_sdk("gemini-3.1-pro", s) == "gemini/gemini-3.1-pro-preview"
     with patch.object(registry, "_antigravity_connected", return_value=False):
         # AG not connected -> key
         assert registry.resolve_model_id_for_sdk("gemini-3-flash", s) == "gemini/gemini-3-flash-preview"
@@ -523,6 +521,20 @@ def test_resolve_sdk_gemini_prefers_antigravity_over_api_key():
     s2 = AppSettings()
     with patch.object(registry, "_antigravity_connected", return_value=False):
         assert registry.resolve_model_id_for_sdk("gemini-3-flash", s2) == "gc/gemini-3-flash-preview"
+
+
+def test_banned_models_not_offered():
+    """Claude Fable (banned) and Gemini 3.1 Pro (no working lane: AG can't serve
+    it, AI Studio key 429s pro-preview) were pulled from the picker. Guard so a
+    refactor can't silently re-list a model that can't run."""
+    from backend.apps.agents.providers.registry import BUILTIN_MODELS
+    all_values = {m["value"] for models in BUILTIN_MODELS.values() for m in models}
+    for dead in ("fable-5-cc", "fable-5-api", "gemini-3.1-pro", "gemini-3.1-pro-api"):
+        assert dead not in all_values, f"{dead} is back in the picker"
+    # No 'fable' or '3.1 pro' label survives in any provider group either.
+    all_labels = " | ".join(m["label"].lower() for models in BUILTIN_MODELS.values() for m in models)
+    assert "fable" not in all_labels
+    assert "3.1 pro" not in all_labels
 
 
 # ===========================================================================
