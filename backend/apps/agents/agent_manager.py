@@ -1824,6 +1824,15 @@ class AgentManager:
                             options_kwargs["thinking"] = {"type": "disabled"}
                     elif level in ("low", "medium", "high"):
                         options_kwargs["effort"] = level
+                elif api_type in ("openai", "codex"):
+                    # GPT-5 family + Codex take reasoning_effort; 9Router carries
+                    # the Anthropic-shaped `effort` across to it, so the slider
+                    # works for OpenAI too, not just Claude. Every OpenAI/Codex
+                    # model we expose is reasoning-capable (registry has no
+                    # non-reasoning ones), so no per-model gate. No "disabled"
+                    # form on these, so "off" just omits the param.
+                    if level in ("low", "medium", "high"):
+                        options_kwargs["effort"] = level
             except Exception as e:
                 logger.debug(f"thinking_level param injection skipped: {e}")
 
