@@ -230,6 +230,73 @@ def test_dashboard_import_remaps_to_fresh_local_ids(monkeypatch):
     assert L["expanded_session_ids"] == ["newsess"]  # the dangling ref is dropped
 
 
+def test_dashboard_remap_invariant_generative(monkeypatch):
+    # The hand-written remap tests only check the id-bearing fields I remembered.
+    # Generate random dashboards and assert the real invariant on a serialize ->
+    # import round-trip: no source-local id and no bundle id survives into the
+    # imported layout, and every card id is a freshly-minted local id. This is
+    # what catches "someone adds a new layout field holding a session id and
+    # forgets to remap it."
+    import random
+
+    from backend.apps.swarm.entities import dashboards as dmod
+    from backend.apps.swarm.exportable import RemapTable
+    from backend.apps.swarm.models import EntityType
+
+    written: dict = {}
+    monkeypatch.setattr(dmod, "_write", lambda did, doc: written.update({did: doc}))
+    monkeypatch.setattr(dmod, "_retag_sessions", lambda ids, did: None)
+
+    rng = random.Random(1234)
+    for _ in range(60):
+        sess = [f"S{i}" for i in range(rng.randint(0, 5))]
+        apps = [f"A{i}" for i in range(rng.randint(0, 4))]
+        s_bid = {s: f"sbid{i}" for i, s in enumerate(sess)}
+        a_bid = {a: f"abid{i}" for i, a in enumerate(apps)}
+
+        class Ctx:
+            def bundle_id_for(self, t, lid):
+                if t == EntityType.session:
+                    return s_bid.get(lid)
+                if t == EntityType.app:
+                    return a_bid.get(lid)
+                return None
+
+        layout = {
+            "cards": {s: {"session_id": s, "x": rng.randint(0, 9)} for s in sess},
+            "view_cards": {a: {"output_id": a} for a in apps},
+            "browser_cards": {
+                f"b{i}": {"browser_id": f"b{i}", "url": "u",
+                          "spawned_by": (rng.choice(sess) if sess and rng.random() < 0.7 else None)}
+                for i in range(rng.randint(0, 3))
+            },
+            "expanded_session_ids": (sess + ["ORPHAN"]) if rng.random() < 0.5 else list(sess),
+        }
+        payload = dmod.DashboardExportable("d-src", "D", {"name": "D", "layout": layout}).serialize(Ctx())
+
+        remap = RemapTable()
+        fresh_sess = {s: f"new-{s_bid[s]}" for s in sess}
+        fresh_apps = {a: f"new-{a_bid[a]}" for a in apps}
+        for s in sess:
+            remap.assign(s_bid[s], fresh_sess[s])
+        for a in apps:
+            remap.assign(a_bid[a], fresh_apps[a])
+
+        did = dmod.DashboardExportable.import_(payload, {}, remap)
+        L = written[did]["layout"]
+
+        forbidden = set(sess) | set(apps) | set(s_bid.values()) | set(a_bid.values())
+        assert set(L["cards"]) == set(fresh_sess.values())
+        assert set(L["view_cards"]) == set(fresh_apps.values())
+        for cid, card in L["cards"].items():
+            assert cid not in forbidden and card["session_id"] == cid
+        for oid, card in L["view_cards"].items():
+            assert oid not in forbidden and card["output_id"] == oid
+        assert set(L["expanded_session_ids"]) <= set(fresh_sess.values())
+        for card in L["browser_cards"].values():
+            assert card["spawned_by"] is None or card["spawned_by"] in set(fresh_sess.values())
+
+
 def test_checksum_rejects_tampering(skill_store):
     _make_skill(skill_store, "tmp", "Tmp", "# original")
     raw, _ = closure.build_bundle(EntityType.skill, "tmp")
@@ -329,6 +396,18 @@ def test_zip_slip_rejected():
 def test_absolute_path_rejected():
     with pytest.raises(BundleError):
         unpack(_zip_with("/etc/evil"))
+
+
+def test_symlink_entry_rejected():
+    # A symlink entry could point outside the sandbox once followed; unpack must
+    # refuse it before writing anything.
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zi = zipfile.ZipInfo("link")
+        zi.external_attr = 0o120777 << 16
+        zf.writestr(zi, "/etc/passwd")
+    with pytest.raises(BundleError):
+        unpack(buf.getvalue())
 
 
 def test_too_many_entries_rejected():
