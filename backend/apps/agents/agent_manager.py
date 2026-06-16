@@ -4639,17 +4639,20 @@ class AgentManager:
     def get_all_sessions(self, dashboard_id: str | None = None) -> list[AgentSession]:
         if not dashboard_id:
             return list(self.sessions.values())
-        # Memory first, then promote any on-disk sessions for this dashboard
-        # that aren't loaded yet. Imported sessions (and ones not resumed since
-        # a restart) live on disk but not in memory, so without the disk pass
-        # their cards render blank, the frontend's AgentCard returns null when
-        # a card's session is missing from the agents slice. Promoting into
-        # self.sessions bounds the disk read to once per session per run, like
-        # resume_session. Mirrors get_browser_agent_children's memory+disk walk.
+        # Memory first, then promote on-disk sessions for this dashboard, but
+        # ONLY ones the dashboard's layout still has a card for. A session keeps
+        # its dashboard_id when its card is deleted, so promoting by tag alone
+        # resurrected deleted chats on every reopen; the layout's cards are the
+        # real source of truth for what's on the board. Imported sessions ARE in
+        # the layout, so they still surface, and this bounds the disk read to
+        # once per session per run, like resume_session.
         result = [s for s in self.sessions.values() if s.dashboard_id == dashboard_id]
         seen = {s.id for s in result}
+        card_ids = self._dashboard_card_ids(dashboard_id)
         for sid, data in _load_all_session_data():
-            if sid in seen or data.get("dashboard_id") != dashboard_id:
+            if sid in seen or sid not in card_ids:
+                continue
+            if data.get("dashboard_id") != dashboard_id:
                 continue
             try:
                 sess = AgentSession(**data)
@@ -4660,6 +4663,18 @@ class AgentManager:
             self.sessions[sid] = sess
             result.append(sess)
         return result
+
+    def _dashboard_card_ids(self, dashboard_id: str) -> set[str]:
+        """Session ids the dashboard's layout currently has agent cards for.
+        Read straight off disk (no dashboards-module import, avoids a cycle)."""
+        try:
+            import os
+            import backend.config.paths as _paths
+            from backend.config.json_store import read_json_or_none
+            d = read_json_or_none(os.path.join(_paths.DASHBOARDS_DIR, f"{dashboard_id}.json")) or {}
+            return set((d.get("layout", {}).get("cards") or {}).keys())
+        except Exception:
+            return set()
 
     def get_session(self, session_id: str) -> Optional[AgentSession]:
         return self.sessions.get(session_id)

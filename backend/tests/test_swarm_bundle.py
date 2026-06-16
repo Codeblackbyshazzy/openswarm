@@ -323,6 +323,39 @@ def test_dashboard_export_import_carries_agent_cards_and_transcript(tmp_path, mo
     assert sum(len(s.messages) for s in found) == 2, "and with their transcripts"
 
 
+def test_get_all_sessions_does_not_resurrect_deleted_cards(tmp_path, monkeypatch):
+    # Deleting a card removes it from the layout but the session keeps its
+    # dashboard_id on disk. get_all_sessions must surface only sessions the
+    # layout still has a card for, or deleted chats come back on every reopen.
+    from backend.apps.agents import agent_manager as am
+    import backend.config.paths as paths
+    sdir = tmp_path / "sessions"
+    ddir = tmp_path / "dashboards"
+    sdir.mkdir()
+    ddir.mkdir()
+    monkeypatch.setattr(am, "SESSIONS_DIR", str(sdir))
+    monkeypatch.setattr(paths, "DASHBOARDS_DIR", str(ddir))
+    monkeypatch.setattr(am.agent_manager, "sessions", {})
+
+    did = "d1"
+
+    def sess(sid):
+        return {
+            "id": sid, "name": sid, "status": "completed", "model": "sonnet",
+            "mode": "agent", "messages": [], "branches": {}, "active_branch_id": "main",
+            "dashboard_id": did,
+        }
+
+    (sdir / "kept.json").write_text(json.dumps(sess("kept")))
+    (sdir / "deleted.json").write_text(json.dumps(sess("deleted")))  # still tagged, card gone
+    # The layout has a card only for "kept" (the user deleted "deleted"'s card).
+    (ddir / f"{did}.json").write_text(json.dumps({"id": did, "layout": {"cards": {"kept": {"session_id": "kept"}}}}))
+
+    ids = {s.id for s in am.agent_manager.get_all_sessions(dashboard_id=did)}
+    assert "kept" in ids, "a session the layout still has a card for must surface"
+    assert "deleted" not in ids, "a session whose card was deleted must NOT resurrect"
+
+
 def test_dashboard_serialize_rewrites_refs_to_bundle_ids():
     from backend.apps.swarm.entities.dashboards import DashboardExportable
     from backend.apps.swarm.models import EntityType
