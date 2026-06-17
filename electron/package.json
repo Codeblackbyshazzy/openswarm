@@ -41,6 +41,13 @@
     "directories": {
       "output": "dist"
     },
+    "files": [
+      "**/*",
+      "!python-env",
+      "!python-env/**",
+      "!build-staging",
+      "!build-staging/**"
+    ],
     "icon": "build/icon.png",
     "mac": {
       "icon": "build/icon.icns",
