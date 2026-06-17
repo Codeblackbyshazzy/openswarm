@@ -164,7 +164,17 @@ direct-vite + junction code, unit tests, local repro) + the warm-cache extract p
 the end-to-end GUI "create app -> live preview" is the one manual checklist step
 (can't drive the Electron+agent UI headlessly).
 
-## ROOT CAUSE of the residual ~17s cold FOUND (2026-06-17): swarm-debug DEBUGLETON scan
+## [DISPROVEN 2026-06-17] hypothesis: residual ~17s cold = swarm-debug DEBUGLETON scan
+
+> UPDATE: this hypothesis was WRONG. The `debug()` -> `OPENSWARM_PACKAGED=1` no-op
+> shipped (commit 3d6fe483) and was verified live on the signed build ("Scanning
+> Project" count=0, scan confirmed gone), yet **cold backend-http-ready stayed at
+> 21.5s (no change)**. So the DEBUGLETON scan was NOT the cold driver. Kept the
+> no-op anyway (it removes a real warm cost and is harmless), but the cold 16s is
+> elsewhere. See the source-audit section below for what it actually is. The
+> original (now-disproven) reasoning is preserved below for the record.
+
+### original (disproven) reasoning
 
 No-coding investigation (import profile + the app's own timestamped logs) pinned it:
 - The cold launch has a ~17s SILENT, synchronous event-loop block during startup
@@ -279,3 +289,58 @@ Recommended order: #2 (biggest UX win, lowest risk), then #1 (largest cold win, 
 
 - Bug #1 skills: seed from bundled snapshot + disk cache + retry-until-success. Catalog never empty offline; 3 tests green; onboarding `skill-item-pdf` resolves.
 - Bug #2 App Builder: (a) `_link_node_modules` symlink->junction->copy fallback (tested); (b) Windows-only direct `vite` spawn via bundled node so frontend-only apps need no bash (kills `[WinError 2]`); (c) `build-app-win.ps1` now pre-builds the node_modules archive natively. Verified end to end on Windows: build digest == runtime `_warm_cache_digest` (`37335fdd1f4d`); the archive (26 MB) extracts to a working node_modules containing `vite/bin/vite.js` and the Windows-native `@esbuild/win32-x64/esbuild.exe`.
+
+## Residual cold ~16s: full source audit + boot instrumentation (2026-06-17)
+
+After FOUR disproven cold hypotheses (file-count via items 1+3, Defender exclusion,
+DEBUGLETON scan, and the asar trim which DID bank 138s->22s), I stopped guessing and
+read the real signed-build cold log line by line, then audited every lifespan in source.
+
+What the cold log (commit 3d6fe483, scan-free build) actually shows:
+
+```
+03:03:02  skill_registry: seeded 17 skills        <- last backend log before the gap
+            ... 16 seconds, NO backend log line ...
+03:03:18  nine_router: Starting 9Router           <- a backgrounded create_task finally runs
+03:03:18  Application startup complete             <- uvicorn; all lifespans entered
+03:03:21  9Router started; GET /api/health 200; backend-http-ready t=21519
+```
+
+SubApp lifespan order (`backend/main.py:52`):
+`health, agents, skills, tools_lib, modes, settings, mcp_registry, skill_registry,
+outputs, dashboards, swarm, service, subscription, auth, web, anthropic_proxy`.
+
+Source-audited EVERY one of the 16 lifespan bodies + the service client:
+- outputs: two `os.makedirs` + yield (trivial)
+- dashboards: `_migrate_if_needed()` early-returns when dashboards exist (they persist
+  across reinstall in AppData, so it's a no-op on the cold post-update launch)
+- swarm: `_gc_staging()` over an empty dict + yield (trivial)
+- service: builds a provider list + `svc.sync()` x2, then `create_task(ensure_9router)`,
+  `create_task(_pulse_loop)`, `create_task(_drain_loop)`, yield. `svc.sync()` is genuinely
+  fire-and-forget: `client.py:sync()` -> `_schedule()` -> `loop.create_task(_post_or_spool)`;
+  the actual httpx POST has a 5s timeout and runs in the task, never on the boot path.
+- skill_registry: seed from disk + `create_task(_refresh_loop)` + yield (trivial)
+- subscription / auth / anthropic_proxy: bare `yield`
+- web: `debug("START")` (no-op packaged) + yield
+
+So NO lifespan body blocks. This matches `profile_boot.py` warm (import + all 16
+lifespans = 617ms, no lifespan over 95ms). The 16s is therefore NOT in our Python
+startup logic; it is cold first-run demand-paging of native bytes (interpreter .pyc
+cold reads, native .pyd / .dll first-touch, the 9Router/claude.exe binaries) that
+the OS pages in during this window. That class of cost is exactly what the asar
+trim already cut and what Defender-exclusion / file-count provably cannot move.
+
+THE missing instrument: `debug(sub_app.name)` (Apps.py:33) is a no-op in the
+packaged build, so the packaged log had ZERO per-lifespan markers, which is why
+four hypotheses were guesses. Added permanent per-lifespan boot timing in
+`backend/config/Apps.py` (one `time.perf_counter()` + flushed `print` per app, plus
+a `lifespans-total`): `[perf] lifespan <name> t=<ms>ms`. Logging only, zero
+functional risk; validated warm (correctly attributes a simulated 300ms blocker to
+the one slow lifespan, others 0ms). On the NEXT cold packaged launch this pins the
+16s to a single lifespan (=> a real fix) or shows it smeared across many (=> confirms
+distributed cold I/O => accept 22s; warm 5s already meets the <10s goal).
+
+Status: warm 5.0s (under goal), cold ~22s (75-84% below the 54-138s baseline), both
+bugs fixed/verified on the signed build. The cold residual is either accepted as
+first-run-only OS I/O, or pinned definitively by one more build that ships this
+instrumentation. Build-gated (user manages tags/release), so not auto-built.
