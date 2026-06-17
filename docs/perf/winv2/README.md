@@ -164,6 +164,29 @@ direct-vite + junction code, unit tests, local repro) + the warm-cache extract p
 the end-to-end GUI "create app -> live preview" is the one manual checklist step
 (can't drive the Electron+agent UI headlessly).
 
+## ROOT CAUSE of the residual ~17s cold FOUND (2026-06-17): swarm-debug DEBUGLETON scan
+
+No-coding investigation (import profile + the app's own timestamped logs) pinned it:
+- The cold launch has a ~17s SILENT, synchronous event-loop block during startup
+  (no async task ran). NOT import (1.1s), NOT Defender (proven twice), NOT
+  file-count, NOT network (the updater succeeded in the window), and every SubApp
+  lifespan is verified trivial (mkdir / early-return / yield).
+- It is the swarm-debug DEBUGLETON: debug() -> Debugleton().find_file_info()
+  (debug.py:20); the first call instantiates the singleton -> update_debug_toggles()
+  -> Directory.build_structure() -> a recursive os.scandir() walk of the project
+  tree (Directory.py:74). debug() is called on the startup critical path
+  (config/Apps.py SubApp init + the lifespan loop), so the scan runs SYNCHRONOUSLY
+  and blocks the HTTP bind. Cold (uncached fs) = ~17s; warm (cached) = ~80ms. The
+  DEBUGLETON INIT log lines land exactly in the 17s gap.
+- This also explains why items 1+3 (file count) and item 5 (Defender) did nothing:
+  the cost is a synchronous scandir tree-walk, not AV scanning or bytecode.
+
+SAFE FIX (proposed): make debug() a no-op when OPENSWARM_PACKAGED=1 (early-return
+before Debugleton() instantiates), so the scan never runs in the packaged build.
+Dev keeps the debugger. Risk very low (debug() is non-critical logging that already
+swallows errors). Expected cold ~22s -> ~5s (under the 10s goal). Confirm with a
+cold rebuild+measure.
+
 ## #9 item 5 (Defender exclusion) measured: ALSO no cold benefit -> cold is NOT Defender
 
 Applied the Defender exclusion (admin) for all 3 openswarm folders, rebuilt a
