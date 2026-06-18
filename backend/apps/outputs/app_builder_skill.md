@@ -56,6 +56,13 @@ fast.
 3. Leave `frontend/package.json`, `frontend/vite.config.ts`, `run.sh`,
    `.env`, `meta.json` alone — vite still needs them.
 4. Don't run `bash backend_init.sh` — lightweight mode has no backend.
+5. Agent control still works without the template: `window.OPENSWARM_APP` is
+   injected by the app shell, so even here you can make the app agent-operable
+   by calling `window.OPENSWARM_APP.register({ rules, controls, getState,
+   invoke })` from your inline `<script>` (see the bridge section below). This is
+   optional, the agent can also play any app via native keyboard/mouse, but for
+   a game/canvas a registered `getState` (e.g. score, alive) makes it far more
+   reliable. Don't wire up the bridge object yourself; it already exists.
 
 The rest of this document covers **workspace mode**. If you picked
 lightweight, only the "Debugging" section (frontend console logs in the
