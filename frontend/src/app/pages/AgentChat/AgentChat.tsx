@@ -897,7 +897,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     setShowResumeBubble(false);
     dispatch(sendMessageThunk({
       sessionId: id,
-      prompt: "Continue where you left off. Start you're response EXACTLY with 'Sorry, let me pick up where I left off",
+      prompt: "Continue your previous response from exactly where it was cut off. Do not repeat anything you already wrote; pick up mid-sentence if you need to and keep going.",
       mode,
       model,
       hidden: true,
