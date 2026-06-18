@@ -16,6 +16,7 @@ import logging
 import os
 import secrets
 import shutil
+import socket
 import subprocess
 import tempfile
 import time
@@ -74,13 +75,29 @@ _is_running_last_ok: float = 0.0
 
 
 def is_running() -> bool:
-    """Check if 9Router is running."""
+    """Check if 9Router is running.
+
+    Fast-fail when down. is_running() is called ~5x on the cold boot path (the
+    settings key-sync sequence + ensure_running) BEFORE 9Router is up. The old
+    body did a synchronous httpx.get to "localhost:20128"; on Windows a dead-port
+    connect to "localhost" stalls multiple seconds (it tries ::1 first and the
+    loopback refusal is slow), so those probes froze the asyncio event loop ~18s
+    and dominated cold startup (faulthandler caught the loop stuck in
+    socket.create_connection here). Fix: probe 127.0.0.1 with a 0.3s TCP timeout
+    first; a down 9Router is detected in <~0.3s instead of ~7s. Only when the
+    port is open do we do the HTTP confirm. 9Router binds 0.0.0.0 (the warm app
+    reaches it via 127.0.0.1 today), so this changes timing, not reachability."""
     global _is_running_last_ok
     now = time.monotonic()
     if now - _is_running_last_ok < _IS_RUNNING_TTL:
         return True
     try:
-        r = httpx.get(f"{NINE_ROUTER_V1}/models", timeout=2.0)
+        with socket.create_connection(("127.0.0.1", NINE_ROUTER_PORT), timeout=0.3):
+            pass
+    except OSError:
+        return False
+    try:
+        r = httpx.get(f"http://127.0.0.1:{NINE_ROUTER_PORT}/v1/models", timeout=2.0)
         if r.status_code == 200:
             _is_running_last_ok = now
             return True

@@ -18,18 +18,6 @@ if not _backend_logger.handlers:
 
 logger = logging.getLogger(__name__)
 
-# [perf][diagnostic] Cold-start stall hunt: dump every thread's stack every 7s to
-# a temp file. During the cold ~13s event-loop stall a dump lands inside the
-# frozen window and names the exact synchronous call the loop is stuck in. Temp
-# file only, best-effort; remove once the stall is diagnosed.
-try:
-    import faulthandler as _faulthandler
-    import tempfile as _tempfile
-    _fh_diag = open(os.path.join(_tempfile.gettempdir(), "openswarm-faulthandler.log"), "w")
-    _faulthandler.dump_traceback_later(7, repeat=True, file=_fh_diag)
-except Exception:
-    pass
-
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi import Request
 
