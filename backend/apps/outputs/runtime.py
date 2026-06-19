@@ -264,12 +264,13 @@ class AppRuntime:
         env["OPENSWARM_DEBUGGER_PATH"] = _DEBUGGER_PATH
         env["OPENSWARM_TEMPLATE_BACKEND_PATH"] = _TEMPLATE_BACKEND_PATH
 
+        cmd, spawn_cwd, launch_desc = self._resolve_launch(env)
         try:
             self.process = await asyncio.create_subprocess_exec(
-                _resolve_bash(), "run.sh",
+                *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=self.workspace_path,
+                cwd=spawn_cwd,
                 env=env,
                 **_background_priority_kwargs(),
             )
@@ -281,7 +282,7 @@ class AppRuntime:
             self.process = None
             return False
         backend_note = f" + backend on {self.port}" if self.port else ""
-        self._broadcast(LogLine("runtime", f"[runtime] bash run.sh started; frontend on {self.frontend_port}{backend_note} (pid {self.process.pid})"))
+        self._broadcast(LogLine("runtime", f"[runtime] {launch_desc} started; frontend on {self.frontend_port}{backend_note} (pid {self.process.pid})"))
         self._stdout_task = asyncio.create_task(self._pipe_stream(self.process.stdout, "stdout"))
         self._stderr_task = asyncio.create_task(self._pipe_stream(self.process.stderr, "stderr"))
         self._wait_task = asyncio.create_task(self._await_exit())
@@ -290,6 +291,33 @@ class AppRuntime:
         self._frontend_ready = False
         self._frontend_ready_task = asyncio.create_task(self._await_frontend_bind())
         return True
+
+    def _resolve_launch(self, env: dict) -> tuple[list[str], str, str]:
+        """Pick the new-mode launch command.
+
+        Default is `bash run.sh` at the workspace root, which handles both
+        frontend-only and backend-enabled apps. On Windows we take a fast path
+        for frontend-only apps (the common case): run vite directly through the
+        bundled node, with no system `bash` at all. The packaged Windows build
+        ships node but not bash, so a user without Git for Windows hit
+        [WinError 2] on `bash run.sh` and the preview never started. We only
+        take this path when vite is actually present (node_modules linked);
+        otherwise fall back to bash so behavior is unchanged everywhere else.
+        vite.config.ts reads FRONTEND_PORT / BACKEND_PORT from the environment."""
+        if os.name == "nt" and self.port is None:
+            node = env.get("OPENSWARM_NODE_PATH") or shutil.which("node")
+            vite_bin = os.path.join(
+                self.workspace_path, "frontend", "node_modules", "vite", "bin", "vite.js"
+            )
+            if node and os.path.exists(node) and os.path.exists(vite_bin):
+                env["FRONTEND_PORT"] = str(self.frontend_port)
+                env["BACKEND_PORT"] = "NONE"
+                return (
+                    [node, "node_modules/vite/bin/vite.js"],
+                    os.path.join(self.workspace_path, "frontend"),
+                    "vite (bundled node, no bash)",
+                )
+        return [_resolve_bash(), "run.sh"], self.workspace_path, "bash run.sh"
 
     async def _await_frontend_bind(self) -> None:
         """Poll `frontend_port` every _FRONTEND_BIND_POLL_INTERVAL until

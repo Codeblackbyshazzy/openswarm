@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 _pulse_task: asyncio.Task | None = None
 _drain_task: asyncio.Task | None = None
+_9r_start_task: asyncio.Task | None = None
 
 _last_9r_cost: float | None = None
 _last_9r_prompt_tokens: int | None = None
@@ -121,7 +122,7 @@ async def _drain_loop():
 
 @asynccontextmanager
 async def service_lifespan():
-    global _pulse_task, _drain_task
+    global _pulse_task, _drain_task, _9r_start_task
 
     try:
         from backend.apps.settings.settings import load_settings, _save_settings
@@ -193,7 +194,13 @@ async def service_lifespan():
 
     try:
         from backend.apps.nine_router import ensure_running as ensure_9router
-        await ensure_9router()
+        # Start 9Router in the BACKGROUND instead of awaiting it here. Awaiting
+        # it was ~7s (up to ~18s cold) of the startup critical path, blocking the
+        # HTTP bind and the whole UI behind it. 9Router is only needed when the
+        # user sends an agent message, and the dispatch path calls ensure_running()
+        # itself (now serialized, so no double-spawn), so the first message waits
+        # for readiness lazily. This is the single biggest warm-startup win.
+        _9r_start_task = asyncio.create_task(ensure_9router())
     except Exception as e:
         logger.debug(f"9Router auto-start skipped: {e}")
 
@@ -217,6 +224,14 @@ async def service_lifespan():
         except asyncio.CancelledError:
             pass
         _drain_task = None
+
+    if _9r_start_task and not _9r_start_task.done():
+        _9r_start_task.cancel()
+        try:
+            await _9r_start_task
+        except (asyncio.CancelledError, Exception):
+            pass
+    _9r_start_task = None
 
     try:
         from backend.apps.nine_router import stop as stop_9router

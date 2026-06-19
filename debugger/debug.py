@@ -7,6 +7,15 @@ from debugger_backend.color_adjuster import rgb_to_ansi, bold_and_italicize_text
 from debugger_backend.debug_arg_parser import is_text, is_error
 
 def debug(*args, mode:str='debug', override_max_chars:bool=False):
+    # Packaged/prod no-op: this frame-aware debugger is a dev tool, and its first
+    # call instantiates Debugleton() -> a recursive os.scandir project scan that
+    # runs synchronously on the backend's startup path. On a cold launch (uncached
+    # filesystem) that scan cost ~17s of the backend-http-ready time; warm it is
+    # ~80ms. Skipping it in the packaged build removes the cold cost entirely. Dev
+    # (OPENSWARM_PACKAGED unset) keeps the full debugger. Safe: debug() returns
+    # None and every caller ignores the return value.
+    if os.environ.get("OPENSWARM_PACKAGED") == "1":
+        return
     frame = inspect.currentframe().f_back
     code = frame.f_code
     line_no = frame.f_lineno

@@ -281,6 +281,10 @@ if (-not (Test-Path (Join-Path $ProjectRoot 'electron\python-env'))) {
 }
 Write-Host "Python environment ready."
 Write-Host ""
+# NOTE: #9 items 1+3 (zip stdlib + pyc-only site-packages) were measured to give
+# NO cold-start benefit (cold is native-binary-scan-bound, not file-count-bound),
+# so they are NOT wired in. scripts/zip-python-stdlib.ps1 + strip-py-to-pyc.ps1
+# remain as drafts. The cold lever is the opt-in Defender exclusion (item 5).
 
 # --- Step 3: Fetch Router from npm ---
 # The 9router Next.js server is published as an npm package with a pre-built
@@ -362,6 +366,56 @@ if (Test-Path $EnvExampleSrc) {
     New-Item -ItemType Directory -Force -Path (Split-Path $EnvExampleDst -Parent) | Out-Null
     Copy-Item -Force $EnvExampleSrc $EnvExampleDst
     Write-Host "Restored webapp_template/.env.example (stripped by the .env.* exclude)"
+}
+
+# --- Step 4b: Pre-build the webapp-template node_modules archive (.tar.gz).
+# The Windows build never shipped any node_modules, and the bundled node has no
+# npm, so the App Builder frontend had no way to get its deps; the preview died
+# with the misleading "backend exited with code 1". We ship a single compressed
+# archive (mirrors the Mac build's step 3c); the runtime's _try_extract_bundled_archive
+# unpacks it into the warm cache (kicked off in the background by
+# warm_cache_in_background at startup, so it is off the first-app create path).
+# NOTE: we deliberately do NOT ship node_modules pre-extracted into resources --
+# that adds ~30k tiny files which made electron-builder/Squirrel LZMA compression
+# blow the build past 50 min and bloats the installer. One .tar.gz (~26 MB) keeps
+# the build fast and the installer small. Built natively so the esbuild/rollup
+# win32 binaries are correct. Non-fatal: a failure warns but does not break the
+# build. Digest == _warm_cache_digest() (sha256 of frontend/package.json, 12 hex).
+Write-Host "[4b] Pre-building webapp-template node_modules archive (.tar.gz)..."
+try {
+    $TmplFrontend = Join-Path $Staging 'backend\apps\outputs\webapp_template\frontend'
+    $PkgJson = Join-Path $TmplFrontend 'package.json'
+    if (-not (Test-Path $PkgJson)) { throw "template package.json not found at $PkgJson" }
+    $Digest = (Get-FileHash -Algorithm SHA256 $PkgJson).Hash.ToLower().Substring(0, 12)
+    $CacheDir = Join-Path $Staging 'backend\apps\outputs\webapp_template_cache'
+    New-Item -ItemType Directory -Force -Path $CacheDir | Out-Null
+    $OutArchive = Join-Path $CacheDir "node_modules.$Digest.tar.gz"
+    $WorkDir = Join-Path $env:TEMP "os-tmpl-nm-$([guid]::NewGuid())"
+    New-Item -ItemType Directory -Force -Path $WorkDir | Out-Null
+    try {
+        Copy-Item -Force $PkgJson (Join-Path $WorkDir 'package.json')
+        $Lock = Join-Path $TmplFrontend 'package-lock.json'
+        Push-Location $WorkDir
+        if (Test-Path $Lock) {
+            Copy-Item -Force $Lock (Join-Path $WorkDir 'package-lock.json')
+            & npm ci --prefer-offline --no-audit --no-fund --loglevel=error
+        } else {
+            & npm install --prefer-offline --no-audit --no-fund --loglevel=error
+        }
+        if ($LASTEXITCODE -ne 0) { throw "npm install/ci failed ($LASTEXITCODE)" }
+        if (-not (Test-Path (Join-Path $WorkDir 'node_modules'))) { throw "no node_modules produced" }
+        # tar.exe (bsdtar) ships with Windows 10+; archive root is node_modules/.
+        & tar -czf $OutArchive -C $WorkDir node_modules
+        if ($LASTEXITCODE -ne 0) { throw "tar failed ($LASTEXITCODE)" }
+        Pop-Location
+        $ArchMB = (Get-Item $OutArchive).Length / 1MB
+        Write-Host ("[4b] webapp-template archive staged: node_modules.$Digest.tar.gz ({0:N1} MB)" -f $ArchMB)
+    } finally {
+        if ((Get-Location).Path -eq $WorkDir) { Pop-Location }
+        if (Test-Path $WorkDir) { Remove-Item -Recurse -Force $WorkDir }
+    }
+} catch {
+    Write-Warning "[4b] webapp-template archive build FAILED: $_  (App Builder first-app falls back to live npm; non-fatal)"
 }
 # data: backend/config/paths.py points DATA_ROOT at %APPDATA%/OpenSwarm/data in
 # packaged mode and no code seeds from the bundle, so the entire shipped
