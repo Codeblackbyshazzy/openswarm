@@ -399,7 +399,12 @@ async def discover_tools(tool_id: str):
 
     tool_names = [t["name"] for t in raw_tools]
     services, service_groups, all_read, all_write = _classify_services(tool_names, tool.name)
-    permissions: dict[str, Any] = {n: tool.tool_permissions.get(n, "ask") for n in tool_names}
+    # Read-only actions auto-allow by default (no prompt for safe, scoped reads);
+    # writes still default to "ask". Any choice the user already made is kept.
+    permissions: dict[str, Any] = {
+        n: tool.tool_permissions.get(n, "always_allow" if n in all_read else "ask")
+        for n in tool_names
+    }
     permissions["_categories"] = {"read": all_read, "write": all_write}
     permissions["_services"] = services
     permissions["_service_groups"] = service_groups
