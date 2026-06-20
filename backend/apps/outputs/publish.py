@@ -266,10 +266,27 @@ async def build_static(output: Output) -> Optional[str]:
     return dist
 
 
+_SECRET_KEY_EXTS = (".pem", ".key", ".p12", ".pfx", ".keystore")
+
+
+def _is_secret_file(rel_path: str) -> bool:
+    """This bundle is served publicly, so anything secret-shaped must never make it
+    in. dotenv files and private-key material are the realistic leaks; the webapp
+    path already ships only the built dist, this also covers a hand-built flat app."""
+    base = rel_path.rsplit("/", 1)[-1].lower()
+    return (
+        base == ".env"
+        or base.startswith(".env.")
+        or base.endswith(_SECRET_KEY_EXTS)
+        or base in (".npmrc", ".git-credentials", ".htpasswd")
+    )
+
+
 def collect_bundle(output: Output, dist_dir: Optional[str]) -> bytes:
     """tar.gz of what the cloud should host. Webapp -> the built dist tree.
     Flat -> the files dict, including backend.py (the edge runs it on the shared
-    sandbox; the edge refuses to serve .py as a static file)."""
+    sandbox; the edge refuses to serve .py as a static file). Secret-shaped files
+    (.env, private keys) are dropped: a published bundle is world-readable."""
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         if dist_dir:
@@ -278,19 +295,24 @@ def collect_bundle(output: Output, dist_dir: Optional[str]) -> bytes:
                     full = os.path.join(root, fn)
                     if os.path.islink(full):
                         continue
+                    rel = os.path.relpath(full, dist_dir).replace(os.sep, "/")
+                    if _is_secret_file(rel):
+                        continue
                     try:
                         if os.path.getsize(full) > _MAX_BUNDLE_FILE:
                             continue
                     except OSError:
                         continue
-                    rel = os.path.relpath(full, dist_dir).replace(os.sep, "/")
                     tar.add(full, arcname=rel)
         else:
             for name, content in (output.files or {}).items():
+                rel = name.replace(os.sep, "/")
+                if _is_secret_file(rel):
+                    continue
                 data = content.encode("utf-8")
                 if len(data) > _MAX_BUNDLE_FILE:
                     continue
-                info = tarfile.TarInfo(name=name.replace(os.sep, "/"))
+                info = tarfile.TarInfo(name=rel)
                 info.size = len(data)
                 tar.addfile(info, io.BytesIO(data))
     return buf.getvalue()
