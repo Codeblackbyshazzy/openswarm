@@ -1,7 +1,7 @@
 """openswarm-edge: the public face of {slug}.openswarm.host.
 
 This service is intentionally the LEAST-privileged of the three: it holds only a
-read-only Tigris key + EDGE_SHARED_SECRET. It serves static app bundles, runs the
+read-only Tigris key + EDGE_AUTH_TOKEN. It serves static app bundles, runs the
 sandboxed backend.py compute locally, and proxies runtime LLM calls to the cloud
 (which owns creator attribution, budgets, and pool credentials). The published
 page only ever talks to its own origin; the slug is derived here from the Host
@@ -23,8 +23,13 @@ from .ratelimit import RateLimiter
 from .sandbox import UnsafeCodeError, run_backend
 
 APPS_BASE_DOMAIN = os.environ.get("APPS_BASE_DOMAIN", "openswarm.host")
-CLOUD_URL = os.environ.get("OPENSWARM_CLOUD_URL", "https://api.openswarm.com").rstrip("/")
-EDGE_SECRET = os.environ.get("EDGE_SHARED_SECRET", "")
+# The metered-LLM call goes to the cloud over Fly's PRIVATE 6PN mesh (encrypted,
+# same-org only), so it never traverses the public internet. Falls back to the
+# public URL only if the internal one isn't configured (e.g. local dev).
+CLOUD_INTERNAL_URL = os.environ.get(
+    "OPENSWARM_CLOUD_INTERNAL_URL", "http://openswarm-cloud.internal:8080"
+).rstrip("/")
+EDGE_AUTH_TOKEN = os.environ.get("EDGE_AUTH_TOKEN", "")
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
 _llm_limiter = RateLimiter(limit=30, window_seconds=60)
@@ -107,7 +112,7 @@ async def edge_llm(request: Request) -> Response:
         )
     body = await request.body()
     headers = {
-        "x-edge-secret": EDGE_SECRET,
+        "x-edge-auth": EDGE_AUTH_TOKEN,
         "x-app-slug": slug,
         "content-type": "application/json",
     }
@@ -117,7 +122,7 @@ async def edge_llm(request: Request) -> Response:
             headers[k] = v
 
     client = httpx.AsyncClient(timeout=httpx.Timeout(60.0, read=None))
-    upstream_req = client.build_request("POST", f"{CLOUD_URL}/api/apps/internal/llm", headers=headers, content=body)
+    upstream_req = client.build_request("POST", f"{CLOUD_INTERNAL_URL}/api/apps/internal/llm", headers=headers, content=body)
     try:
         upstream = await client.send(upstream_req, stream=True)
     except httpx.HTTPError:
