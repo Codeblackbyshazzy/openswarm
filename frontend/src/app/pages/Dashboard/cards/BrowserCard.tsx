@@ -24,7 +24,6 @@ import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import {
   setBrowserCardPosition,
   setBrowserCardSize,
-  removeBrowserCard,
   resumeBrowserCard,
   cancelBrowserCardEnding,
   addBrowserTab,
@@ -36,6 +35,7 @@ import {
   reorderBrowserTab,
   type BrowserTab,
 } from '@/shared/state/dashboardLayoutSlice';
+import { removeBrowserCardCleanly } from '@/shared/browserTeardown';
 import { createSelector } from '@reduxjs/toolkit';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { handleApproval } from '@/shared/state/agentsSlice';
@@ -278,7 +278,7 @@ const BrowserCard: React.FC<Props> = ({
   useEffect(() => {
     if (!endingState) return;
     const timer = setTimeout(() => {
-      dispatch(removeBrowserCard(browserId));
+      removeBrowserCardCleanly(browserId, dispatch);
     }, 3000);
     return () => clearTimeout(timer);
   }, [endingState, browserId, dispatch]);
@@ -464,7 +464,7 @@ const BrowserCard: React.FC<Props> = ({
 
   const handleRemove = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    dispatch(removeBrowserCard(browserId));
+    removeBrowserCardCleanly(browserId, dispatch);
   }, [dispatch, browserId]);
 
   const handleAddTab = useCallback((e: React.MouseEvent) => {

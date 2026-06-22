@@ -2,7 +2,8 @@ import { useEffect, type Dispatch, type SetStateAction } from 'react';
 import { report } from '@/shared/serviceClient';
 import { useAppDispatch } from '@/shared/hooks';
 import { closeSession, toggleExpandSession } from '@/shared/state/agentsSlice';
-import { removeViewCard, removeBrowserCard, removeNote } from '@/shared/state/dashboardLayoutSlice';
+import { removeViewCard, removeNote } from '@/shared/state/dashboardLayoutSlice';
+import { removeBrowserCardCleanly } from '@/shared/browserTeardown';
 import type { useDashboardSelection } from '../state/useDashboardSelection';
 
 type Selection = ReturnType<typeof useDashboardSelection>;
@@ -76,7 +77,7 @@ export function useDashboardShortcuts({
         } else if (type === 'view') {
           dispatch(removeViewCard(id));
         } else if (type === 'browser') {
-          dispatch(removeBrowserCard(id));
+          removeBrowserCardCleanly(id, dispatch);
         } else if (type === 'note') {
           dispatch(removeNote(id));
         }

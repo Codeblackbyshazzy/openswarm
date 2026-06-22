@@ -2109,6 +2109,7 @@ app.on('web-contents-created', (_event, contents) => {
       cdpAutoAttachWired.delete(contents.id);
       cdpRoutesByWcId.delete(contents.id);
       webviewConsoleErrors.delete(contents.id);
+      cdpTearingDown.delete(contents.id);
     });
 
     contents.on('render-process-gone', () => {
@@ -2118,6 +2119,7 @@ app.on('web-contents-created', (_event, contents) => {
       cdpAutoAttachWired.delete(contents.id);
       cdpRoutesByWcId.delete(contents.id);
       webviewConsoleErrors.delete(contents.id);
+      cdpTearingDown.delete(contents.id);
     });
 
     // A heavy SPA can HANG the renderer without crashing it (a render-process-gone
@@ -2614,6 +2616,10 @@ const cdpChildSessions = new Map();   // wcId -> Map<sessionId, {frameId, parent
 const cdpAutoAttachWired = new Set(); // wcIds whose 'message' listener is attached
 const cdpRoutesByWcId = new Map();    // wcId -> Map<routeKey, entry> (tier-2 shadow-API capture)
 const webviewConsoleErrors = new Map(); // wcId -> [{level,message,source,line}] capped warn+error, read via BrowserGetConsole
+// wcIds whose CDP is being cleanly detached on the way to destruction. Blocks a
+// late agent command from RE-attaching (and re-enabling Network/auto-attach) as
+// the webview tears down, which would re-arm the freed-DevToolsSession SIGSEGV.
+const cdpTearingDown = new Set();
 
 function wireChildSessions(wc) {
   const wcId = wc.id;
@@ -2643,11 +2649,14 @@ function wireChildSessions(wc) {
         parentSessionId: sessionId || null,
         url: info.url || '',
       });
-      // Enable perception + network domains and propagate auto-attach into nested OOPIF.
+      // Enable perception domains on the child + propagate auto-attach into nested OOPIF.
+      // Deliberately NO Network.enable here: a child iframe churns constantly, and a
+      // Network notification arriving after the child detaches lands on a freed session
+      // and SIGSEGVs the browser process (the mid-browse crash). Root Network still
+      // captures the page's own routes; we only forgo transient child-iframe routes.
       const sid = params.sessionId;
       wc.debugger.sendCommand('Accessibility.enable', {}, sid).catch(() => {});
       wc.debugger.sendCommand('DOM.enable', {}, sid).catch(() => {});
-      wc.debugger.sendCommand('Network.enable', {}, sid).catch(() => {});
       wc.debugger.sendCommand('Target.setAutoAttach',
         { autoAttach: true, waitForDebuggerOnStart: false, flatten: true }, sid).catch(() => {});
     } else if (method === 'Target.detachedFromTarget') {
@@ -2665,6 +2674,11 @@ function getWebContentsById(wcId) {
 async function ensureDebuggerAttached(wc) {
   if (!wc || wc.isDestroyed()) {
     throw new Error('webContents is destroyed');
+  }
+  // Once a clean teardown has started, never re-attach: a re-attach here would
+  // re-enable Network + auto-attach right as the session is being freed.
+  if (cdpTearingDown.has(wc.id)) {
+    throw new Error('webContents is tearing down');
   }
   if (wc.debugger.isAttached()) return;
   try {
@@ -2685,6 +2699,25 @@ async function ensureDebuggerAttached(wc) {
   try {
     await raceCdp(wc.debugger.sendCommand('Network.enable', {}), 5000, 'Network.enable');
   } catch (_) {}
+}
+
+// Cleanly tear the DevTools session down BEFORE the webContents is destroyed:
+// turn off the two churn-prone domains (auto-attach, Network) so no child
+// sessions or network observers are live when Chromium frees the session, then
+// detach. Without this, a notification in the mojo pipe lands on a freed
+// DevToolsSession on the browser main thread and SIGSEGVs the whole app.
+// Bounded + fail-open: a wedged pipe must never block the card from closing.
+async function detachCdpCleanly(wc) {
+  if (!wc || wc.isDestroyed()) return;
+  cdpTearingDown.add(wc.id);
+  let attached = false;
+  try { attached = wc.debugger.isAttached(); } catch (_) { return; }
+  if (!attached) return;
+  const drain = (method, params) =>
+    raceCdp(wc.debugger.sendCommand(method, params || {}), 1200, method).catch(() => {});
+  await drain('Target.setAutoAttach', { autoAttach: false, waitForDebuggerOnStart: false, flatten: true });
+  await drain('Network.disable', {});
+  try { wc.debugger.detach(); } catch (_) { /* already detached / gone */ }
 }
 
 // debugger.sendCommand can hang FOREVER when the target's pipe breaks without
@@ -2749,6 +2782,15 @@ ipcMain.handle('send-cdp-command', async (_event, wcId, method, params, sessionI
   } catch (err) {
     return { ok: false, error: err && err.message ? err.message : String(err) };
   }
+});
+
+// Called by the renderer right before a browser card unmounts, so its CDP
+// session is drained + detached while the webContents is still alive.
+ipcMain.handle('cdp-detach-clean', async (_event, wcId) => {
+  try {
+    await detachCdpCleanly(getWebContentsById(wcId));
+  } catch (_) { /* fail-open: never block the card's teardown */ }
+  return { ok: true };
 });
 
 // Renderer-side AX index cache helpers — the renderer stores its own copy

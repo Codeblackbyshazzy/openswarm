@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld('openswarm', {
   hardReset: () => ipcRenderer.invoke('hard-reset'),
   connectSlack: () => ipcRenderer.invoke('connect-slack'),
   sendCdpCommand: (wcId, method, params, sessionId) => ipcRenderer.invoke('send-cdp-command', wcId, method, params, sessionId),
+  cdpDetachClean: (wcId) => ipcRenderer.invoke('cdp-detach-clean', wcId),
   cdpCacheSet: (wcId, indexMap) => ipcRenderer.invoke('cdp-cache-set', wcId, indexMap),
   cdpCacheGet: (wcId) => ipcRenderer.invoke('cdp-cache-get', wcId),
   cdpCacheClear: (wcId) => ipcRenderer.invoke('cdp-cache-clear', wcId),

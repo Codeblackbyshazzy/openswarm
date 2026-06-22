@@ -57,6 +57,14 @@ export function getWebview(browserId: string, tabId?: string): BrowserWebview | 
   return registry.get(makeKey(browserId, resolvedTabId));
 }
 
+export function getBrowserWebviews(browserId: string): BrowserWebview[] {
+  const out: BrowserWebview[] = [];
+  for (const [key, wv] of registry.entries()) {
+    if (key.split(':')[0] === browserId) out.push(wv);
+  }
+  return out;
+}
+
 export function findBrowserByWebContentsId(wcId: number): string | undefined {
   for (const [key, wv] of registry.entries()) {
     if ((wv as any).getWebContentsId?.() === wcId) {
