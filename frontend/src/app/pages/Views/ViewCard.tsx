@@ -6,6 +6,7 @@ import Tooltip from '@mui/material/Tooltip';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import HistoryIcon from '@mui/icons-material/History';
 import Icon from '@mui/material/Icon';
 import { Output } from '@/shared/state/outputsSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
@@ -16,9 +17,10 @@ interface Props {
   onClick: () => void;
   onDelete: () => void;
   onRun: () => void;
+  onHistory: () => void;
 }
 
-const ViewCard: React.FC<Props> = ({ output, onClick, onDelete, onRun }) => {
+const ViewCard: React.FC<Props> = ({ output, onClick, onDelete, onRun, onHistory }) => {
   const c = useClaudeTokens();
 
   return (
@@ -108,6 +110,20 @@ const ViewCard: React.FC<Props> = ({ output, onClick, onDelete, onRun }) => {
             </IconButton>
           </Tooltip>
           <ShareButton target={{ kind: 'app', id: output.id, name: output.name }} tone="chip" iconFontSize={16} />
+          <Tooltip title="History">
+            <IconButton
+              size="small"
+              onClick={(e) => { e.stopPropagation(); onHistory(); }}
+              sx={{
+                bgcolor: c.bg.surface,
+                color: c.text.secondary,
+                boxShadow: c.shadow.sm,
+                '&:hover': { bgcolor: c.bg.elevated },
+              }}
+            >
+              <HistoryIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Delete">
             <IconButton
               size="small"

@@ -3,6 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
+import Dialog from '@mui/material/Dialog';
+import Snackbar from '@mui/material/Snackbar';
+import Alert from '@mui/material/Alert';
 import AddIcon from '@mui/icons-material/Add';
 import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { fetchOutputs, deleteOutput, Output } from '@/shared/state/outputsSlice';
@@ -11,6 +14,7 @@ import { byPreviewRecency } from '@/shared/previewOrder';
 import ViewCard from './ViewCard';
 import { Skeleton } from '@/app/components/feedback/Loading';
 import ViewRunDialog from './ViewRunDialog';
+import HistoryPanel from './HistoryPanel';
 // Lazy: pulls CodeMirror (~600KB) + 1600 lines of form scaffolding, only needed when an editor opens.
 const ViewEditor = lazy(() => import('./ViewEditor'));
 
@@ -27,6 +31,10 @@ const Views: React.FC = () => {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingOutput, setEditingOutput] = useState<Output | null>(null);
   const [runOutput, setRunOutput] = useState<Output | null>(null);
+  const [historyOutput, setHistoryOutput] = useState<Output | null>(null);
+  // Branch closes the history modal, which would unmount the panel before its own
+  // flash renders; surface the confirmation at the grid level so it survives.
+  const [branchToast, setBranchToast] = useState(false);
 
   useEffect(() => {
     dispatch(fetchOutputs());
@@ -161,6 +169,7 @@ const Views: React.FC = () => {
                   onClick={() => handleEditView(output)}
                   onDelete={() => handleDeleteView(output.id)}
                   onRun={() => setRunOutput(output)}
+                  onHistory={() => setHistoryOutput(output)}
                 />
               </Box>
             ))}
@@ -174,6 +183,34 @@ const Views: React.FC = () => {
           onClose={() => setRunOutput(null)}
         />
       )}
+
+      {historyOutput && (
+        <Dialog
+          open
+          onClose={() => setHistoryOutput(null)}
+          PaperProps={{ sx: { borderRadius: 3, bgcolor: c.bg.surface, width: 480, maxWidth: '92vw', height: '72vh' } }}
+        >
+          <HistoryPanel
+            outputId={historyOutput.id}
+            onBranched={() => { setHistoryOutput(null); setBranchToast(true); }}
+          />
+        </Dialog>
+      )}
+
+      <Snackbar
+        open={branchToast}
+        autoHideDuration={3000}
+        onClose={() => setBranchToast(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setBranchToast(false)}
+          severity="success"
+          sx={{ bgcolor: c.status.successBg, color: c.status.success, border: `1px solid rgba(38,91,25,0.25)` }}
+        >
+          Saved as a new app. Find it at the top of your apps.
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
