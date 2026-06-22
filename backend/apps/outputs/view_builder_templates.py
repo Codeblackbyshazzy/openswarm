@@ -319,13 +319,21 @@ def _ensure_warm_cache() -> str | None:
     with _warm_cache_lock:
         if _warm_cache_is_complete(cache_modules):
             return cache_modules
+        # A node_modules that exists but flunks the completeness check is a
+        # half-finished install; wipe it so the rebuild below starts on clean
+        # ground instead of layering onto a broken tree.
+        if os.path.isdir(cache_modules):
+            shutil.rmtree(cache_modules, ignore_errors=True)
         # Fast path: pre-built archive shipped inside the release. The
         # build script generates this so users hitting OpenSwarm for the
         # first time skip the ~22 s live `npm install`. Falls through on
         # any failure so dev installs (no archive) keep working.
         if _try_extract_bundled_archive(cache_dir, _warm_cache_digest()):
-            logger.info("webapp-template: warm cache ready from bundled archive")
-            return cache_modules
+            if _warm_cache_is_complete(cache_modules):
+                logger.info("webapp-template: warm cache ready from bundled archive")
+                return cache_modules
+            # Archive unpacked a tree without the launch bin; don't trust it.
+            shutil.rmtree(cache_modules, ignore_errors=True)
         try:
             os.makedirs(cache_dir, exist_ok=True)
             # Copy package.json + lockfile (if it exists) into the cache
@@ -369,6 +377,10 @@ def _ensure_warm_cache() -> str | None:
                     result.returncode,
                     (result.stderr or "")[-1500:],
                 )
+                return None
+            # Never hand back a tree the workspace can't actually launch from.
+            if not _warm_cache_is_complete(cache_modules):
+                logger.warning("webapp-template: warm-cache install left no .bin/vite; not caching")
                 return None
             return cache_modules
         except Exception as exc:
@@ -549,7 +561,7 @@ def warm_cache_in_background() -> None:
     global _warm_cache_thread
     if _warm_cache_thread is not None and _warm_cache_thread.is_alive():
         return
-    node_done = os.path.isdir(os.path.join(_warm_cache_dir(), "node_modules"))
+    node_done = _warm_cache_is_complete(os.path.join(_warm_cache_dir(), "node_modules"))
     venv_done = os.path.isfile(os.path.join(_warm_venv_dir(), ".populated"))
     if node_done and venv_done:
         return

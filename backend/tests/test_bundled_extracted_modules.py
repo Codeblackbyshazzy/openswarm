@@ -31,3 +31,38 @@ def test_no_bundled_tree_returns_none(monkeypatch, tmp_path):
     # caller falls through to the .tar.gz extract or live npm.
     monkeypatch.setattr(vt, "_BUNDLED_ARCHIVE_DIR", str(tmp_path / "empty"))
     assert vt._bundled_extracted_modules() is None
+
+
+def test_warm_cache_is_complete_requires_launch_bin(tmp_path):
+    # A package tree on disk is NOT a finished install; the .bin/vite launch
+    # shim is what proves npm finished its bin-linking phase.
+    nm = tmp_path / "node_modules"
+    (nm / "vite" / "bin").mkdir(parents=True)
+    (nm / "vite" / "bin" / "vite.js").write_text("// vite")
+    assert vt._warm_cache_is_complete(str(nm)) is False
+    bindir = nm / ".bin"
+    bindir.mkdir()
+    (bindir / "vite").symlink_to("../vite/bin/vite.js")
+    assert vt._warm_cache_is_complete(str(nm)) is True
+
+
+def test_ensure_warm_cache_wipes_partial_and_never_returns_incomplete(monkeypatch, tmp_path):
+    # A half-finished cache (package tree present, .bin/vite missing) must be
+    # WIPED and never handed back, so no workspace symlinks to an unlaunchable
+    # tree and run.sh is never pushed into installing through the shared cache.
+    digest = vt._warm_cache_digest()
+    home = tmp_path / "home"
+    monkeypatch.setenv("OPENSWARM_WEBAPP_CACHE_DIR", str(home))
+    cache_modules = home / digest / "node_modules"
+    (cache_modules / "vite" / "bin").mkdir(parents=True)
+    (cache_modules / "vite" / "bin" / "vite.js").write_text("// vite")
+    assert vt._warm_cache_is_complete(str(cache_modules)) is False
+
+    # No bundled tree, no archive, no npm: the only honest answer is "not ready"
+    # (None), and the broken tree must be gone, not cached for the next caller.
+    monkeypatch.setattr(vt, "_BUNDLED_ARCHIVE_DIR", str(tmp_path / "noresources"))
+    monkeypatch.setattr(vt, "_try_extract_bundled_archive", lambda *a, **k: False)
+    monkeypatch.setattr(vt, "_resolve_npm", lambda: None)
+
+    assert vt._ensure_warm_cache() is None
+    assert not cache_modules.exists()
