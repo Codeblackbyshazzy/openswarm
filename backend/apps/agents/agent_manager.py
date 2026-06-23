@@ -52,6 +52,7 @@ from backend.apps.agents.manager import browser_dispatch
 from backend.apps.agents.manager import metadata
 from backend.apps.agents.manager.session.apply_context_window import apply_context_window
 from backend.apps.agents.manager.session import lifecycle
+from backend.apps.agents.manager.permissions import path_gate
 from backend.apps.agents.manager.session.workspace_git import _detect_git_identity, _ensure_cwd_git_repo
 from backend.apps.agents.manager.prompt.tool_catalog import (
     FULL_TOOLS,
@@ -491,211 +492,6 @@ class AgentManager:
         def _default_for(tool_name: str) -> str:
             return _DEFAULTS.get(tool_name, "always_allow")
 
-        # Defense-in-depth path gate: flips Write/Edit/NotebookEdit from
-        # always_allow to ask only for paths where a prompt-injected write
-        # would grant the attacker persistence or credential exfil that the
-        # user can't easily undo. Excludes routine dev artifacts (.env files,
-        # generic app-support dirs); those triggered approvals on every
-        # webapp build and contradicted the user's UI setting without
-        # blocking any real attacker (a project .env doesn't auto-execute
-        # and doesn't grant persistence; the threat is SSH auth keys, shell
-        # rc files that auto-source on login, publish tokens, keychains,
-        # and system dirs).
-        import fnmatch as _fnmatch
-
-        # Each entry: pattern -> (short label, plain-English risk).
-        # Multiple patterns can describe the same folder, but the user-
-        # facing label/risk is what we show in the approval card, so it
-        # has to read clearly to a non-developer who has no idea what
-        # `~/.ssh/authorized_keys` is.
-        _SENSITIVE_PATH_INFO: dict[str, tuple[str, str]] = {
-            "*/.ssh": ("SSH folder (~/.ssh)", "Controls who can log in to your computer remotely."),
-            "*/.ssh/*": ("SSH folder (~/.ssh)", "Controls who can log in to your computer remotely."),
-            "*/.aws/*": ("AWS credentials (~/.aws)", "Cloud account access keys; can spend money and read your data."),
-            "*/.config/gcloud/*": ("Google Cloud credentials", "Cloud account access; can spend money and read your data."),
-            "*/.kube/*": ("Kubernetes config (~/.kube)", "Admin access to your Kubernetes clusters."),
-            "*/.gnupg/*": ("GPG encryption keys", "Your private encryption keys; lets attackers decrypt your data or sign as you."),
-            "*/.docker/config*": ("Docker credentials", "Login tokens for container registries."),
-            "*/.zshrc": ("Shell startup file (.zshrc)", "Runs automatically every time you open a terminal."),
-            "*/.bashrc": ("Shell startup file (.bashrc)", "Runs automatically every time you open a terminal."),
-            "*/.bash_profile": ("Shell startup file (.bash_profile)", "Runs automatically every time you log in."),
-            "*/.profile": ("Shell startup file (.profile)", "Runs automatically every time you log in."),
-            "*/.zprofile": ("Shell startup file (.zprofile)", "Runs automatically every time you log in."),
-            "*/.zshenv": ("Shell environment file (.zshenv)", "Runs automatically for every shell, including non-interactive ones."),
-            "*/.gitconfig": ("Global Git config", "Affects every Git command you run; can hijack commits."),
-            "*/.npmrc": ("npm auth file (~/.npmrc)", "Lets you publish npm packages; a token here can publish malicious packages as you."),
-            "*/.pypirc": ("PyPI auth file (~/.pypirc)", "Lets you publish Python packages; a token here can publish malicious packages as you."),
-            "*/.netrc": ("Stored login info (~/.netrc)", "Saved passwords for various services."),
-            "*/Library/Keychains/*": ("macOS Keychain", "Where macOS stores all your saved passwords."),
-            "/etc/*": ("System config (/etc)", "Affects the whole computer, not just your account."),
-            "/private/etc/*": ("System config (/etc)", "Affects the whole computer, not just your account."),
-            "/System/*": ("macOS system folder", "Affects the whole computer; should almost never be modified."),
-            "/usr/local/etc/*": ("System config (/usr/local/etc)", "Affects the whole computer, not just your account."),
-        }
-        _SENSITIVE_PATH_PATTERNS = tuple(_SENSITIVE_PATH_INFO.keys())
-
-        def _match_sensitive_pattern(file_path: str) -> str | None:
-            """Return the matched sensitive pattern, or None if the path isn't
-            sensitive OR if the user has previously trusted that pattern. The
-            trusted list is reloaded on every call so a trust decision made
-            during one approval takes effect for any later prompt fired in the
-            same turn (no in-process cache to invalidate).
-            """
-            if not file_path or not isinstance(file_path, str):
-                return None
-            try:
-                norm = os.path.normpath(os.path.expanduser(file_path))
-            except Exception:
-                return None
-            # Normalize to forward slashes so the patterns match on Windows
-            # too, `os.path.normpath` produces backslashes on Windows
-            # (`C:\Users\eric\.ssh\authorized_keys`), and fnmatch treats
-            # `/` in the pattern as a literal character. Without this,
-            # every sensitive-path gate would silently no-op on Windows
-            # production and the prompt-injected `Write` to `~/.ssh/...`
-            # would go through unchallenged.
-            if os.sep != '/':
-                norm = norm.replace(os.sep, '/')
-            trusted = set(load_trusted_sensitive_paths())
-            for pat in _SENSITIVE_PATH_PATTERNS:
-                if pat in trusted:
-                    continue
-                if _fnmatch.fnmatch(norm, pat):
-                    return pat
-            return None
-
-        _PATH_GATED_TOOLS = ("Write", "Edit", "NotebookEdit")
-
-        # OS-level scheduling across macOS/Linux/Windows. Agent must
-        # not install cron entries, launchd plists, Windows scheduled
-        # tasks, or PowerShell ScheduledTask cmdlets behind the user's
-        # back. Word-bounded so we don't flag stray strings in echo etc.
-        import re as _re_sched
-        _OS_SCHED_RE = _re_sched.compile(
-            r"\b("
-            r"crontab|launchctl|launchd|schtasks|systemd-run|"
-            r"systemctl\s+--user.*timer|at\s+\d|at\s+now|at\s+-f|"
-            # Windows PowerShell scheduled-task cmdlets:
-            r"Register-ScheduledTask|New-ScheduledTask|Set-ScheduledTask|"
-            r"Register-ScheduledJob|New-ScheduledJob"
-            r")\b",
-            _re_sched.IGNORECASE,
-        )
-
-        def _looks_like_os_scheduling(tool_input) -> bool:
-            if not isinstance(tool_input, dict):
-                return False
-            cmd = str(tool_input.get("command") or "")
-            if not cmd:
-                return False
-            return bool(_OS_SCHED_RE.search(cmd))
-
-        # Catastrophic-path Bash gate. Bash is intentionally NOT in
-        # _PATH_GATED_TOOLS because gating every `echo ... > /tmp/foo` would
-        # interrupt routine work; but a single redirected write to one of
-        # these paths can grant persistent attacker access (SSH keys,
-        # sudoers, Keychain) or break the OS in ways the user can't
-        # recover from. Scope is intentionally tighter than the Write/Edit
-        # list because Bash is the agent's hot path and we'd rather miss
-        # a borderline case than gate routine commands. The trust list is
-        # shared with Write/Edit so a single "Always allow" decision in
-        # the modal covers both surfaces.
-        _BASH_CATASTROPHIC_INFO: dict[str, tuple[str, str]] = {
-            "*/.ssh/*": ("SSH folder (~/.ssh)", "Controls who can log in to your computer remotely."),
-            "/etc/sudoers": ("Sudo permissions (/etc/sudoers)", "Controls which commands can run with admin privileges."),
-            "/etc/sudoers.d/*": ("Sudo permissions (/etc/sudoers.d)", "Controls which commands can run with admin privileges."),
-            "/etc/passwd": ("System user list (/etc/passwd)", "Defines every user account on this computer."),
-            "/etc/shadow": ("System password file (/etc/shadow)", "Stores password hashes for every user account."),
-            "*/Library/Keychains/*": ("macOS Keychain", "Where macOS stores all your saved passwords."),
-            "/System/*": ("macOS system folder", "Affects the whole computer; should almost never be modified."),
-        }
-        _BASH_CATASTROPHIC_PATTERNS = tuple(_BASH_CATASTROPHIC_INFO.keys())
-
-        # Token-extraction regex: pulls quoted strings AND bare path-like
-        # tokens out of the Bash command so we can match against the
-        # catastrophic list. Intentionally loose: false positives just
-        # mean an extra approval prompt, never a missed gate.
-        _BASH_PATH_TOKEN_RE = _re_sched.compile(
-            r"""(?P<quoted>"[^"]+"|'[^']+')|(?P<bare>[~/.][\w./~\-]*)"""
-        )
-
-        # Write operators we care about. Presence alone is not enough;
-        # we also need a sensitive target in the same command. Includes
-        # both shell redirection (`>`, `>>`, `tee`) and tools that take
-        # an explicit destination flag (`cp`, `mv`, `dd of=`, `sed -i`,
-        # `install`, `chmod`, `chown`, `rm`).
-        _BASH_WRITE_OP_RE = _re_sched.compile(
-            r"(?:>>?|\btee\b|\bsed\s+-i\b|\bcp\b|\bmv\b|\bdd\b[^|]*\bof=|\binstall\b|\bchmod\b|\bchown\b|\brm\b|\btouch\b|\bmkdir\b|\bln\b)",
-            _re_sched.IGNORECASE,
-        )
-
-        def _match_bash_catastrophic_pattern(command: str) -> str | None:
-            """Return the matched catastrophic-path pattern for a Bash
-            command, or None if the command isn't writing to one (or the
-            user has trusted that pattern). Same trust-list as
-            _match_sensitive_pattern so toggling once covers both.
-            """
-            if not command or not isinstance(command, str):
-                return None
-            if not _BASH_WRITE_OP_RE.search(command):
-                return None
-            trusted = set(load_trusted_sensitive_paths())
-            for raw_match in _BASH_PATH_TOKEN_RE.finditer(command):
-                tok = (raw_match.group("quoted") or raw_match.group("bare") or "")
-                if tok and tok[0] in ("'", '"'):
-                    tok = tok[1:-1]
-                if not tok:
-                    continue
-                try:
-                    norm = os.path.normpath(os.path.expanduser(tok))
-                except Exception:
-                    continue
-                if os.sep != '/':
-                    norm = norm.replace(os.sep, '/')
-                for pat in _BASH_CATASTROPHIC_PATTERNS:
-                    if pat in trusted:
-                        continue
-                    if _fnmatch.fnmatch(norm, pat):
-                        return pat
-            return None
-
-        def _extract_target_path(tool_name: str, tool_input) -> str:
-            if not isinstance(tool_input, dict):
-                return ""
-            if tool_name == "NotebookEdit":
-                return str(tool_input.get("notebook_path") or "")
-            return str(tool_input.get("file_path") or "")
-
-        def _maybe_override_policy(policy: str, tool_name: str, tool_input) -> tuple[str, str | None]:
-            """Returns (effective_policy, matched_sensitive_pattern).
-
-            Flips a permissive policy to 'ask' when the target path is
-            sensitive (and not in the user's trusted allowlist). Defense
-            in depth: even if the user has Write set to always_allow for
-            productivity, a prompt-injected agent writing to
-            ~/.ssh/authorized_keys or ~/.zshrc gets surfaced for review;
-            but once the user opts into "always allow files like this"
-            for a given pattern, future writes to that pattern pass
-            through silently.
-
-            Also: Bash invocations that look like OS-level scheduling
-            (crontab, launchctl, schtasks, at, systemd-run --on-calendar)
-            are flipped to 'ask' regardless of permission policy; we
-            don't want the agent silently installing cron entries.
-            """
-            if tool_name == "Bash" and _looks_like_os_scheduling(tool_input):
-                return "ask", None
-            if tool_name == "Bash" and isinstance(tool_input, dict):
-                bash_match = _match_bash_catastrophic_pattern(str(tool_input.get("command") or ""))
-                if bash_match:
-                    return "ask", bash_match
-            if policy != "always_allow" or tool_name not in _PATH_GATED_TOOLS:
-                return policy, None
-            matched = _match_sensitive_pattern(_extract_target_path(tool_name, tool_input))
-            if matched:
-                return "ask", matched
-            return policy, None
-
         def _get_effective_policy(tool_name: str) -> str:
             """Return 'always_allow', 'deny', or 'ask' for any tool. Keyed through
             the shared resolver so the read slot matches the write slot exactly."""
@@ -740,10 +536,9 @@ class AgentManager:
             request_id = uuid4().hex
             label, why = (None, None)
             if sensitive_pattern:
-                if sensitive_pattern in _SENSITIVE_PATH_INFO:
-                    label, why = _SENSITIVE_PATH_INFO[sensitive_pattern]
-                elif sensitive_pattern in _BASH_CATASTROPHIC_INFO:
-                    label, why = _BASH_CATASTROPHIC_INFO[sensitive_pattern]
+                described = path_gate.describe_sensitive_pattern(sensitive_pattern)
+                if described:
+                    label, why = described
             approval_req = ApprovalRequest(
                 id=request_id,
                 session_id=session_id,
@@ -819,7 +614,7 @@ class AgentManager:
         async def can_use_tool(tool_name, input_data, context):
             sensitive_pattern: str | None = None
             if tool_name != "AskUserQuestion":
-                policy, sensitive_pattern = _maybe_override_policy(
+                policy, sensitive_pattern = path_gate.maybe_override_policy(
                     _get_effective_policy(tool_name), tool_name, input_data
                 )
                 if policy == "always_allow":
@@ -917,7 +712,7 @@ class AgentManager:
 
             if tool_name and tool_name != "AskUserQuestion":
                 tool_input = input_data.get("tool_input", {})
-                policy, sensitive_pattern = _maybe_override_policy(
+                policy, sensitive_pattern = path_gate.maybe_override_policy(
                     _get_effective_policy(tool_name), tool_name, tool_input
                 )
 
