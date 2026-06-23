@@ -1,4 +1,4 @@
-"""Streaming harness: drive the real _run_agent_loop with a MOCKED claude_agent_sdk.query
+"""Streaming harness: drive the real p_run_agent_loop with a MOCKED claude_agent_sdk.query
 that yields a controlled SDK message sequence, and assert the session state + emitted WS
 events. This is the safety net for restructuring the streaming loop (it had no isolated
 coverage), so it pins the observable contract: streamed text lands as an assistant message,
@@ -22,7 +22,7 @@ def _mock_query_yielding(*messages):
 
 
 def _drive(monkeypatch, messages, prompt="hi"):
-    """Run one _run_agent_loop turn against a mocked SDK message stream; return (session, ws_events)."""
+    """Run one p_run_agent_loop turn against a mocked SDK message stream; return (session, ws_events)."""
     events = []
 
     async def fake_send(session_id, event, data):
@@ -35,7 +35,7 @@ def _drive(monkeypatch, messages, prompt="hi"):
     from backend.apps.agents.core.models import AgentSession
     session = AgentSession(name="t", model="sonnet", dashboard_id="d")
     mgr.sessions[session.id] = session
-    asyncio.run(mgr._run_agent_loop(session.id, prompt))
+    asyncio.run(mgr.p_run_agent_loop(session.id, prompt))
     return session, events
 
 
@@ -55,7 +55,7 @@ def _assistant(blocks, **kw):
 
 def test_loop_wires_all_four_hooks_to_a_live_hook_context(monkeypatch):
     # Integration coverage the unit tests can't give: capture the ClaudeAgentOptions the real
-    # loop hands to query(), then invoke the WIRED hooks. This proves _run_agent_loop builds a
+    # loop hands to query(), then invoke the WIRED hooks. This proves p_run_agent_loop builds a
     # HookContext (all required fields, incl. the live `sessions` registry) and the four thin
     # wrappers delegate to the extracted hook modules. The SDK never fires these under a mocked
     # query, so without this the wiring (not just the functions) would be untested.
@@ -76,7 +76,7 @@ def test_loop_wires_all_four_hooks_to_a_live_hook_context(monkeypatch):
     from backend.apps.agents.core.models import AgentSession
     session = AgentSession(name="t", model="sonnet", dashboard_id="d")
     mgr.sessions[session.id] = session
-    asyncio.run(mgr._run_agent_loop(session.id, "hi"))
+    asyncio.run(mgr.p_run_agent_loop(session.id, "hi"))
 
     options = captured["options"]
     assert options is not None
@@ -174,7 +174,7 @@ def test_transient_capacity_error_is_retried_then_succeeds(monkeypatch):
     from backend.apps.agents.core.models import AgentSession
     session = AgentSession(name="t", model="sonnet", dashboard_id="d")
     mgr.sessions[session.id] = session
-    asyncio.run(mgr._run_agent_loop(session.id, "hi"))
+    asyncio.run(mgr.p_run_agent_loop(session.id, "hi"))
 
     assert state["n"] == 2  # retried exactly once
     assert any(m.role == "assistant" and "Recovered" in str(m.content) for m in session.messages)
@@ -207,7 +207,7 @@ def test_thinking_pill_shows_per_turn_delta_not_cumulative(monkeypatch):
     session = AgentSession(name="t", model="sonnet", dashboard_id="d")
     session.tokens = {"input_fresh": 1000, "output": 500}  # prior-turn accumulation
     mgr.sessions[session.id] = session
-    asyncio.run(mgr._run_agent_loop(session.id, "hi"))
+    asyncio.run(mgr.p_run_agent_loop(session.id, "hi"))
 
     assert pills, "expected a consolidated thinking pill"
     assert pills[-1]["input_tokens"] == 150  # (1100-1000)+(550-500), not the cumulative 1650

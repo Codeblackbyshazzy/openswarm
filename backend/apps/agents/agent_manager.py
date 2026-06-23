@@ -7,7 +7,8 @@ import sys
 import time
 from datetime import datetime
 from uuid import uuid4
-from typing import Dict, Optional
+from typing import Dict, List, Optional
+from typeguard import typechecked
 
 from backend.apps.agents.core.models import (
     AgentConfig, AgentSession, Message, MessageBranch, ApprovalRequest, ToolGroupMeta,
@@ -90,13 +91,14 @@ os.environ.setdefault("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", "3600000")
 
 
 class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunSupportMixin):
+    @typechecked
     def __init__(self):
-        self.sessions: dict[str, AgentSession] = {}
-        self.tasks: dict[str, asyncio.Task] = {}
+        self.sessions: Dict[str, AgentSession] = {}
+        self.tasks: Dict[str, asyncio.Task] = {}
         # Live mirror of the in-flight streamed assistant text per session, so a
         # stop can persist the partial reply instantly instead of waiting out the
         # multi-second SDK teardown the cancel handler sits behind.
-        self._live_partial: Dict[str, LivePartial] = {}
+        self.p_live_partial: Dict[str, LivePartial] = {}
 
 
 
@@ -120,7 +122,8 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
 
 
 
-    async def _run_agent_loop(self, session_id: str, prompt: str, images: list | None = None, context_paths: list | None = None, forced_tools: list[str] | None = None, attached_skills: list | None = None, fork_session: bool = False, selected_browser_ids: list[str] | None = None, selected_app_output_ids: list[str] | None = None, selected_setting_ids: list[str] | None = None):
+    @typechecked
+    async def p_run_agent_loop(self, session_id: str, prompt: str, images: Optional[List] = None, context_paths: Optional[List] = None, forced_tools: Optional[List[str]] = None, attached_skills: Optional[List] = None, fork_session: bool = False, selected_browser_ids: Optional[List[str]] = None, selected_app_output_ids: Optional[List[str]] = None, selected_setting_ids: Optional[List[str]] = None):
         """Run the Claude Agent SDK query loop for a session."""
         session = self.sessions.get(session_id)
         if not session:
@@ -512,7 +515,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                 logger.info(f"[MCP-DEBUG] effective_disallowed: {effective_disallowed}")
 
             # `p_router_model_id` and `p_api_type_for_session` were resolved
-            # at the top of _run_agent_loop (before any closures were
+            # at the top of p_run_agent_loop (before any closures were
             # defined) so analytics closures could tag events with them.
             # Reuse those values here and keep session.provider in sync.
             resolved_model = p_router_model_id
@@ -1158,12 +1161,12 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
 
                     if isinstance(message, StreamEvent):
                         await stream_event.handle_stream_event(
-                            message, session, session_id, turn, thinking, self._live_partial
+                            message, session, session_id, turn, thinking, self.p_live_partial
                         )
 
                     elif isinstance(message, AssistantMessage):
                         await assistant_message.handle_assistant_message(
-                            message, session, session_id, turn, thinking, self._live_partial, self.sessions
+                            message, session, session_id, turn, thinking, self.p_live_partial, self.sessions
                         )
                     elif isinstance(message, ResultMessage):
                         await result_message.handle_result_message(
@@ -1214,7 +1217,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                             })
                             turn.stream_text_msg_id = None
                         turn.stream_text_accum = ""
-                        self._live_partial.pop(session_id, None)
+                        self.p_live_partial.pop(session_id, None)
                         for p_tool_msg_id in turn.stream_tool_msg_ids_ordered:
                             await ws_manager.send_to_session(session_id, "agent:stream_end", {
                                 "session_id": session_id,
@@ -1237,7 +1240,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             # analogous flow) flagged pending_continuation during this
             # turn, kick off a follow-up turn immediately with the
             # captured prompt. We dispatch as a fire-and-forget task so
-            # the current _run_agent_loop frame can unwind cleanly
+            # the current p_run_agent_loop frame can unwind cleanly
             # before the next turn's options + history rebuild kicks in.
             # The follow-up is `hidden=True` so it doesn't add a user
             # bubble to the visible chat; the model sees it as a
@@ -1523,7 +1526,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             # snapshot the live turn is writing.
             p_is_live_task = self.tasks.get(session_id) is asyncio.current_task()
             if p_is_live_task:
-                self._live_partial.pop(session_id, None)
+                self.p_live_partial.pop(session_id, None)
             if session_id in self.sessions and p_is_live_task:
                 # For canvas-launched App Builder sessions, the workspace
                 # folder IS the session_id (see launch_agent), so meta.json

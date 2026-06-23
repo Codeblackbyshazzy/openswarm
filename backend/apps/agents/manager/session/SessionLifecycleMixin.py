@@ -103,7 +103,7 @@ class SessionLifecycleMixin:
         wires its eviction in HERE and both removal paths get it for free."""
         self.sessions.pop(session_id, None)
         self.tasks.pop(session_id, None)
-        self._live_partial.pop(session_id, None)
+        self.p_live_partial.pop(session_id, None)
         view_builder_render_retry_counts.pop(session_id, None)
         view_builder_dirty_sessions.discard(session_id)
 

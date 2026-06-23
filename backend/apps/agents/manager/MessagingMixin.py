@@ -1,6 +1,6 @@
 """User-facing message operations for AgentManager (send / stop / edit / branch / approve /
 update), split into a mixin to keep the manager file under the size ceiling. Pure relocation:
-self._run_agent_loop / self.sessions / self.stop_agent all resolve across the MRO as before."""
+self.p_run_agent_loop / self.sessions / self.stop_agent all resolve across the MRO as before."""
 
 import asyncio
 import logging
@@ -169,7 +169,7 @@ class MessagingMixin:
         if fast_verdict != "no":
             task = asyncio.create_task(browser_dispatch.run_browser_fast_path(session, session_id, prompt, selected_browser_ids, fast_brief, fast_verdict))
         else:
-            task = asyncio.create_task(self._run_agent_loop(session_id, prompt, images=images, context_paths=context_paths, forced_tools=forced_tools, attached_skills=attached_skills, selected_browser_ids=selected_browser_ids, selected_app_output_ids=selected_app_output_ids, selected_setting_ids=selected_setting_ids))
+            task = asyncio.create_task(self.p_run_agent_loop(session_id, prompt, images=images, context_paths=context_paths, forced_tools=forced_tools, attached_skills=attached_skills, selected_browser_ids=selected_browser_ids, selected_app_output_ids=selected_app_output_ids, selected_setting_ids=selected_setting_ids))
         self.tasks[session_id] = task
 
     @typechecked
@@ -308,7 +308,7 @@ class MessagingMixin:
             "session": session.model_dump(mode="json"),
         })
 
-        task = asyncio.create_task(self._run_agent_loop(
+        task = asyncio.create_task(self.p_run_agent_loop(
             session_id, new_content,
             images=target_msg.images,
             context_paths=target_msg.context_paths,

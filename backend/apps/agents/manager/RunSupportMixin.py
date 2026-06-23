@@ -1,7 +1,7 @@
 """Per-run support methods for AgentManager: build the gated MCP server set, warm the prompt
 cache, stream-emit helpers, commit/drain a stopped turn, context-update broadcast, and the aux
 metadata + prompt/attachment delegators. Split into a mixin to keep the manager file under the
-size ceiling; self.sessions / self.tasks / self._live_partial resolve across the MRO as before."""
+size ceiling; self.sessions / self.tasks / self.p_live_partial resolve across the MRO as before."""
 
 import asyncio
 import logging
@@ -200,7 +200,7 @@ class RunSupportMixin:
         push it to the client, idempotently. Lets a stop show the partial
         instantly instead of waiting out the SDK teardown the cancel handler
         sits behind. Returns True if it committed something."""
-        live = self._live_partial.pop(session.id, None)
+        live = self.p_live_partial.pop(session.id, None)
         if not live:
             return False
         text = live.text or ""
