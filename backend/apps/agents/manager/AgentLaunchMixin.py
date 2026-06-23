@@ -18,7 +18,7 @@ from backend.apps.agents.core.models import (
 )
 from backend.apps.agents.core.ws_manager import ws_manager
 from backend.apps.settings.settings import load_settings
-from backend.apps.agents.manager.session.session_store import _load_session_data as load_session_data
+from backend.apps.agents.manager.session.session_store import load_session_data
 from backend.apps.agents.manager.session.apply_context_window import apply_context_window
 from backend.apps.agents.manager.session.workspace_git import (
     detect_git_identity,

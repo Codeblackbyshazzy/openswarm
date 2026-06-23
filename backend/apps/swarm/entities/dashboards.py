@@ -150,12 +150,12 @@ def _write(did: str, doc: dict) -> None:
 
 def _retag_sessions(session_ids, dashboard_id: str) -> None:
     # Best-effort: a hiccup here must not orphan the just-written dashboard.
-    from backend.apps.agents.manager.session.session_store import _load_session_data, _save_session
+    from backend.apps.agents.manager.session.session_store import load_session_data, save_session
     for sid in session_ids:
         try:
-            d = _load_session_data(sid)
+            d = load_session_data(sid)
             if d is not None:
                 d["dashboard_id"] = dashboard_id
-                _save_session(sid, d)
+                save_session(sid, d)
         except Exception:
             pass

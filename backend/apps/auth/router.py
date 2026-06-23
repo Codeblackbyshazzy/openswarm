@@ -211,7 +211,7 @@ async def signout():
     # Best-effort: failures here shouldn't block the sign-out itself.
     try:
         from backend.apps.agents.agent_manager import agent_manager
-        from backend.apps.agents.agent_manager import _save_session
+        from backend.apps.agents.manager.session.session_store import save_session
 
         running = list(agent_manager.tasks.keys())
         for session_id in running:
@@ -227,7 +227,7 @@ async def signout():
             if sess.sdk_session_id:
                 sess.sdk_session_id = None
                 try:
-                    _save_session(sess.id, sess.model_dump(mode="json"))
+                    save_session(sess.id, sess.model_dump(mode="json"))
                 except Exception as e:
                     logger.warning("signout: save_session(%s) failed: %s", sess.id, e)
 

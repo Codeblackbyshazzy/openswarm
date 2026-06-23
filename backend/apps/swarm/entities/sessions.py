@@ -45,8 +45,8 @@ class SessionExportable:
         if sess is not None:
             d = sess.model_dump(mode="json")
         else:
-            from backend.apps.agents.manager.session.session_store import _load_session_data
-            d = _load_session_data(local_id)
+            from backend.apps.agents.manager.session.session_store import load_session_data
+            d = load_session_data(local_id)
         if d is None:
             return None
         return cls(local_id, d.get("name") or "Agent", d)
@@ -85,7 +85,7 @@ class SessionExportable:
 
     @classmethod
     def import_(cls, payload: dict, files: dict[str, bytes], remap: RemapTable) -> str:
-        from backend.apps.agents.manager.session.session_store import _save_session
+        from backend.apps.agents.manager.session.session_store import save_session
         sid = uuid4().hex
         now = datetime.now(timezone.utc).isoformat()
         # Older bundles (made before transcripts were carried) have no messages;
@@ -118,10 +118,10 @@ class SessionExportable:
             "created_at": now,
             "closed_at": now,
         }
-        _save_session(sid, doc)
+        save_session(sid, doc)
         return sid
 
     @classmethod
     def rollback(cls, local_id: str) -> None:
-        from backend.apps.agents.manager.session.session_store import _delete_session_file
-        _delete_session_file(local_id)
+        from backend.apps.agents.manager.session.session_store import delete_session_file
+        delete_session_file(local_id)

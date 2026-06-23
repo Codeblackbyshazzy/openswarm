@@ -204,7 +204,7 @@ def test_session_import_restores_transcript_without_granting_mcp(monkeypatch):
     from backend.apps.swarm.exportable import RemapTable
     from backend.apps.agents.manager.session import session_store
     saved: dict = {}
-    monkeypatch.setattr(session_store, "_save_session", lambda sid, doc: saved.update({sid: doc}))
+    monkeypatch.setattr(session_store, "save_session", lambda sid, doc: saved.update({sid: doc}))
     payload = {
         "name": "A", "model": "sonnet", "mode": "agent",
         "messages": [{"id": "m1", "role": "user", "content": "hi", "branch_id": "main"}],
@@ -230,7 +230,7 @@ def test_session_import_old_bundle_without_transcript(monkeypatch):
     from backend.apps.swarm.exportable import RemapTable
     from backend.apps.agents.manager.session import session_store
     saved: dict = {}
-    monkeypatch.setattr(session_store, "_save_session", lambda sid, doc: saved.update({sid: doc}))
+    monkeypatch.setattr(session_store, "save_session", lambda sid, doc: saved.update({sid: doc}))
     sid = SessionExportable.import_({"name": "Old", "model": "sonnet"}, {}, RemapTable())
     doc = saved[sid]
     assert doc["messages"] == []

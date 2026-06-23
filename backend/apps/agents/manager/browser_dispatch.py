@@ -12,7 +12,7 @@ from typeguard import typechecked
 
 from backend.apps.agents.core.models import AgentSession, Message
 from backend.apps.agents.core.ws_manager import ws_manager
-from backend.apps.agents.manager.session.session_store import _save_session as save_session
+from backend.apps.agents.manager.session.session_store import save_session
 from backend.apps.settings.settings import load_settings
 
 logger = logging.getLogger(__name__)

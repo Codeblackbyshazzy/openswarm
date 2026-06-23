@@ -15,8 +15,8 @@ from backend.apps.agents.core.ws_manager import ws_manager
 from backend.apps.settings.settings import load_settings
 from backend.apps.agents.manager import browser_dispatch
 from backend.apps.agents.manager.session.session_store import (
-    _load_session_data as load_session_data,
-    _save_session as save_session,
+    load_session_data,
+    save_session,
 )
 from backend.apps.agents.manager.session.apply_context_window import apply_context_window
 from backend.apps.agents.manager.prompt.tool_catalog import get_all_tool_names

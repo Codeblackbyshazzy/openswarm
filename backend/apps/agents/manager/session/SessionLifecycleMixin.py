@@ -12,9 +12,9 @@ from typeguard import typechecked
 from backend.apps.agents.core.models import AgentSession
 from backend.apps.agents.core.ws_manager import ws_manager
 from backend.apps.agents.manager.session.session_store import (
-    _delete_session_file as delete_session_file,
-    _load_all_session_data as load_all_session_data,
-    _save_session as save_session,
+    delete_session_file,
+    load_all_session_data,
+    save_session,
     build_search_text,
 )
 from backend.apps.agents.manager.session.cloud_sync import sync_session_close

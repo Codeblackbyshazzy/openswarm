@@ -374,7 +374,7 @@ def _strip_orphan_session_cards(data: dict) -> None:
     non-destructive: a wrong check can only hide a card for one response, not
     delete it. Drafts have no backend session yet, so they're always kept."""
     from backend.apps.agents.agent_manager import agent_manager
-    from backend.apps.agents.manager.session.session_store import _load_session_data
+    from backend.apps.agents.manager.session.session_store import load_session_data
     layout = data.get("layout")
     if not isinstance(layout, dict):
         return
@@ -385,7 +385,7 @@ def _strip_orphan_session_cards(data: dict) -> None:
     def gone(sid: str) -> bool:
         if sid.startswith("draft-") or sid in agent_manager.sessions:
             return False
-        return _load_session_data(sid) is None
+        return load_session_data(sid) is None
 
     orphans = [sid for sid in cards if gone(sid)]
     for sid in orphans:
@@ -463,7 +463,7 @@ async def duplicate_dashboard(dashboard_id: str):
     now = datetime.now().isoformat()
 
     from backend.apps.agents.agent_manager import agent_manager
-    from backend.apps.agents.manager.session.session_store import _save_session
+    from backend.apps.agents.manager.session.session_store import save_session
 
     source_layout = source_data.get("layout", {}) or {}
     source_browser_cards = source_layout.get("browser_cards", {}) or {}
@@ -513,7 +513,7 @@ async def duplicate_dashboard(dashboard_id: str):
             new_sess.browser_id = browser_id_remap[old_browser_id]
         if old_parent_sid and old_parent_sid in session_id_remap:
             new_sess.parent_session_id = session_id_remap[old_parent_sid]
-        _save_session(new_sess.id, new_sess.model_dump(mode="json"))
+        save_session(new_sess.id, new_sess.model_dump(mode="json"))
 
     new_cards: dict[str, dict] = {}
     for old_sid, card in source_cards.items():

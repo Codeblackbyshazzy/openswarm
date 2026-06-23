@@ -32,8 +32,8 @@ from backend.apps.agents.core.error_classify import (
 # call time (dodging a circular import), and the disk-resilience test monkeypatches it here.
 from backend.config.paths import SESSIONS_DIR
 from backend.apps.agents.manager.session.session_store import (
-    _save_session as save_session,
-    _load_session_data as load_session_data,
+    save_session,
+    load_session_data,
 )
 from backend.apps.agents.manager.streaming.state import ThinkingState, TurnState
 from backend.apps.agents.manager.streaming.hook_context import HookContext

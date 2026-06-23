@@ -11,7 +11,7 @@ from typeguard import typechecked
 
 from backend.apps.agents.core.models import AgentSession, Message, MessageBranch
 from backend.apps.agents.manager.session.apply_context_window import apply_context_window
-from backend.apps.agents.manager.session.session_store import _load_session_data as load_session_data
+from backend.apps.agents.manager.session.session_store import load_session_data
 
 
 @typechecked
