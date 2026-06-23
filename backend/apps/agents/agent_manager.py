@@ -126,11 +126,11 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
         if not session:
             return
         
-        from backend.apps.agents.providers.registry import get_api_type as _get_api_type
-        _api = _get_api_type(session.model)
+        from backend.apps.agents.providers.registry import get_api_type as p_get_api_type
+        p_api = p_get_api_type(session.model)
         prompt_content = self.p_build_prompt_content(
             prompt, images, context_paths, forced_tools, attached_skills,
-            api_type=_api, model=session.model,
+            api_type=p_api, model=session.model,
         )
 
         try:
@@ -155,11 +155,11 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
         # name is what the user sees; the router id is what 9Router
         # reports its per-model counters under.
         from backend.apps.agents.providers.registry import (
-            resolve_model_id_for_sdk as _resolve_model_id_early,
-            get_api_type as _get_api_type_early,
+            resolve_model_id_for_sdk as p_resolve_model_id_early,
+            get_api_type as p_get_api_type_early,
         )
-        _router_model_id = _resolve_model_id_early(session.model, load_settings())
-        _api_type_for_session = _get_api_type_early(session.model)
+        p_router_model_id = p_resolve_model_id_early(session.model, load_settings())
+        p_api_type_for_session = p_get_api_type_early(session.model)
 
         builtin_perms = load_builtin_permissions()
 
@@ -199,21 +199,21 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             # "X is active" while p_build_mcp_servers silently filters it out.
             # Emit a context_status event so the model and UI both know.
             try:
-                _enabled = {
+                p_enabled = {
                     _sanitize_server_name(t.name)
                     for t in load_all_tools()
                     if t.mcp_config and t.enabled and t.auth_status in ("configured", "connected")
                 }
-                _stale = [s for s in session.active_mcps if s not in _enabled]
-                if _stale:
-                    session.active_mcps = [s for s in session.active_mcps if s in _enabled]
+                p_stale = [s for s in session.active_mcps if s not in p_enabled]
+                if p_stale:
+                    session.active_mcps = [s for s in session.active_mcps if s in p_enabled]
                     session.needs_fork = True
                     await ws_manager.send_to_session(session_id, "agent:context_status", {
                         "session_id": session_id,
                         "reason": "mcp_disabled_externally",
-                        "deactivated": _stale,
+                        "deactivated": p_stale,
                     })
-                    logger.info(f"Reconciled stale active_mcps for session {session_id}: dropped {_stale}")
+                    logger.info(f"Reconciled stale active_mcps for session {session_id}: dropped {p_stale}")
             except Exception:
                 logger.exception("active_mcps reconciliation failed; proceeding")
 
@@ -233,13 +233,13 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             # MCP tool definitions range 1-10K depending on server; 3K is a
             # rough median that keeps the meter honest without over-trimming),
             # char/4 of composed prompt.
-            _PRESET_OVERHEAD = 16_000
-            _TOOL_DEFS_OVERHEAD = 12_000
-            _PER_MCP_OVERHEAD = 3_000
-            _composed_tokens = len(composed_prompt or "") // 4
-            _mcp_tokens = len(session.active_mcps) * _PER_MCP_OVERHEAD
+            p_PRESET_OVERHEAD = 16_000
+            p_TOOL_DEFS_OVERHEAD = 12_000
+            p_PER_MCP_OVERHEAD = 3_000
+            p_composed_tokens = len(composed_prompt or "") // 4
+            p_mcp_tokens = len(session.active_mcps) * p_PER_MCP_OVERHEAD
             session.framework_overhead_tokens = (
-                _PRESET_OVERHEAD + _TOOL_DEFS_OVERHEAD + _composed_tokens + _mcp_tokens
+                p_PRESET_OVERHEAD + p_TOOL_DEFS_OVERHEAD + p_composed_tokens + p_mcp_tokens
             )
 
             # Pass session.active_mcps as the activation filter. Empty list ⇒
@@ -248,13 +248,13 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             # dispatch layer (see p_build_mcp_servers docstring).
             mcp_servers = await self.p_build_mcp_servers(session.allowed_tools, session.active_mcps)
 
-            _browser_delegation_tools = ["CreateBrowserAgent", "BrowserAgent", "BrowserAgents"]
-            _browser_all_denied = all(
+            p_browser_delegation_tools = ["CreateBrowserAgent", "BrowserAgent", "BrowserAgents"]
+            p_browser_all_denied = all(
                 builtin_perms.get(t, "always_allow") == "deny"
-                for t in _browser_delegation_tools
+                for t in p_browser_delegation_tools
             )
 
-            if not _browser_all_denied:
+            if not p_browser_all_denied:
                 browser_agent_server_path = os.path.join(
                     os.path.dirname(__file__), "browser_agent_mcp_server.py"
                 )
@@ -264,14 +264,14 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                 # EVERY dashboard card here (the old behavior) made the sub force-grab a random,
                 # usually-parked card and never navigate it, which broke the bulk of browser tasks.
                 pre_selected_bids = [b for b in (selected_browser_ids or []) if b]
-                from backend.auth import get_auth_token as _get_auth_token
-                _auth_tok = _get_auth_token()
+                from backend.auth import get_auth_token as p_get_auth_token
+                p_auth_tok = p_get_auth_token()
                 mcp_servers["openswarm-browser-agent"] = {
                     "command": sys.executable,
                     "args": [browser_agent_server_path],
                     "env": {
                         "OPENSWARM_PORT": backend_port,
-                        "OPENSWARM_AUTH_TOKEN": _auth_tok,
+                        "OPENSWARM_AUTH_TOKEN": p_auth_tok,
                         "OPENSWARM_AGENT_MODEL": session.model,
                         "OPENSWARM_DASHBOARD_ID": session.dashboard_id or "",
                         "OPENSWARM_PRE_SELECTED_BROWSER_IDS": ",".join(pre_selected_bids),
@@ -280,24 +280,24 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                     "type": "stdio",
                 }
 
-            _invoke_agent_tools = ["InvokeAgent"]
-            _invoke_all_denied = all(
+            p_invoke_agent_tools = ["InvokeAgent"]
+            p_invoke_all_denied = all(
                 builtin_perms.get(t, "always_allow") == "deny"
-                for t in _invoke_agent_tools
+                for t in p_invoke_agent_tools
             )
 
-            if not _invoke_all_denied:
+            if not p_invoke_all_denied:
                 invoke_agent_server_path = os.path.join(
                     os.path.dirname(__file__), "invoke_agent_mcp_server.py"
                 )
                 backend_port = os.environ.get("OPENSWARM_PORT", "8324")
-                from backend.auth import get_auth_token as _get_auth_token2
+                from backend.auth import get_auth_token as p_get_auth_token2
                 mcp_servers["openswarm-invoke-agent"] = {
                     "command": sys.executable,
                     "args": [invoke_agent_server_path],
                     "env": {
                         "OPENSWARM_PORT": backend_port,
-                        "OPENSWARM_AUTH_TOKEN": _get_auth_token2(),
+                        "OPENSWARM_AUTH_TOKEN": p_get_auth_token2(),
                         "OPENSWARM_PARENT_SESSION_ID": session.id,
                         "OPENSWARM_DASHBOARD_ID": session.dashboard_id or "",
                     },
@@ -312,13 +312,13 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             mcp_meta_server_path = os.path.join(
                 os.path.dirname(__file__), "mcp_meta_server.py"
             )
-            from backend.auth import get_auth_token as _get_auth_token3
+            from backend.auth import get_auth_token as p_get_auth_token3
             mcp_servers["openswarm-mcp-meta"] = {
                 "command": sys.executable,
                 "args": [mcp_meta_server_path],
                 "env": {
                     "OPENSWARM_PORT": os.environ.get("OPENSWARM_PORT", "8324"),
-                    "OPENSWARM_AUTH_TOKEN": _get_auth_token3(),
+                    "OPENSWARM_AUTH_TOKEN": p_get_auth_token3(),
                     "OPENSWARM_PARENT_SESSION_ID": session.id,
                 },
                 "type": "stdio",
@@ -333,13 +333,13 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             settings_meta_server_path = os.path.join(
                 os.path.dirname(__file__), "settings_meta_server.py"
             )
-            from backend.auth import get_auth_token as _get_auth_token4
+            from backend.auth import get_auth_token as p_get_auth_token4
             mcp_servers["openswarm-settings-meta"] = {
                 "command": sys.executable,
                 "args": [settings_meta_server_path],
                 "env": {
                     "OPENSWARM_PORT": os.environ.get("OPENSWARM_PORT", "8324"),
-                    "OPENSWARM_AUTH_TOKEN": _get_auth_token4(),
+                    "OPENSWARM_AUTH_TOKEN": p_get_auth_token4(),
                     "OPENSWARM_PARENT_SESSION_ID": session.id,
                 },
                 "type": "stdio",
@@ -347,13 +347,13 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
 
 
             # Register the DDG-backed openswarm-web MCP only when the primary has no reliable
-            # native Anthropic web path (decided in tools/web.py); _m feeds the registration log
+            # native Anthropic web path (decided in tools/web.py); p_m feeds the registration log
             # + provider branch just below, so it stays a loop local.
-            _m = _router_model_id if isinstance(_router_model_id, str) else ""
+            p_m = p_router_model_id if isinstance(p_router_model_id, str) else ""
             need_web_mcp = should_register_web_mcp(
                 model=session.model,
-                router_model_id=_router_model_id,
-                api_type=_api_type_for_session,
+                router_model_id=p_router_model_id,
+                api_type=p_api_type_for_session,
                 anthropic_api_key=getattr(global_settings, "anthropic_api_key", None),
                 connection_mode=getattr(global_settings, "connection_mode", "own_key"),
             )
@@ -363,25 +363,25 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                 )
                 # Tell the MCP which primary the session is using so it
                 # can route to that provider's native search tool.
-                if _m.startswith(("gc/", "gemini/", "ag/")):
-                    _primary_hint = "gemini"
-                elif _m.startswith("cx/"):
-                    _primary_hint = "openai"
+                if p_m.startswith(("gc/", "gemini/", "ag/")):
+                    p_primary_hint = "gemini"
+                elif p_m.startswith("cx/"):
+                    p_primary_hint = "openai"
                 else:
-                    _primary_hint = ""
-                from backend.auth import get_auth_token as _get_auth_token3
+                    p_primary_hint = ""
+                from backend.auth import get_auth_token as p_get_auth_token3
                 mcp_servers["openswarm-web"] = {
                     "command": sys.executable,
                     "args": [web_mcp_server_path],
                     "env": {
                         "OPENSWARM_PORT": backend_port,
-                        "OPENSWARM_AUTH_TOKEN": _get_auth_token3(),
-                        "OPENSWARM_PRIMARY_API": _primary_hint,
+                        "OPENSWARM_AUTH_TOKEN": p_get_auth_token3(),
+                        "OPENSWARM_PRIMARY_API": p_primary_hint,
                     },
                     "type": "stdio",
                 }
                 logger.info(
-                    f"[MCP-DEBUG] Primary {_m} has no reliable native web search, "
+                    f"[MCP-DEBUG] Primary {p_m} has no reliable native web search, "
                     f"registering openswarm-web (DDG search + trafilatura fetch, free)"
                 )
 
@@ -399,7 +399,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                 all_tools_list = load_all_tools()
                 for name in mcp_servers:
                     if name == "openswarm-browser-agent":
-                        for bt in _browser_delegation_tools:
+                        for bt in p_browser_delegation_tools:
                             policy = builtin_perms.get(bt, "always_allow")
                             if policy == "always_allow":
                                 effective_allowed.append(f"mcp__openswarm-browser-agent__{bt}")
@@ -408,7 +408,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                         continue
 
                     if name == "openswarm-invoke-agent":
-                        for it in _invoke_agent_tools:
+                        for it in p_invoke_agent_tools:
                             policy = builtin_perms.get(it, "always_allow")
                             if policy == "always_allow":
                                 effective_allowed.append(f"mcp__openswarm-invoke-agent__{it}")
@@ -452,9 +452,9 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             # and doesn't waste a turn on a broken tool.
             if need_web_mcp:
                 effective_allowed = [t for t in effective_allowed if t not in ("WebSearch", "WebFetch")]
-                for _bt in ("WebSearch", "WebFetch"):
-                    if _bt not in effective_disallowed:
-                        effective_disallowed.append(_bt)
+                for p_bt in ("WebSearch", "WebFetch"):
+                    if p_bt not in effective_disallowed:
+                        effective_disallowed.append(p_bt)
 
             # Tell the model directly which web tools work for this session.
             # The Claude Code CLI's deferred-tool registry still advertises bare
@@ -468,13 +468,13 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             # web MCP, AND (b) the user hasn't disabled the policy, matches
             # the same gate the MCP allowlist uses, so disabling WebSearch in
             # Settings still wins.
-            _web_tools_available = need_web_mcp and (
+            p_web_tools_available = need_web_mcp and (
                 "mcp__openswarm-web__WebSearch" in effective_allowed
                 or "mcp__openswarm-web__WebFetch" in effective_allowed
             )
-            if _web_tools_available:
-                _hint_lines = ["<web_tools>"]
-                _hint_lines.append(
+            if p_web_tools_available:
+                p_hint_lines = ["<web_tools>"]
+                p_hint_lines.append(
                     "This session does NOT have the built-in `WebSearch` / "
                     "`WebFetch` tools (they delegate to Anthropic Haiku, which "
                     "isn't reachable on this primary). Use the MCP-backed "
@@ -482,24 +482,24 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                     "step needed:"
                 )
                 if "mcp__openswarm-web__WebSearch" in effective_allowed:
-                    _hint_lines.append(
+                    p_hint_lines.append(
                         "- `mcp__openswarm-web__WebSearch(query: str, "
                         "num_results?: int)`, DuckDuckGo search."
                     )
                 if "mcp__openswarm-web__WebFetch" in effective_allowed:
-                    _hint_lines.append(
+                    p_hint_lines.append(
                         "- `mcp__openswarm-web__WebFetch(url: str, prompt?: "
                         "str)`, fetch a URL and return readable text."
                     )
-                _hint_lines.append(
+                p_hint_lines.append(
                     "Do not call `ToolSearch(select:WebSearch)`, bare "
                     "`WebSearch` is unavailable on this session and that path "
                     "will return empty matches."
                 )
-                _hint_lines.append("</web_tools>")
-                _web_hint = "\n".join(_hint_lines)
+                p_hint_lines.append("</web_tools>")
+                p_web_hint = "\n".join(p_hint_lines)
                 composed_prompt = (
-                    f"{composed_prompt}\n\n{_web_hint}" if composed_prompt else _web_hint
+                    f"{composed_prompt}\n\n{p_web_hint}" if composed_prompt else p_web_hint
                 )
 
             # Log effective tool lists
@@ -511,12 +511,12 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             if effective_disallowed:
                 logger.info(f"[MCP-DEBUG] effective_disallowed: {effective_disallowed}")
 
-            # `_router_model_id` and `_api_type_for_session` were resolved
+            # `p_router_model_id` and `p_api_type_for_session` were resolved
             # at the top of _run_agent_loop (before any closures were
             # defined) so analytics closures could tag events with them.
             # Reuse those values here and keep session.provider in sync.
-            resolved_model = _router_model_id
-            api_type = _api_type_for_session
+            resolved_model = p_router_model_id
+            api_type = p_api_type_for_session
             session.provider = api_type
 
             # Capture the Claude CLI's stderr into a buffer so the retry
@@ -526,13 +526,13 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             # SDK's ProcessError only stringifies to "Command failed with
             # exit code 1 / Check stderr output for details", which masks
             # transient capacity issues.
-            _stderr_buffer: list[str] = []
+            p_stderr_buffer: list[str] = []
 
             def _stderr_cb(line: str) -> None:
-                _stderr_buffer.append(line)
+                p_stderr_buffer.append(line)
                 # Cap the buffer so a runaway subprocess can't balloon RAM.
-                if len(_stderr_buffer) > 500:
-                    del _stderr_buffer[:250]
+                if len(p_stderr_buffer) > 500:
+                    del p_stderr_buffer[:250]
 
             async def stop_hook(input_data, tool_use_id, context):
                 return await stop_hook_mod.stop_hook(hook_ctx, input_data, tool_use_id, context)
@@ -560,19 +560,19 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             }
             # cc/cx/gc/ag/gemini/openrouter prefixes force 9Router; route="api"
             # bypasses to the provider's host directly; otherwise Pro proxy or key.
-            from backend.apps.nine_router import is_running as _9r_running
-            from backend.apps.agents.providers.registry import _NINEROUTER_MODEL_PREFIXES
-            resolved_is_9router = isinstance(resolved_model, str) and resolved_model.startswith(_NINEROUTER_MODEL_PREFIXES)
+            from backend.apps.nine_router import is_running as p_9r_running
+            from backend.apps.agents.providers.registry import _NINEROUTER_MODEL_PREFIXES as p_NINEROUTER_MODEL_PREFIXES
+            resolved_is_9router = isinstance(resolved_model, str) and resolved_model.startswith(p_NINEROUTER_MODEL_PREFIXES)
 
-            from backend.apps.agents.providers.registry import _find_builtin_model
-            _model_entry = _find_builtin_model(session.model)
-            _is_pinned_api_route = (
-                _model_entry is not None
-                and _model_entry.get("route") == "api"
+            from backend.apps.agents.providers.registry import _find_builtin_model as p_find_builtin_model
+            p_model_entry = p_find_builtin_model(session.model)
+            p_is_pinned_api_route = (
+                p_model_entry is not None
+                and p_model_entry.get("route") == "api"
             )
-            _api_route_provider = (_model_entry or {}).get("api") if _is_pinned_api_route else None
+            p_api_route_provider = (p_model_entry or {}).get("api") if p_is_pinned_api_route else None
 
-            if _is_pinned_api_route and _api_route_provider == "anthropic" and getattr(global_settings, "anthropic_api_key", None):
+            if p_is_pinned_api_route and p_api_route_provider == "anthropic" and getattr(global_settings, "anthropic_api_key", None):
                 options_kwargs["env"] = {
                     "ANTHROPIC_API_KEY": global_settings.anthropic_api_key,
                     "ANTHROPIC_BASE_URL": "https://api.anthropic.com",
@@ -582,7 +582,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
                 }
                 logger.info(f"[MCP-DEBUG] Using direct Anthropic API key (route=api) for {session.model}")
-            elif _is_pinned_api_route and _api_route_provider == "openai" and getattr(global_settings, "openai_api_key", None):
+            elif p_is_pinned_api_route and p_api_route_provider == "openai" and getattr(global_settings, "openai_api_key", None):
                 # Goes through 9Router's Anthropic→OpenAI translator like
                 # other own-key routes, but we point OPENAI_BASE_URL at a
                 # tiny local pass-through (/api/openai-passthrough/v1) that
@@ -595,31 +595,31 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                 # nine_router.py comment) so we patch the boundary instead
                 # of bumping. Pre-fix: every gpt-5.* / gpt-5.* own-key
                 # session 400'd silently.
-                from backend.auth import get_auth_token as _get_auth_token_o
-                _passthrough_url = f"http://127.0.0.1:{os.environ.get('OPENSWARM_PORT', '8324')}/api/openai-passthrough/v1"
+                from backend.auth import get_auth_token as p_get_auth_token_o
+                p_passthrough_url = f"http://127.0.0.1:{os.environ.get('OPENSWARM_PORT', '8324')}/api/openai-passthrough/v1"
                 options_kwargs["env"] = {
                     "OPENAI_API_KEY": global_settings.openai_api_key,
-                    "OPENAI_BASE_URL": _passthrough_url,
-                    "ANTHROPIC_API_KEY": _get_auth_token_o() or "9router",
+                    "OPENAI_BASE_URL": p_passthrough_url,
+                    "ANTHROPIC_API_KEY": p_get_auth_token_o() or "9router",
                     "ANTHROPIC_BASE_URL": "http://localhost:20128",
                 }
                 logger.info(f"[MCP-DEBUG] Using direct OpenAI API key (route=api) for {session.model} via openai-passthrough")
-            elif _is_pinned_api_route and _api_route_provider == "custom":
+            elif p_is_pinned_api_route and p_api_route_provider == "custom":
                 # User-configured OpenAI-compatible endpoint (Ollama Cloud,
                 # Together, local Ollama, etc.). Routes through 9Router's
                 # openai-compatible provider node we synced from settings.
-                from backend.apps.nine_router import ensure_running as _9r_ensure_c
-                if not _9r_running():
+                from backend.apps.nine_router import ensure_running as p_9r_ensure_c
+                if not p_9r_running():
                     logger.info(f"[MCP-DEBUG] custom provider selected but 9Router not running; waiting for startup")
-                    await _9r_ensure_c()
-                    if not _9r_running():
+                    await p_9r_ensure_c()
+                    if not p_9r_running():
                         raise ValueError(
                             "9Router could not start. Custom OpenAI-compatible "
                             "providers need 9Router to translate the Anthropic "
                             "protocol, install Node.js and restart the app."
                         )
-                from backend.apps.agents.providers.registry import _find_custom_provider_for_value
-                cp = _find_custom_provider_for_value(global_settings, session.model)
+                from backend.apps.agents.providers.registry import _find_custom_provider_for_value as p_find_custom_provider_for_value
+                cp = p_find_custom_provider_for_value(global_settings, session.model)
                 env = {
                     "ANTHROPIC_API_KEY": "9router",
                     "ANTHROPIC_BASE_URL": "http://localhost:20128",
@@ -633,8 +633,8 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                     # CLI can issue requests. Servers that DO check auth always
                     # have a real key configured.
                     env["OPENAI_API_KEY"] = (cp.api_key or "").strip() or "no-auth-required"
-                    from backend.apps.nine_router import normalize_openai_compat_base_url as _norm_cp_url
-                    env["OPENAI_BASE_URL"] = _norm_cp_url(cp.base_url or "")
+                    from backend.apps.nine_router import normalize_openai_compat_base_url as p_norm_cp_url
+                    env["OPENAI_BASE_URL"] = p_norm_cp_url(cp.base_url or "")
                 # Pin subagent ids, without these, CLI's default Haiku 4.5
                 # gets sent to the custom provider and 404s.
                 if global_settings.anthropic_api_key:
@@ -650,17 +650,17 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                     env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = resolved_model
                 options_kwargs["env"] = env
                 logger.info(f"[MCP-DEBUG] Using custom provider for {session.model} → {resolved_model}")
-            elif _is_pinned_api_route and _api_route_provider == "gemini" and getattr(global_settings, "google_api_key", None):
+            elif p_is_pinned_api_route and p_api_route_provider == "gemini" and getattr(global_settings, "google_api_key", None):
                 # Routed through the local anthropic-proxy so it can scrub the
                 # JSON-Schema fields Gemini's API rejects ($schema, additionalProperties,
                 # propertyNames, exclusiveMinimum, nested const) that 9Router 0.3.60 misses.
-                from backend.auth import get_auth_token as _get_auth_token_g
-                _proxy_url = f"http://127.0.0.1:{os.environ.get('OPENSWARM_PORT', '8324')}/api/anthropic-proxy"
+                from backend.auth import get_auth_token as p_get_auth_token_g
+                p_proxy_url = f"http://127.0.0.1:{os.environ.get('OPENSWARM_PORT', '8324')}/api/anthropic-proxy"
                 options_kwargs["env"] = {
                     "GEMINI_API_KEY": global_settings.google_api_key,
                     "GOOGLE_API_KEY": global_settings.google_api_key,
-                    "ANTHROPIC_API_KEY": _get_auth_token_g() or "9router",
-                    "ANTHROPIC_BASE_URL": _proxy_url,
+                    "ANTHROPIC_API_KEY": p_get_auth_token_g() or "9router",
+                    "ANTHROPIC_BASE_URL": p_proxy_url,
                 }
                 logger.info(f"[MCP-DEBUG] Using direct Google API key (route=api) for {session.model} via local proxy")
             elif api_type == "openrouter" and getattr(global_settings, "openrouter_api_key", None):
@@ -670,11 +670,11 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                 # CLI's WebSearch delegation needs an Anthropic-shaped lane;
                 # if the user has no Anthropic key/sub/Pro, fall back to OR's
                 # resold Claude so subagents stay on the same OR billing.
-                if not _9r_running():
-                    from backend.apps.nine_router import ensure_running as _9r_ensure
+                if not p_9r_running():
+                    from backend.apps.nine_router import ensure_running as p_9r_ensure
                     logger.info(f"[MCP-DEBUG] OpenRouter selected but 9Router not running; waiting for startup")
-                    await _9r_ensure()
-                    if not _9r_running():
+                    await p_9r_ensure()
+                    if not p_9r_running():
                         raise ValueError(
                             "9Router could not start. OpenRouter routing requires "
                             "Node.js, install it and restart the app, or pick a "
@@ -727,19 +727,19 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             elif api_type == "anthropic" and not resolved_is_9router and global_settings.anthropic_api_key:
                 options_kwargs["env"] = {"ANTHROPIC_API_KEY": global_settings.anthropic_api_key}
                 logger.info("[MCP-DEBUG] Using direct Anthropic API key")
-            elif _9r_running():
+            elif p_9r_running():
                 # Gemini-bound ids go through the local proxy for schema scrubbing;
                 # everything else hits 9Router directly.
-                _is_gemini_bound = (
+                p_is_gemini_bound = (
                     isinstance(resolved_model, str)
                     and resolved_model.startswith(("gemini/", "gc/", "ag/"))
                 )
-                if _is_gemini_bound:
-                    from backend.auth import get_auth_token as _get_auth_token_g2
-                    _base_url = f"http://127.0.0.1:{os.environ.get('OPENSWARM_PORT', '8324')}/api/anthropic-proxy"
+                if p_is_gemini_bound:
+                    from backend.auth import get_auth_token as p_get_auth_token_g2
+                    p_base_url = f"http://127.0.0.1:{os.environ.get('OPENSWARM_PORT', '8324')}/api/anthropic-proxy"
                     env = {
-                        "ANTHROPIC_API_KEY": _get_auth_token_g2() or "9router",
-                        "ANTHROPIC_BASE_URL": _base_url,
+                        "ANTHROPIC_API_KEY": p_get_auth_token_g2() or "9router",
+                        "ANTHROPIC_BASE_URL": p_base_url,
                     }
                 else:
                     env = {
@@ -749,35 +749,35 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                 # Pin subagent ids to whichever lane the user has, else CLI's
                 # default Haiku 4.5 hits 9Router with no Claude route and 401s.
                 try:
-                    _sub_conns = _conns  # reuse list fetched above
+                    p_sub_conns = _conns  # reuse list fetched above
                 except NameError:
-                    _sub_conns = []
-                _active = {c.get("provider") for c in _sub_conns
+                    p_sub_conns = []
+                p_active = {c.get("provider") for c in p_sub_conns
                            if isinstance(c, dict) and c.get("isActive")}
-                _sub_model = None
-                _small_model = None
+                p_sub_model = None
+                p_small_model = None
                 if global_settings.anthropic_api_key:
-                    _sub_model = "claude-sonnet-4-6"
-                    _small_model = "claude-haiku-4-5-20251001"
-                elif "claude" in _active or "anthropic" in _active:
-                    _sub_model = "cc/claude-sonnet-4-6"
-                    _small_model = "cc/claude-haiku-4-5-20251001"
-                elif "antigravity" in _active:
-                    _sub_model = "ag/gemini-3-flash"
-                    _small_model = "ag/gemini-3-flash"
-                elif "gemini-cli" in _active:
-                    _sub_model = "gc/gemini-2.5-flash"
-                    _small_model = "gc/gemini-2.5-flash"
-                elif "codex" in _active:
-                    _sub_model = "cx/gpt-5.4-mini"
-                    _small_model = "cx/gpt-5.4-mini"
-                if _sub_model:
-                    env["CLAUDE_CODE_SUBAGENT_MODEL"] = _sub_model
-                if _small_model:
-                    env["ANTHROPIC_SMALL_FAST_MODEL"] = _small_model
-                    env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = _small_model
+                    p_sub_model = "claude-sonnet-4-6"
+                    p_small_model = "claude-haiku-4-5-20251001"
+                elif "claude" in p_active or "anthropic" in p_active:
+                    p_sub_model = "cc/claude-sonnet-4-6"
+                    p_small_model = "cc/claude-haiku-4-5-20251001"
+                elif "antigravity" in p_active:
+                    p_sub_model = "ag/gemini-3-flash"
+                    p_small_model = "ag/gemini-3-flash"
+                elif "gemini-cli" in p_active:
+                    p_sub_model = "gc/gemini-2.5-flash"
+                    p_small_model = "gc/gemini-2.5-flash"
+                elif "codex" in p_active:
+                    p_sub_model = "cx/gpt-5.4-mini"
+                    p_small_model = "cx/gpt-5.4-mini"
+                if p_sub_model:
+                    env["CLAUDE_CODE_SUBAGENT_MODEL"] = p_sub_model
+                if p_small_model:
+                    env["ANTHROPIC_SMALL_FAST_MODEL"] = p_small_model
+                    env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = p_small_model
                 logger.info(
-                    f"[MCP-DEBUG] 9Router direct, subagent_model={_sub_model}, small_fast={_small_model}"
+                    f"[MCP-DEBUG] 9Router direct, subagent_model={p_sub_model}, small_fast={p_small_model}"
                 )
                 # ENABLE_TOOL_SEARCH=auto: without it, CLI's tengu_defer_all_bn4
                 # Statsig flag defers 16 tools with no way to load them on non-
@@ -789,10 +789,10 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                 logger.info(f"[MCP-DEBUG] Using 9Router (api_type={api_type})")
             else:
                 if api_type != "anthropic":
-                    from backend.apps.nine_router import ensure_running as _9r_ensure
+                    from backend.apps.nine_router import ensure_running as p_9r_ensure
                     logger.info(f"[MCP-DEBUG] 9Router not running for non-Anthropic model {session.model}; waiting for startup")
-                    await _9r_ensure()
-                    if _9r_running():
+                    await p_9r_ensure()
+                    if p_9r_running():
                         options_kwargs["env"] = {
                             "ANTHROPIC_API_KEY": "9router",
                             "ANTHROPIC_BASE_URL": "http://localhost:20128",
@@ -861,8 +861,8 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                 # 5-30s of hidden reasoning. Override per-turn only, session
                 # setting is untouched so the UI pill keeps reflecting the
                 # user's choice.
-                _prompt_len = len((prompt or "").strip())
-                if 0 < _prompt_len < 50 and level != "off":
+                p_prompt_len = len((prompt or "").strip())
+                if 0 < p_prompt_len < 50 and level != "off":
                     level = "off"
                 # gc/gemini-3* without Antigravity 400s every multi-step turn
                 # on thoughtSignature continuity. Force-disable thinking.
@@ -962,22 +962,22 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                 # current turn's user prompt + any new history adds on top
                 #, but the first turn of a fresh session has tokens=0 so
                 # we only act once we've seen real numbers.
-                _est_tokens = session.tokens.get("input", 0)
-                _hard_cap = int(session.context_window * session.context_soft_cap_pct)
-                if _est_tokens >= _hard_cap:
+                p_est_tokens = session.tokens.get("input", 0)
+                p_hard_cap = int(session.context_window * session.context_soft_cap_pct)
+                if p_est_tokens >= p_hard_cap:
                     trimmed: list[str] = []
-                    while _est_tokens >= _hard_cap and len(session.active_mcps) > 1:
+                    while p_est_tokens >= p_hard_cap and len(session.active_mcps) > 1:
                         # Keep at least one MCP active so the model can
                         # finish whatever it was doing; trim from oldest
                         # which is FIFO order in the list.
                         trimmed.append(f"mcp:{session.active_mcps.pop(0)}")
-                        _est_tokens -= 8_000  # rough per-MCP schema cost
+                        p_est_tokens -= 8_000  # rough per-MCP schema cost
                     if trimmed:
                         await ws_manager.send_to_session(session_id, "agent:context_status", {
                             "session_id": session_id,
                             "reason": "trimmed",
                             "trimmed": trimmed,
-                            "estimate_after": _est_tokens,
+                            "estimate_after": p_est_tokens,
                         })
                         # Surface a visible system breadcrumb in the chat so
                         # the user (and the model on the next turn) know
@@ -985,20 +985,20 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                         # may keep trying to call a now-missing tool and
                         # the user has no idea why.
                         try:
-                            _names = ", ".join(t.replace("mcp:", "") for t in trimmed)
-                            _trim_msg = Message(
+                            p_names = ", ".join(t.replace("mcp:", "") for t in trimmed)
+                            p_trim_msg = Message(
                                 role="system",
                                 content=(
                                     f"Trimmed {len(trimmed)} app{'s' if len(trimmed) != 1 else ''} from this session to fit "
-                                    f"the model's context: {_names}. Re-activate via MCPSearch + MCPActivate "
+                                    f"the model's context: {p_names}. Re-activate via MCPSearch + MCPActivate "
                                     "if you still need them."
                                 ),
                                 branch_id=session.active_branch_id,
                             )
-                            session.messages.append(_trim_msg)
+                            session.messages.append(p_trim_msg)
                             await ws_manager.send_to_session(session_id, "agent:message", {
                                 "session_id": session_id,
-                                "message": _trim_msg.model_dump(mode="json"),
+                                "message": p_trim_msg.model_dump(mode="json"),
                             })
                         except Exception:
                             logger.exception("failed to emit MCP-trimmed breadcrumb")
@@ -1113,18 +1113,18 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                                 if isinstance(session.tokens, dict):
                                     turn.baseline_session_in = int(session.tokens.get("input_fresh", 0) or 0)
                                     turn.baseline_session_out = int(session.tokens.get("output", 0) or 0)
-                                _ch_in = 0
-                                _ch_out = 0
-                                for _child in self.sessions.values():
-                                    if getattr(_child, "parent_session_id", None) != session.id:
+                                p_ch_in = 0
+                                p_ch_out = 0
+                                for p_child in self.sessions.values():
+                                    if getattr(p_child, "parent_session_id", None) != session.id:
                                         continue
-                                    _ct = getattr(_child, "tokens", None)
-                                    if not isinstance(_ct, dict):
+                                    p_ct = getattr(p_child, "tokens", None)
+                                    if not isinstance(p_ct, dict):
                                         continue
-                                    _ch_in += int(_ct.get("input_fresh", 0) or 0)
-                                    _ch_out += int(_ct.get("output", 0) or 0)
-                                turn.baseline_children_in = _ch_in
-                                turn.baseline_children_out = _ch_out
+                                    p_ch_in += int(p_ct.get("input_fresh", 0) or 0)
+                                    p_ch_out += int(p_ct.get("output", 0) or 0)
+                                turn.baseline_children_in = p_ch_in
+                                turn.baseline_children_out = p_ch_out
                                 turn.baseline_captured = True
                             except Exception:
                                 pass
@@ -1138,11 +1138,11 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                             # path. Updates in place at turn end via the
                             # stable thinking.msg_id dedupe.
                             try:
-                                _route_strips_reasoning_pre = (
+                                p_route_strips_reasoning_pre = (
                                     isinstance(resolved_model, str)
                                     and resolved_model.startswith(("cx/", "gc/", "ag/", "gemini/"))
                                 )
-                                if _route_strips_reasoning_pre:
+                                if p_route_strips_reasoning_pre:
                                     await thinking_mod.emit_consolidated_thinking(thinking, turn, session, session_id, self.sessions, force_provider_unavailable=True)
                             except Exception:
                                 logger.exception("pre-emit thinking pill failed; continuing")
@@ -1188,7 +1188,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                         except (asyncio.CancelledError, Exception):
                             pass
                     thinking.ticker_task = None
-                    stderr_snapshot = "\n".join(_stderr_buffer[-50:])
+                    stderr_snapshot = "\n".join(p_stderr_buffer[-50:])
                     wait = capacity_retry_wait(e, capacity_retry_attempt, extra_text=stderr_snapshot)
                     if wait is not None:
                         capacity_retry_attempt += 1
@@ -1215,16 +1215,16 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                             turn.stream_text_msg_id = None
                         turn.stream_text_accum = ""
                         self._live_partial.pop(session_id, None)
-                        for _tool_msg_id in turn.stream_tool_msg_ids_ordered:
+                        for p_tool_msg_id in turn.stream_tool_msg_ids_ordered:
                             await ws_manager.send_to_session(session_id, "agent:stream_end", {
                                 "session_id": session_id,
-                                "message_id": _tool_msg_id,
+                                "message_id": p_tool_msg_id,
                             })
                         turn.stream_tool_msg_ids_ordered = []
                         turn.stream_block_index_map = {}
                         turn.current_turn_emitted = False
                         await asyncio.sleep(wait)
-                        _stderr_buffer.clear()
+                        p_stderr_buffer.clear()
                         if session.sdk_session_id:
                             options_kwargs["resume"] = session.sdk_session_id
                             options = ClaudeAgentOptions(**options_kwargs)
@@ -1244,12 +1244,12 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             # synthetic prompt to keep working.
             try:
                 if getattr(session, "pending_continuation", False):
-                    _continuation_prompt = session.pending_continuation_prompt or "Continue."
+                    p_continuation_prompt = session.pending_continuation_prompt or "Continue."
                     session.pending_continuation = False
                     session.pending_continuation_prompt = None
                     asyncio.create_task(self.send_message(
                         session_id,
-                        _continuation_prompt,
+                        p_continuation_prompt,
                         hidden=True,
                     ))
                     logger.info(f"Auto-continuing session {session_id} with hidden prompt")
@@ -1284,15 +1284,15 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             # user can't recover by waiting, this is a tier-gate, not a rate
             # limit, so the UX matters.
             try:
-                _stderr_tail = "\n".join(_stderr_buffer[-50:])
+                p_stderr_tail = "\n".join(p_stderr_buffer[-50:])
             except Exception:
-                _stderr_tail = ""
+                p_stderr_tail = ""
             # If we already streamed a substantive assistant response this
             # turn, the user got their answer; the error fired on a
             # subsequent step (title gen, follow-up tool turn, etc.).
             # Don't blast a "context exceeded" card over a completed reply.
-            _streamed_substantive = bool(turn.stream_text_msg_id) and turn.current_turn_emitted
-            if _streamed_substantive and _is_long_context_error(e, extra_text=_stderr_tail):
+            p_streamed_substantive = bool(turn.stream_text_msg_id) and turn.current_turn_emitted
+            if p_streamed_substantive and _is_long_context_error(e, extra_text=p_stderr_tail):
                 # Mark the session completed (not error), keep the assistant
                 # reply visible, and skip the overflow card. The next user
                 # turn will properly hit the pre-send guard if the chat is
@@ -1307,7 +1307,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                     except Exception:
                         pass
                 return
-            if _is_long_context_error(e, extra_text=_stderr_tail):
+            if _is_long_context_error(e, extra_text=p_stderr_tail):
                 friendly_msg = (
                     "This conversation has grown too large for your account's "
                     "standard context window. Long-context requests require an "
@@ -1316,7 +1316,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                 )
                 error_msg = Message(role="system", content=friendly_msg, branch_id=session.active_branch_id)
                 session.messages.append(error_msg)
-                _ovf_payload = {
+                p_ovf_payload = {
                     "session_id": session_id,
                     "reason": "long_context_required",
                     "message": friendly_msg,
@@ -1329,7 +1329,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                     "compact_threshold_pct": session.compact_threshold_pct,
                     "context_soft_cap_pct": session.context_soft_cap_pct,
                 }
-                await ws_manager.send_to_session(session_id, "agent:context_overflow", _ovf_payload)
+                await ws_manager.send_to_session(session_id, "agent:context_overflow", p_ovf_payload)
                 await ws_manager.send_to_session(session_id, "agent:message", {
                     "session_id": session_id,
                     "message": error_msg.model_dump(mode="json"),
@@ -1351,7 +1351,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                     })
                 except Exception:
                     logger.debug("submit_diagnostic for context_overflow failed", exc_info=True)
-            elif _is_transient_capacity_error(e, extra_text=_stderr_tail):
+            elif _is_transient_capacity_error(e, extra_text=p_stderr_tail):
                 # A genuine throttle (429/overload/capacity) that already burned
                 # the whole silent-backoff budget (the only way one reaches here).
                 # It's a limit, not a failure, so don't append a system-message
@@ -1368,9 +1368,9 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                         pass
                 await ws_manager.send_to_session(session_id, "agent:rate_limited", {
                     "session_id": session_id,
-                    "retry_after_s": parse_retry_after(e, _stderr_tail),
+                    "retry_after_s": parse_retry_after(e, p_stderr_tail),
                 })
-            elif _is_free_trial_exhausted(e, extra_text=_stderr_tail):
+            elif _is_free_trial_exhausted(e, extra_text=p_stderr_tail):
                 # Free runs spent. Flip back to own_key and show a friendly
                 # "connect a model" upsell instead of a raw 402.
                 try:
@@ -1393,7 +1393,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                     "session_id": session_id,
                     "message": error_msg.model_dump(mode="json"),
                 })
-            elif _is_auth_error(e, extra_text=_stderr_tail):
+            elif _is_auth_error(e, extra_text=p_stderr_tail):
                 # Three sub-cases the user can hit, with distinct fixes:
                 #   1. "No credentials for provider: claude", user picked a
                 #      -cc route but doesn't have Claude Pro/Max connected
@@ -1401,15 +1401,15 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                 #      Pro/Max OR pick a non--cc model.
                 #   2. OpenSwarm Pro 401, bearer expired. Reconnect.
                 #   3. Anthropic API key 401, wrong key. Re-enter.
-                _model = (session.model or "").lower()
-                _combined = f"{e!s}\n{_stderr_tail}".lower()
+                p_model = (session.model or "").lower()
+                p_combined = f"{e!s}\n{p_stderr_tail}".lower()
                 # Codex/OpenAI subscription tokens rotate every ~2-3
                 # minutes, the user sees the rotation window as a 401
                 # with "reset after 1m 59s" or similar. Don't ask them to
                 # reconnect; just tell them to wait it out and retry.
                 if (
-                    ("codex/" in _combined or "[codex/" in _combined or _model.startswith(("cx/", "gpt-")))
-                    and ("authentication token is expired" in _combined or "authentication token has expired" in _combined or "401" in _combined)
+                    ("codex/" in p_combined or "[codex/" in p_combined or p_model.startswith(("cx/", "gpt-")))
+                    and ("authentication token is expired" in p_combined or "authentication token has expired" in p_combined or "401" in p_combined)
                 ):
                     friendly_msg = (
                         "GPT subscription token just rotated, this is "
@@ -1418,7 +1418,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                         "through. (No need to reconnect anything.)"
                     )
                     reason = "codex_token_rotating"
-                elif "no credentials for provider" in _combined:
+                elif "no credentials for provider" in p_combined:
                     friendly_msg = (
                         "Selected route requires Claude Pro / Max, but it's "
                         "not connected. Open Settings → Models and either "
@@ -1428,7 +1428,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                     )
                     reason = "claude_sub_not_connected"
                 elif (
-                    "-cc" not in _model
+                    "-cc" not in p_model
                     and getattr(load_settings(), "connection_mode", "own_key") == "openswarm-pro"
                 ):
                     friendly_msg = (
@@ -1459,7 +1459,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                     "session_id": session_id,
                     "message": error_msg.model_dump(mode="json"),
                 })
-            elif _is_unknown_model_error(e, extra_text=_stderr_tail):
+            elif _is_unknown_model_error(e, extra_text=p_stderr_tail):
                 # Upstream rejected the model code itself (e.g. Codex 1211 on a
                 # ChatGPT plan that lacks our GPT ids). Track it; the friendly
                 # "add an API key / pick another model" card is rendered frontend-side.
@@ -1472,7 +1472,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                         "provider": session.provider,
                         "connection_mode": getattr(load_settings(), "connection_mode", "own_key"),
                         "error_preview": redact_for_telemetry(str(e), limit=400),
-                        "stderr_tail": redact_for_telemetry(_stderr_tail),
+                        "stderr_tail": redact_for_telemetry(p_stderr_tail),
                     })
                 except Exception:
                     logger.debug("submit_diagnostic model_error failed", exc_info=True)
@@ -1493,7 +1493,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                         "provider": session.provider,
                         "connection_mode": getattr(load_settings(), "connection_mode", "own_key"),
                         "error_preview": redact_for_telemetry(str(e), limit=400),
-                        "stderr_tail": redact_for_telemetry(_stderr_tail),
+                        "stderr_tail": redact_for_telemetry(p_stderr_tail),
                     })
                 except Exception:
                     logger.debug("submit_diagnostic model_error failed", exc_info=True)
@@ -1521,10 +1521,10 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
             # superseded by a newer turn must not pop the new turn's partial
             # mirror, broadcast a stale terminal status, or overwrite the
             # snapshot the live turn is writing.
-            _is_live_task = self.tasks.get(session_id) is asyncio.current_task()
-            if _is_live_task:
+            p_is_live_task = self.tasks.get(session_id) is asyncio.current_task()
+            if p_is_live_task:
                 self._live_partial.pop(session_id, None)
-            if session_id in self.sessions and _is_live_task:
+            if session_id in self.sessions and p_is_live_task:
                 # For canvas-launched App Builder sessions, the workspace
                 # folder IS the session_id (see launch_agent), so meta.json
                 # lives at outputs_workspace/<session_id>/meta.json. Read it
@@ -1541,7 +1541,7 @@ class AgentManager(SessionLifecycleMixin, MessagingMixin, AgentLaunchMixin, RunS
                             # flips from "Untitled App" to the real name
                             # without waiting for the next mount.
                             try:
-                                matching = [o for o in _load_all() if o.workspace_id == session_id]
+                                matching = [o for o in p_load_all() if o.workspace_id == session_id]
                                 if matching:
                                     await ws_manager.broadcast_global("agent:output_upserted", {
                                         "output": matching[0].model_dump(mode="json"),
