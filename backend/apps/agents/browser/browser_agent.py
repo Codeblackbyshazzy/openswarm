@@ -982,10 +982,11 @@ async def run_browser_agent(
     # Perceived value, zero clicks: one calm line so the user FEELS the agent is
     # picking up where it left off, not figuring the site out cold again. Only
     # when strategy was actually seeded, so it's honest, never noise.
-    if pb_seeded and _pb_host:
+    if pb_seeded and pb_host:
         session.memory_recalled = True  # drives the subtle "Remembered" card chip
+        _where = "this app" if app_mode else pb_host
         _recall_msg = Message(role="assistant",
-                              content=f"Picking up what I learned about {_pb_host} from a previous visit.")
+                              content=f"Picking up what I learned about {_where} from a previous visit.")
         session.messages.append(_recall_msg)
         await ws_manager.send_to_session(session_id, "agent:message", {
             "session_id": session_id, "message": _recall_msg.model_dump(mode="json"),
@@ -2435,11 +2436,13 @@ async def run_browser_agent(
         # judgment ones (which can't be skills) still get faster/wiser next time.
         if browser_playbook.should_learn(honest, turn + 1):
             try:
-                pb_host = browser_skills.host_of(last_seen_url)
-                if pb_host:
+                # App mode keys by the stable app id (the run had no URL host); web
+                # keys by the final host, which navigation may have changed.
+                rec_pb_host = browser_id if app_mode else browser_skills.host_of(last_seen_url)
+                if rec_pb_host:
                     aux_client, aux_model = await _get_aux_client()
                     changed = await browser_playbook.distill_and_store(
-                        pb_host, skill_key_task, latest_working_mem, summary,
+                        rec_pb_host, skill_key_task, latest_working_mem, summary,
                         aux_client, aux_model,
                     )
                     # Perceived value, zero clicks: a calm closing line so the user
@@ -2447,8 +2450,9 @@ async def run_browser_agent(
                     # it genuinely learned something, so it stays honest + rare.
                     if changed:
                         session.memory_learned = True  # drives the subtle "Learned" card chip
+                        _where = "this app" if app_mode else rec_pb_host
                         _learn_msg = Message(role="assistant",
-                                             content=f"Noted what worked on {pb_host} so I'm faster here next time.")
+                                             content=f"Noted what worked on {_where} so I'm faster here next time.")
                         session.messages.append(_learn_msg)
                         await ws_manager.send_to_session(session_id, "agent:message", {
                             "session_id": session_id, "message": _learn_msg.model_dump(mode="json"),
