@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import sys
-import time
 from typing import Dict, List, Optional
 from typeguard import typechecked
 
@@ -17,10 +16,6 @@ from backend.apps.tools_lib.tools_lib import (
     sanitize_server_name as sanitize_server_name,
     load_builtin_permissions,
 )
-from backend.apps.agents.core.error_classify import (
-    CAPACITY_BACKOFFS,
-    capacity_retry_wait,
-)
 # SESSIONS_DIR is re-exported on purpose: session_store reads agent_manager.SESSIONS_DIR at
 # call time (dodging a circular import), and the disk-resilience test monkeypatches it here.
 from backend.config.paths import SESSIONS_DIR
@@ -30,12 +25,8 @@ from backend.apps.agents.manager.session.session_store import (
 )
 from backend.apps.agents.manager.streaming.state import ThinkingState, TurnState
 from backend.apps.agents.manager.streaming.hook_context import HookContext
-from backend.apps.agents.manager.streaming import thinking as thinking_mod
 from backend.apps.agents.manager.streaming import tool_result_hook
 from backend.apps.agents.manager.streaming import stop_hook as stop_hook_mod
-from backend.apps.agents.manager.streaming import stream_event
-from backend.apps.agents.manager.streaming import assistant_message
-from backend.apps.agents.manager.streaming import result_message
 from backend.apps.agents.manager.streaming.LivePartial import LivePartial
 from backend.apps.agents.manager.prompt.system_prompt import compose_turn_system_prompt
 from backend.apps.agents.tools.web import should_register_web_mcp
@@ -51,6 +42,7 @@ from backend.apps.agents.manager.MockAgentMixin import MockAgentMixin
 from backend.apps.agents.manager.RunSupportMixin import RunSupportMixin
 from backend.apps.agents.manager.permissions import gate_hooks
 from backend.apps.agents.manager.run.error_cards import handle_run_error
+from backend.apps.agents.manager.run.turn_runner import TurnRunnerMixin
 from backend.apps.agents.manager.session.workspace_git import ensure_cwd_git_repo
 from backend.apps.agents.manager.prompt.tool_catalog import (
     get_all_tool_names,
@@ -67,7 +59,7 @@ logger = logging.getLogger(__name__)
 os.environ.setdefault("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", "3600000")
 
 
-class AgentManager(SessionLifecycleMixin, SessionPersistenceMixin, MessagingMixin, SessionControlMixin, AgentLaunchMixin, MockAgentMixin, RunSupportMixin):
+class AgentManager(SessionLifecycleMixin, SessionPersistenceMixin, MessagingMixin, SessionControlMixin, AgentLaunchMixin, MockAgentMixin, TurnRunnerMixin, RunSupportMixin):
     @typechecked
     def __init__(self):
         self.sessions: Dict[str, AgentSession] = {}
@@ -118,13 +110,8 @@ class AgentManager(SessionLifecycleMixin, SessionPersistenceMixin, MessagingMixi
         )
 
         try:
-            from claude_agent_sdk import (
-                query, ClaudeAgentOptions, AssistantMessage, ResultMessage,
-            )
-            from claude_agent_sdk.types import (
-                HookMatcher,
-                StreamEvent, SystemMessage,
-            )
+            from claude_agent_sdk import ClaudeAgentOptions
+            from claude_agent_sdk.types import HookMatcher
         except ImportError:
             logger.warning("claude_agent_sdk not installed, running in mock mode")
             await self.run_mock_agent(session_id, prompt)
@@ -595,223 +582,12 @@ class AgentManager(SessionLifecycleMixin, SessionPersistenceMixin, MessagingMixi
             options = ClaudeAgentOptions(**options_kwargs)
             logger.info("[MCP-DEBUG] ClaudeAgentOptions created. Starting query...")
 
-            async def prompt_stream():
-                yield {
-                    "type": "user",
-                    "message": {"role": "user", "content": prompt_content},
-                }
-
             turn = TurnState()
-            # Mirror of the streamed assistant text. The SDK envelope that
-            # normally commits a reply never lands when a turn is stopped
-            # mid-stream, so without this the text the user just watched
-            # appear would evaporate. Cleared the instant a block commits.
-            # Per-turn aggregate trackers for the consolidated thinking
-            # message. We accumulate across every AssistantMessage in the
-            # turn (think → tool → think → tool → answer) and stream
-            # incremental updates to the SAME persisted Message id so the
-            # ThinkingBubble pill ticks live: "Thought for 18s · 412
-            # tokens · 3 tools used". Reset only at turn boundaries.
             thinking = ThinkingState()
-            # Persistent id for the turn's single thinking message. We
-            # reuse it across multi-step turns so the frontend's
-            # addMessage dedupe replaces the bubble in place rather
-            # than stacking N pills above the answer. Reset at the
-            # next user turn (next prompt_stream iteration).
-            # Wall-clock turn duration (ms), covers thinking + tool
-            # execution + assistant text. Updated continuously as the
-            # turn unfolds. Used for the "Thought for Ns" segment so
-            # the duration reflects the entire user-visible wait, not
-            # just thinking-only time.
-            # Total output tokens across every AssistantMessage in the
-            # turn (thinking + visible text + tool-call JSON args). The
-            # consolidated thinking pill's `tokens` segment uses this
-            # rather than thinking-text-only chars/3.6, answers the
-            # question "how much work did the model produce on this
-            # turn" honestly. Populated from each AssistantMessage's
-            # usage.output_tokens; fallback heuristic kicks in only
-            # when usage is absent.
-            # Running char counts for the streaming portions of the
-            # turn, used to grow the token estimate while assistant
-            # text and tool-call JSON args are still streaming, BEFORE
-            # the SDK has emitted a final usage.output_tokens count
-            # for those blocks. Once the AssistantMessage lands with
-            # real usage data, turn.output_tokens supersedes these.
-            # Latest Gemini thoughtSignature captured from this turn's
-            # ThinkingBlocks. We persist it on the consolidated thinking
-            # Message so subsequent turns can re-attach it to the
-            # assistant turn we feed back to Gemini, satisfying
-            # Google's reasoning-continuity check (the source of the
-            # "Thought signature is not valid" 400). None for providers
-            # that don't use signatures.
-            # session.tokens accumulates SDK running totals across turns,
-            # so subtract the turn-start baseline to get this turn's delta.
-            # Background ticker handle. Re-emits the consolidated
-            # thinking message every 1s so the elapsed counter keeps
-            # ticking through gaps where no SDK events fire (tool
-            # execution, slow text generation). Started at first
-            # AssistantMessage of the turn, cancelled at ResultMessage.
-            # True between the first non-ResultMessage of a turn and the
-            # following ResultMessage; False at turn boundaries. The retry
-            # layer below only retries at boundaries, resuming mid-turn via
-            # sdk_session_id would risk duplicating user-visible output.
-
-            # Silently absorb transient upstream capacity errors (429/500/503/
-            # 529/overloaded/network blips) by waiting with exponential
-            # backoff and restarting the query with resume=sdk_session_id.
-            # The session keeps its conversation state across retries so the
-            # user just sees a pause, not a red error card. Hard errors
-            # (auth, plan limit, invalid args) fall through to the existing
-            # error handler unchanged.
-
-            async def p_run_streaming_turn():
-                # Per-turn thinking aggregation trackers (added for the
-                # "Thought for Ns · M tokens" persisted label). Without
-                # nonlocal, the int reassignments at AssistantMessage emission
-                # below shadow them as locals and the dict access at
-                # content_block_start crashes with UnboundLocalError.
-                async for message in query(
-                    prompt=prompt_stream(),
-                    options=options,
-                ):
-                    if isinstance(message, ResultMessage):
-                        turn.current_turn_emitted = False
-                    else:
-                        turn.current_turn_emitted = True
-                        # Stamp the turn's wall-clock start at the FIRST
-                        # non-Result message we see, this is when the
-                        # user actually started waiting. We use the same
-                        # timestamp as the basis for "Thought for Ns"
-                        # so the duration covers thinking + tool exec
-                        # + assistant text generation.
-                        if turn.started_ts is None:
-                            turn.started_ts = time.time()
-                            # Snapshot cumulative tokens at turn start;
-                            # subtracted at emit time for per-turn deltas.
-                            try:
-                                # Baselines track the SAME fresh lane the pill reads,
-                                # so the per-turn delta is fresh-minus-fresh.
-                                if isinstance(session.tokens, dict):
-                                    turn.baseline_session_in = int(session.tokens.get("input_fresh", 0) or 0)
-                                    turn.baseline_session_out = int(session.tokens.get("output", 0) or 0)
-                                p_ch_in = 0
-                                p_ch_out = 0
-                                for p_child in self.sessions.values():
-                                    if getattr(p_child, "parent_session_id", None) != session.id:
-                                        continue
-                                    p_ct = getattr(p_child, "tokens", None)
-                                    if not isinstance(p_ct, dict):
-                                        continue
-                                    p_ch_in += int(p_ct.get("input_fresh", 0) or 0)
-                                    p_ch_out += int(p_ct.get("output", 0) or 0)
-                                turn.baseline_children_in = p_ch_in
-                                turn.baseline_children_out = p_ch_out
-                                turn.baseline_captured = True
-                            except Exception:
-                                pass
-                            # Pre-emit thinking pill for routes whose
-                            # translator strips reasoning content (cx/, gc/,
-                            # ag/, gemini/). Without this, the pill emits
-                            # at turn end and lands BELOW the assistant
-                            # text in session.messages, visually wrong.
-                            # Pre-emitting here gives the pill the same
-                            # ordering as Anthropic's natural streaming
-                            # path. Updates in place at turn end via the
-                            # stable thinking.msg_id dedupe.
-                            try:
-                                p_route_strips_reasoning_pre = (
-                                    isinstance(resolved_model, str)
-                                    and resolved_model.startswith(("cx/", "gc/", "ag/", "gemini/"))
-                                )
-                                if p_route_strips_reasoning_pre:
-                                    await thinking_mod.emit_consolidated_thinking(thinking, turn, session, session_id, self.sessions, force_provider_unavailable=True)
-                            except Exception:
-                                logger.exception("pre-emit thinking pill failed; continuing")
-
-                    if turn.first_event:
-                        logger.info(f"[MCP-DEBUG] First event received: {type(message).__name__}")
-                        turn.first_event = False
-
-                    # Log system messages (MCP server status, errors, etc.)
-                    if isinstance(message, SystemMessage):
-                        raw = message.__dict__ if hasattr(message, '__dict__') else str(message)
-                        logger.info(f"[MCP-DEBUG] SystemMessage: {raw}")
-
-                    if isinstance(message, StreamEvent):
-                        await stream_event.handle_stream_event(
-                            message, session, session_id, turn, thinking, self.live_partial
-                        )
-
-                    elif isinstance(message, AssistantMessage):
-                        await assistant_message.handle_assistant_message(
-                            message, session, session_id, turn, thinking, self.live_partial, self.sessions
-                        )
-                    elif isinstance(message, ResultMessage):
-                        await result_message.handle_result_message(
-                            message, session, session_id, turn, thinking, self.sessions,
-                            resolved_model, api_type, global_settings,
-                        )
-
-            capacity_retry_attempt = 0
-            while True:
-                try:
-                    await p_run_streaming_turn()
-                    break
-                except Exception as e:
-                    # Make sure the consolidated-thinking ticker doesn't
-                    # outlive the turn on error/retry. Without this, an
-                    # exception mid-stream leaves a dangling task that
-                    # keeps re-emitting against a stale msg id.
-                    if thinking.ticker_task is not None and not thinking.ticker_task.done():
-                        thinking.ticker_task.cancel()
-                        try:
-                            await thinking.ticker_task
-                        except (asyncio.CancelledError, Exception):
-                            pass
-                    thinking.ticker_task = None
-                    stderr_snapshot = "\n".join(p_stderr_buffer[-50:])
-                    wait = capacity_retry_wait(e, capacity_retry_attempt, extra_text=stderr_snapshot)
-                    if wait is not None:
-                        capacity_retry_attempt += 1
-                        mid_stream = turn.current_turn_emitted
-                        logger.warning(
-                            f"Transient upstream error on session {session_id} "
-                            f"(attempt {capacity_retry_attempt}/{len(CAPACITY_BACKOFFS)}, "
-                            f"mid_stream={mid_stream}); sleeping {wait}s before retry. "
-                            f"exc={e!r} stderr_tail={stderr_snapshot[-400:]!r}"
-                        )
-                        # Finalize any in-flight stream messages so the UI
-                        # doesn't leave them pinned as "still streaming" while
-                        # we wait and restart. On resume the CLI re-runs the
-                        # last turn from scratch (Anthropic doesn't persist
-                        # in-progress responses), so the partial assistant
-                        # text / tool call we emitted is now orphaned, cap
-                        # it with stream_end and start the fresh turn under a
-                        # new message id.
-                        if turn.stream_text_msg_id:
-                            await ws_manager.send_to_session(session_id, "agent:stream_end", {
-                                "session_id": session_id,
-                                "message_id": turn.stream_text_msg_id,
-                            })
-                            turn.stream_text_msg_id = None
-                        turn.stream_text_accum = ""
-                        self.live_partial.pop(session_id, None)
-                        for p_tool_msg_id in turn.stream_tool_msg_ids_ordered:
-                            await ws_manager.send_to_session(session_id, "agent:stream_end", {
-                                "session_id": session_id,
-                                "message_id": p_tool_msg_id,
-                            })
-                        turn.stream_tool_msg_ids_ordered = []
-                        turn.stream_block_index_map = {}
-                        turn.current_turn_emitted = False
-                        await asyncio.sleep(wait)
-                        p_stderr_buffer.clear()
-                        if session.sdk_session_id:
-                            options_kwargs["resume"] = session.sdk_session_id
-                            options = ClaudeAgentOptions(**options_kwargs)
-                        continue
-                    raise
-
+            await self.p_run_turn_with_retry(
+                session, session_id, prompt_content, options, options_kwargs,
+                turn, thinking, p_stderr_buffer, resolved_model, api_type, global_settings,
+            )
             session.status = "completed"
 
             # Auto-continuation hook (Phase 3). If MCPActivate (or any
