@@ -687,7 +687,7 @@ def test_dashboard_get_strips_only_orphan_session_cards():
     with patch("backend.apps.agents.agent_manager.agent_manager", fake_mgr), \
          patch("backend.apps.agents.manager.session.session_store.load_session_data",
                side_effect=lambda sid: on_disk.get(sid)):
-        D._strip_orphan_session_cards(data)
+        D.strip_orphan_session_cards(data)
     assert set(data["layout"]["cards"].keys()) == {"live", "ondisk", "draft-1"}, "only the ghost should be dropped"
     assert data["layout"]["expanded_session_ids"] == ["live"], "ghost dropped from expanded too"
 

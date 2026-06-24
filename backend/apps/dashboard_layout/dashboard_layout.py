@@ -21,38 +21,38 @@ async def dashboard_layout_lifespan():
 dashboard_layout = SubApp("dashboard_layout", dashboard_layout_lifespan)
 
 
-def _default_layout() -> DashboardLayout:
+def p_default_layout() -> DashboardLayout:
     return DashboardLayout(cards={})
 
 
-def _load() -> DashboardLayout:
+def load() -> DashboardLayout:
     if not os.path.exists(LAYOUT_FILE):
-        return _default_layout()
+        return p_default_layout()
     try:
         with open(LAYOUT_FILE) as f:
             data = json.load(f)
         if "columns" in data and "cards" not in data:
             logger.info("Detected old column-based layout format, resetting to empty canvas")
-            return _default_layout()
+            return p_default_layout()
         return DashboardLayout(**data)
     except Exception:
         logger.exception("Failed to load dashboard layout, returning default")
-        return _default_layout()
+        return p_default_layout()
 
 
-def _save(layout: DashboardLayout):
+def save(layout: DashboardLayout):
     with open(LAYOUT_FILE, "w") as f:
         json.dump(layout.model_dump(), f, indent=2)
 
 
 @dashboard_layout.router.get("")
 async def get_layout():
-    layout = _load()
+    layout = load()
     return layout.model_dump()
 
 
 @dashboard_layout.router.put("")
 async def update_layout(body: DashboardLayoutUpdate):
     layout = DashboardLayout(cards=body.cards, view_cards=body.view_cards)
-    _save(layout)
+    save(layout)
     return layout.model_dump()

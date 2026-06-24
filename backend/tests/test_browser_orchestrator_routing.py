@@ -20,7 +20,7 @@ def _fake_dashboard(monkeypatch):
     class _D:
         def model_dump(self, mode="json"):
             return {"layout": {"browser_cards": {}}}
-    monkeypatch.setattr(dash, "_load", lambda did: _D(), raising=True)
+    monkeypatch.setattr(dash, "load", lambda did: _D(), raising=True)
 
 
 def test_orchestrator_routes_same_flow_batches_to_one_agent(monkeypatch):

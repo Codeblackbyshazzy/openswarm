@@ -2135,13 +2135,13 @@ async def run_browser_agent(
         # flag set before any close path runs.
         if honest and done_keep_open and dashboard_id:
             try:
-                from backend.apps.dashboards.dashboards import _load, _save
-                dashboard = _load(dashboard_id)
+                from backend.apps.dashboards.dashboards import load, save
+                dashboard = load(dashboard_id)
                 card = dashboard.layout.browser_cards.get(browser_id)
                 if card is not None:
                     card.keep_open = True
                     dashboard.updated_at = datetime.now()
-                    _save(dashboard)
+                    save(dashboard)
                     await ws_manager.broadcast_global("dashboard:browser_card_keep", {
                         "dashboard_id": dashboard_id,
                         "browser_id": browser_id,
@@ -2218,8 +2218,8 @@ def find_reusable_card(dashboard_id: str, url: str, parent_session_id: str | Non
     if not (dashboard_id and want):
         return ""
     try:
-        from backend.apps.dashboards.dashboards import _load
-        cards = _load(dashboard_id).layout.browser_cards
+        from backend.apps.dashboards.dashboards import load
+        cards = load(dashboard_id).layout.browser_cards
     except Exception:
         return ""
     from backend.apps.agents.agent_manager import agent_manager
@@ -2241,10 +2241,10 @@ def find_reusable_card(dashboard_id: str, url: str, parent_session_id: str | Non
 
 async def p_create_browser_card(dashboard_id: str, url: str, parent_session_id: str | None = None) -> str:
     """Create a new browser card on the dashboard and return its browser_id."""
-    from backend.apps.dashboards.dashboards import _load, _save
+    from backend.apps.dashboards.dashboards import load, save
     from backend.apps.dashboards.models import BrowserCardPosition, BrowserTab
 
-    dashboard = _load(dashboard_id)
+    dashboard = load(dashboard_id)
     browser_id = f"browser-{uuid4().hex[:8]}"
     tab_id = f"tab-{uuid4().hex[:8]}"
     tab = BrowserTab(id=tab_id, url=url or "https://www.google.com", title="")
@@ -2261,7 +2261,7 @@ async def p_create_browser_card(dashboard_id: str, url: str, parent_session_id: 
     )
     dashboard.layout.browser_cards[browser_id] = card
     dashboard.updated_at = datetime.now()
-    _save(dashboard)
+    save(dashboard)
 
     await ws_manager.broadcast_global("dashboard:browser_card_added", {
         "dashboard_id": dashboard_id,

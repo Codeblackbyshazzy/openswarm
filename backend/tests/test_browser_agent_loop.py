@@ -1315,7 +1315,7 @@ def test_find_reusable_card_reuses_own_then_orphan_never_user(monkeypatch):
     class _Dash:
         layout = _Layout()
 
-    monkeypatch.setattr(dash_mod, "_load", lambda did: _Dash(), raising=True)
+    monkeypatch.setattr(dash_mod, "load", lambda did: _Dash(), raising=True)
 
     class _Done:
         status = "completed"

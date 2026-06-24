@@ -94,12 +94,12 @@ def test_dashboards_load_all_skips_corrupt_and_invalid(tmp_path, monkeypatch):
     from backend.apps.dashboards import dashboards as dmod
     from backend.apps.dashboards.models import Dashboard, DashboardLayout
     monkeypatch.setattr(dmod, "DATA_DIR", str(tmp_path))
-    dmod._save(Dashboard(name="good", layout=DashboardLayout()))
+    dmod.save(Dashboard(name="good", layout=DashboardLayout()))
     (tmp_path / "garbled.json").write_text("{ not json")
     # Valid JSON the model can't accept (a list can't be **-unpacked into the model).
     # Models are lenient about missing/extra fields, so this is what an unloadable file actually looks like.
     (tmp_path / "wrongshape.json").write_text(json.dumps([1, 2, 3]))
-    loaded = dmod._load_all()
+    loaded = dmod.load_all()
     assert [d.name for d in loaded] == ["good"]
     # both bad files preserved on disk (decode error + unloadable shape are non-destructive)
     assert (tmp_path / "garbled.json").exists()
@@ -110,9 +110,9 @@ def test_modes_load_all_skips_corrupt(tmp_path, monkeypatch):
     from backend.apps.modes import modes as mmod
     from backend.apps.modes.models import Mode
     monkeypatch.setattr(mmod, "DATA_DIR", str(tmp_path))
-    mmod._save(Mode(name="good"))
+    mmod.save(Mode(name="good"))
     (tmp_path / "garbled.json").write_text("{{{")
-    loaded = mmod._load_all()
+    loaded = mmod.load_all()
     assert [m.name for m in loaded] == ["good"]
     assert (tmp_path / "garbled.json").exists()
 
@@ -144,9 +144,9 @@ def test_migration_survives_corrupt_session(tmp_path, monkeypatch):
     (sess_dir / "good.json").write_text(json.dumps({"id": "good"}))
     (sess_dir / "bad.json").write_text("{ truncated ,,,")
 
-    dmod._migrate_if_needed()  # must not raise despite the corrupt session
+    dmod.migrate_if_needed()  # must not raise despite the corrupt session
 
-    dashboards = dmod._load_all()
+    dashboards = dmod.load_all()
     assert len(dashboards) == 1
     tagged = read_json_or_none(str(sess_dir / "good.json"))
     assert tagged["dashboard_id"] == dashboards[0].id  # good session tagged
