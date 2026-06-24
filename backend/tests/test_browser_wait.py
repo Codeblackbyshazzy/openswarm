@@ -168,7 +168,7 @@ async def test_hung_tab_returns_fast_not_after_the_full_command_timeout():
     assert out.get("error") == "page unresponsive"
     assert elapsed < 3.0, f"hung wait must return fast, took {elapsed:.1f}s"
     # it bailed after the timeout threshold, not after burning the whole cap
-    assert ex.calls <= bw._MAX_PROBE_TIMEOUTS
+    assert ex.calls <= bw.MAX_PROBE_TIMEOUTS
 
 
 @pytest.mark.asyncio

@@ -57,14 +57,14 @@ def test_analyzer_measures_replay_speedup_when_the_layer_helps(_metrics_dir, cap
     sk.clear(wipe_disk=True)
     # A repeated task: 1 slow LLM run, then 2 fast replays -> measurable speedup.
     sk.record_skill("shop.com", "search now", _log())
-    _task_row(sk._sig("search now"), "llm", 4.0)
+    _task_row(sk.compute_sig("search now"), "llm", 4.0)
     sk.mark_replay_succeeded("shop.com", "search now")
-    _task_row(sk._sig("search now"), "replay", 0.04)
-    _task_row(sk._sig("search now"), "replay", 0.05)
+    _task_row(sk.compute_sig("search now"), "replay", 0.04)
+    _task_row(sk.compute_sig("search now"), "replay", 0.05)
 
     mod = _load_analyzer()
-    tasks = mod._load(os.path.join(_metrics_dir, "tasks.jsonl"))
-    sevs = mod._load(os.path.join(_metrics_dir, "skill_events.jsonl"))
+    tasks = mod.load(os.path.join(_metrics_dir, "tasks.jsonl"))
+    sevs = mod.load(os.path.join(_metrics_dir, "skill_events.jsonl"))
     mod.skill_layer_report(tasks, sevs)
     out = capsys.readouterr().out
     assert "REPLAY SPEEDUP" in out
@@ -81,12 +81,12 @@ def test_analyzer_flags_silent_non_help_thrash(_metrics_dir, capsys):
                              "clicked_role": "button", "clicked_name": "Other"}]
     sk.record_skill("bad.com", "do thing now", edited)                  # edit (un-quarantine)
     sk.mark_replay_failed("bad.com", "do thing now")                    # quarantine again
-    _task_row(sk._sig("do thing now"), "llm", 3.0)
-    _task_row(sk._sig("do thing now"), "llm_fallback", 3.2)
+    _task_row(sk.compute_sig("do thing now"), "llm", 3.0)
+    _task_row(sk.compute_sig("do thing now"), "llm_fallback", 3.2)
 
     mod = _load_analyzer()
-    tasks = mod._load(os.path.join(_metrics_dir, "tasks.jsonl"))
-    sevs = mod._load(os.path.join(_metrics_dir, "skill_events.jsonl"))
+    tasks = mod.load(os.path.join(_metrics_dir, "tasks.jsonl"))
+    sevs = mod.load(os.path.join(_metrics_dir, "skill_events.jsonl"))
     mod.skill_layer_report(tasks, sevs)
     out = capsys.readouterr().out
     assert "SILENT NON-HELP" in out          # repeated but never replayed
@@ -104,7 +104,7 @@ def test_analyzer_reports_composition(_metrics_dir, capsys):
     sk.deprecate_skill("shop.com", "search now")                 # must invalidate the TRUSTED dependent
 
     mod = _load_analyzer()
-    sevs = mod._load(os.path.join(_metrics_dir, "skill_events.jsonl"))
+    sevs = mod.load(os.path.join(_metrics_dir, "skill_events.jsonl"))
     # the invalidate EVENT must actually fire (end-to-end), not just the state flip
     assert any(e["kind"] == "invalidate" for e in sevs)
     mod.skill_layer_report([], sevs)
@@ -117,11 +117,11 @@ def test_analyzer_reports_composition(_metrics_dir, capsys):
 def test_analyzer_reports_playbook_cutting_exploration_turns(_metrics_dir, capsys):
     # tier-2 win: a cold run on a host takes many turns; once strategy is seeded,
     # the same kind of task takes fewer. The analyzer must report HELPS.
-    sig = sk._sig("find people")
+    sig = sk.compute_sig("find people")
     _task_row(sig, "llm", 60.0, turns=14, playbook_seeded=False)   # cold
     _task_row(sig, "llm", 40.0, turns=8, playbook_seeded=True)     # seeded -> fewer turns
     mod = _load_analyzer()
-    tasks = mod._load(os.path.join(_metrics_dir, "tasks.jsonl"))
+    tasks = mod.load(os.path.join(_metrics_dir, "tasks.jsonl"))
     mod.playbook_report(tasks)
     out = capsys.readouterr().out
     assert "STRATEGIC PLAYBOOK" in out and "HELPS" in out and "NOT HELPING" not in out
@@ -129,11 +129,11 @@ def test_analyzer_reports_playbook_cutting_exploration_turns(_metrics_dir, capsy
 
 def test_analyzer_flags_playbook_that_does_not_help(_metrics_dir, capsys):
     # anti-ghost: memory is active (seeded) but seeded runs are NOT cheaper -> flag.
-    sig = sk._sig("stubborn task")
+    sig = sk.compute_sig("stubborn task")
     _task_row(sig, "llm", 60.0, turns=10, playbook_seeded=False)
     _task_row(sig, "llm", 60.0, turns=12, playbook_seeded=True)    # seeded but MORE turns
     mod = _load_analyzer()
-    tasks = mod._load(os.path.join(_metrics_dir, "tasks.jsonl"))
+    tasks = mod.load(os.path.join(_metrics_dir, "tasks.jsonl"))
     mod.playbook_report(tasks)
     out = capsys.readouterr().out
     assert "NOT HELPING" in out

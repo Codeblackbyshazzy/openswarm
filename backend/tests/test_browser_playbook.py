@@ -103,7 +103,7 @@ async def test_playbook_is_capped():
     pb.clear(wipe_disk=True)
     many = [f"strategy bullet number {i}" for i in range(20)]
     await _distill("big.com", "t", "m", "s", FakeAux(_pb(*many)))
-    assert len(pb.get_playbook("big.com")) <= pb._MAX_BULLETS
+    assert len(pb.get_playbook("big.com")) <= pb.MAX_BULLETS
 
 
 @pytest.mark.asyncio
@@ -119,7 +119,7 @@ async def test_playbook_survives_a_restart():
     pb.clear(wipe_disk=True)
     await _distill("persist.com", "t", "m", "s", FakeAux(_pb("durable lesson one", "durable lesson two")))
     pb.clear(wipe_disk=False)            # restart: memory gone, disk intact
-    assert not pb._cache
+    assert not pb.CACHE
     bullets = pb.get_playbook("persist.com")
     assert len(bullets) == 2 and "durable lesson one" in bullets
 
@@ -184,6 +184,6 @@ def test_seed_playbook_fallback_and_supersede():
     assert seeded and any("github.com/search" in b for b in seeded)
     # a learned playbook supersedes the seed (real usage wins)
     pb.clear(wipe_disk=True)
-    pb._persist("github.com", ["learned: use the org filter"])
-    pb._cache.clear()
+    pb.persist("github.com", ["learned: use the org filter"])
+    pb.CACHE.clear()
     assert pb.get_playbook("github.com") == ["learned: use the org filter"]

@@ -18,20 +18,20 @@ import anthropic
 
 from backend.apps.agents.browser import browser_history
 from backend.apps.agents.browser.browser_history import (
-    _MAX_HISTORY_MESSAGES,
-    _trim_history_by_turns,
-    _validate_message_pairing,
+    MAX_HISTORY_MESSAGES,
+    trim_history_by_turns,
+    validate_message_pairing,
     clear_browser_history,
     PAGE_STATE_MARKER,
 )
 from backend.apps.agents.browser.browser_loop import (
-    _LOOP_DETECTION_EXCLUDED_TOOLS,
-    _LOOP_HARD_CAP,
-    _LOOP_WARNING_TEXT,
-    _LOOP_WINDOW_SIZE,
-    _detect_loop,
-    _hash_tool_call,
-    _CARD_GONE_LIMIT,
+    LOOP_DETECTION_EXCLUDED_TOOLS,
+    LOOP_HARD_CAP,
+    LOOP_WARNING_TEXT,
+    LOOP_WINDOW_SIZE,
+    detect_loop,
+    hash_tool_call,
+    CARD_GONE_LIMIT,
     advance_stagnation,
     card_is_unavailable,
     completion_is_honest,
@@ -45,14 +45,14 @@ from backend.apps.agents.browser.browser_validator import adjudicate_stuck
 
 # Single actions the model could have folded into one BrowserBatch turn;
 # reads, waits, and the batch tools themselves don't count toward the streak.
-_BATCHABLE_ACTION_TOOLS = {
+P_BATCHABLE_ACTION_TOOLS = {
     "BrowserNavigate", "BrowserClick", "BrowserClickIndex", "BrowserClickByName",
     "BrowserType", "BrowserPressKey", "BrowserScroll",
 }
 
 # Injected when the spin backstop trips: one chance to land a real answer from
 # what's already gathered, instead of the loop cutting it off mid-thought.
-_WRAPUP_NUDGE = (
+P_WRAPUP_NUDGE = (
     "You've spent several turns looking without finishing. Wrap up NOW: call Done with the "
     "best answer you can give from what you've ALREADY gathered. For a find/list ask, put the "
     "actual items in the message and, if the site exposes fewer than asked, say so plainly and "
@@ -69,7 +69,7 @@ from backend.apps.agents.browser import browser_skills
 from backend.apps.agents.browser import browser_wait
 from backend.apps.agents.browser import browser_schema
 from backend.apps.agents.browser.browser_schema import (
-    _ACTION_TOOLS_REQUIRING_REPORT,
+    ACTION_TOOLS_REQUIRING_REPORT,
     ACTION_MAP,
     BROWSER_TOOLS_SCHEMA,
     MAX_TURNS,
@@ -84,7 +84,7 @@ logger = logging.getLogger(__name__)
 
 # Mutating actions that can carry an `expect` (the change they should cause) and be
 # confirmed after running. Reads/waits aren't here, there's nothing to confirm.
-_CONFIRM_TOOLS = {
+P_CONFIRM_TOOLS = {
     "BrowserClick", "BrowserClickIndex", "BrowserClickByName",
     "BrowserType", "BrowserNavigate", "BrowserPressKey", "BrowserBatch",
 }
@@ -106,7 +106,7 @@ async def execute_browser_tool(
     return result
 
 
-def _extract_domain(url: str) -> str | None:
+def p_extract_domain(url: str) -> str | None:
     """Extract the apex domain from a URL (acme-corp.notion.so → notion.so).
     Returns None for non-http URLs."""
     try:
@@ -123,7 +123,7 @@ def _extract_domain(url: str) -> str | None:
         return None
 
 
-def _strip_lone_surrogates(s: str) -> str:
+def strip_lone_surrogates(s: str) -> str:
     # The JS/webview hands us page text as UTF-16, so an emoji can arrive as half
     # of its surrogate pair; Python carries the orphan but .encode('utf-8') later
     # (the SDK serializing the request to the LLM) detonates with "surrogates not
@@ -131,10 +131,10 @@ def _strip_lone_surrogates(s: str) -> str:
     return re.sub(r"[\ud800-\udfff]", "�", s) if s else s
 
 
-def _format_tool_result(result: dict, tool_name: str) -> list[dict]:
+def format_tool_result(result: dict, tool_name: str) -> list[dict]:
     """Convert a browser command result dict into Anthropic API content blocks."""
     if "error" in result:
-        return [{"type": "text", "text": _strip_lone_surrogates(f"Error: {result['error']}")}]
+        return [{"type": "text", "text": strip_lone_surrogates(f"Error: {result['error']}")}]
 
     if tool_name == "BrowserScreenshot" and result.get("image"):
         blocks = [
@@ -151,31 +151,31 @@ def _format_tool_result(result: dict, tool_name: str) -> list[dict]:
         return blocks
 
     text = result.get("text", json.dumps(result))
-    return [{"type": "text", "text": _strip_lone_surrogates(str(text))}]
+    return [{"type": "text", "text": strip_lone_surrogates(str(text))}]
 
 
 # Mutating tools whose results get fresh page state attached (the browser-use
 # loop shape: act, settle, see), so acting and seeing are one turn, not two.
-_AUTO_STATE_TOOLS = {
+P_AUTO_STATE_TOOLS = {
     "BrowserNavigate", "BrowserClick", "BrowserClickIndex", "BrowserClickByName",
     "BrowserType", "BrowserPressKey", "BrowserScroll", "BrowserBatch",
 }
-_AUTO_STATE_MAX_LINES = 35
-_AUTO_SETTLE_CAPS_MS = {"BrowserNavigate": 2500, "BrowserBatch": 1500}
+P_AUTO_STATE_MAX_LINES = 35
+P_AUTO_SETTLE_CAPS_MS = {"BrowserNavigate": 2500, "BrowserBatch": 1500}
 
 # URL shapes that mean "a list of candidates to pick from" (auto candidate scan)
-_RESULTS_URL_RE = re.compile(
+RESULTS_URL_RE = re.compile(
     r"[?&](q|query|keywords|search|search_query|find|term)=|/search\b|/results\b", re.I,
 )
-_AUTO_SCAN_MAX_PER_RUN = 2
+P_AUTO_SCAN_MAX_PER_RUN = 2
 
 
-def _batch_ends_with_read(tool_input: dict) -> bool:
+def p_batch_ends_with_read(tool_input: dict) -> bool:
     actions = (tool_input or {}).get("actions") or []
     return bool(actions) and (actions[-1] or {}).get("type") == "list_interactives"
 
 
-def _truncate_state(text: str, max_lines: int = _AUTO_STATE_MAX_LINES) -> str:
+def p_truncate_state(text: str, max_lines: int = P_AUTO_STATE_MAX_LINES) -> str:
     lines = str(text).splitlines()
     if len(lines) <= max_lines:
         return str(text)
@@ -184,7 +184,7 @@ def _truncate_state(text: str, max_lines: int = _AUTO_STATE_MAX_LINES) -> str:
     )
 
 
-def _delta_state(text: str, seen_lines: set[str]) -> str:
+def delta_state(text: str, seen_lines: set[str]) -> str:
     """Shrink an attached element list to the rows that changed since the last
     attach; stable indices make a line's identity meaningful, so re-sending 30
     unchanged rows every action is pure token burn. Mutates `seen_lines` to the
@@ -210,20 +210,20 @@ def _delta_state(text: str, seen_lines: set[str]) -> str:
 # A button row whose name is exactly a Send control (not "Send InMail credit" or
 # "Send a message to X"); used to hand the model the Send button after it types,
 # so it never burns turns hunting a button that's right there.
-_SEND_ROW_RE = re.compile(r'\[(\d+)\]\*?<\s*button\s+"([^"]*)"', re.I)
+P_SEND_ROW_RE = re.compile(r'\[(\d+)\]\*?<\s*button\s+"([^"]*)"', re.I)
 
 
-def _send_index_in_state(state_text: str):
+def send_index_in_state(state_text: str):
     """(index, name) of a real Send button in an interactives list, or None.
     Strict exact match so it never grabs an upsell or a profile 'Send a message' link."""
     for line in (state_text or "").splitlines():
-        m = _SEND_ROW_RE.search(line)
+        m = P_SEND_ROW_RE.search(line)
         if m and m.group(2).strip().lower() in ("send", "send now", "send message"):
             return int(m.group(1)), m.group(2)
     return None
 
 
-def _is_composer_fill(tool_name: str, tool_input: dict) -> bool:
+def is_composer_fill(tool_name: str, tool_input: dict) -> bool:
     """True if this action typed a message into a composer (the moment the Send
     button is about to matter). Covers the solo fill, BrowserType, and a batched
     fill, the three ways the model composes."""
@@ -238,25 +238,25 @@ def _is_composer_fill(tool_name: str, tool_input: dict) -> bool:
     return False
 
 
-async def _post_action_state(
+async def post_action_state(
     tool_name: str, tool_input: dict, result: dict,
     browser_id: str, tab_id: str, wait_exec, goal: str,
     seen_lines: set[str] | None = None,
 ) -> str:
     """Settle the page after a mutating action, then return a compact fresh
     interactives list to append to its result. Empty string = attach nothing."""
-    if tool_name not in _AUTO_STATE_TOOLS or not isinstance(result, dict) or "error" in result:
+    if tool_name not in P_AUTO_STATE_TOOLS or not isinstance(result, dict) or "error" in result:
         return ""
-    if tool_name == "BrowserBatch" and _batch_ends_with_read(tool_input):
+    if tool_name == "BrowserBatch" and p_batch_ends_with_read(tool_input):
         return ""
     # an `expect` confirm already ran its own smart_wait; don't settle twice
     if not str((tool_input or {}).get("expect") or "").strip():
         settle = await browser_wait.smart_wait(
-            wait_exec, browser_id, tab_id, _AUTO_SETTLE_CAPS_MS.get(tool_name, 1200),
+            wait_exec, browser_id, tab_id, P_AUTO_SETTLE_CAPS_MS.get(tool_name, 1200),
         )
         if settle.get("hung"):
             return ""
-    _composer_fill = _is_composer_fill(tool_name, tool_input)
+    _composer_fill = is_composer_fill(tool_name, tool_input)
     params = {"goal": goal} if goal else {}
     lst = None
     _send_si = None
@@ -275,7 +275,7 @@ async def _post_action_state(
                 break
             if isinstance(_l, dict) and "error" not in _l and _l.get("text"):
                 lst = _l
-                _send_si = _send_index_in_state(_l["text"])
+                _send_si = send_index_in_state(_l["text"])
                 if _send_si:
                     break
             if time.monotonic() >= _deadline:
@@ -290,8 +290,8 @@ async def _post_action_state(
             return ""
     if not isinstance(lst, dict) or "error" in lst or not lst.get("text"):
         return ""
-    state = lst["text"] if seen_lines is None else _delta_state(lst["text"], seen_lines)
-    out = f"\n\n{PAGE_STATE_MARKER}\n{_truncate_state(state)}"
+    state = lst["text"] if seen_lines is None else delta_state(lst["text"], seen_lines)
+    out = f"\n\n{PAGE_STATE_MARKER}\n{p_truncate_state(state)}"
     # Hand the Send button's index over so the model clicks it directly instead of
     # scanning the list or hunting via CSS/JS/screenshots (the polled list above is what
     # makes Send actually present to point at, the two work together).
@@ -303,7 +303,7 @@ async def _post_action_state(
     return out
 
 
-async def _request_browser_approval(
+async def p_request_browser_approval(
     session: AgentSession, tool_name: str, tool_input: dict,
 ) -> dict:
     """Send an approval request for a browser sub-agent tool and wait for the decision."""
@@ -430,7 +430,7 @@ async def run_browser_agent(
     preloaded_perception = ""
     current_url = ""
     preloaded_reads: list[dict] = []  # real front-loaded reads, seeded into action_log
-    _resumed = bool(browser_history._browser_history.get(browser_id))
+    _resumed = bool(browser_history.BROWSER_HISTORY.get(browser_id))
     if initial_url:
         nav_result = await execute_browser_tool(
             "BrowserNavigate", {"url": initial_url}, browser_id, tab_id,
@@ -503,8 +503,8 @@ async def run_browser_agent(
     # cycle every time the parent issues a new task. Defensively validate
     # the cache; if it's somehow corrupted (orphaned tool_use_ids), drop
     # it and start fresh rather than crash on the next API call.
-    prior_messages = browser_history._browser_history.get(browser_id) or []
-    if prior_messages and not _validate_message_pairing(prior_messages):
+    prior_messages = browser_history.BROWSER_HISTORY.get(browser_id) or []
+    if prior_messages and not validate_message_pairing(prior_messages):
         logger.warning(
             f"[browser-agent {session_id}] cached history for {browser_id} has "
             f"orphaned tool_use_ids; dropping cache and starting fresh"
@@ -594,7 +594,7 @@ async def run_browser_agent(
     # Advisory per-domain hints: seed the system prompt with what a prior agent
     # learned about this domain (if we know the domain at start), and keep the
     # store fresh from each ReportProgress. Re-verify, never blindly trust.
-    start_domain = _extract_domain(initial_url) if initial_url else None
+    start_domain = p_extract_domain(initial_url) if initial_url else None
     run_system_prompt = SYSTEM_PROMPT
     if start_domain:
         prior_note = browser_history.get_domain_note(start_domain)
@@ -791,7 +791,7 @@ async def run_browser_agent(
             try:
                 lst = await execute_browser_tool("BrowserListInteractives", {}, browser_id, tab_id)
                 if isinstance(lst, dict) and lst.get("text") and "error" not in lst:
-                    _fresh = f"\nCurrent page state after the replayed prefix:\n{_truncate_state(lst['text'])}"
+                    _fresh = f"\nCurrent page state after the replayed prefix:\n{p_truncate_state(lst['text'])}"
             except Exception:
                 pass
             remaining = "; ".join(f"{s['tool']}({str(s.get('params', {}))[:80]})" for s in steps[unsafe_i:])
@@ -838,7 +838,7 @@ async def run_browser_agent(
             summary = browser_metrics.record_task(
                 session_id, browser_id, task, "completed", metrics_started_at,
                 turns_spent, rlog, session.tokens,
-                path="replay", task_sig=browser_skills._sig(skill_key_task),
+                path="replay", task_sig=browser_skills.compute_sig(skill_key_task),
             )
             logger.info(f"[browser-skills] REPLAY SUCCEEDED in {summary['total_ms']}ms ({turns_spent} LLM turn(s))")
             try:
@@ -909,7 +909,7 @@ async def run_browser_agent(
     # Pre-nav landed on a results page (the cold entry case): scan it NOW so the
     # model's very first turn can pick a candidate instead of read-then-decide.
     _start_url = (current_url or initial_url or "").split("#")[0]
-    if _start_url and _RESULTS_URL_RE.search(_start_url):
+    if _start_url and RESULTS_URL_RE.search(_start_url):
         auto_scanned_urls.add(_start_url)
         _scan_json, _sc_ms = await _scan_results(task)
         if _scan_json:
@@ -1048,7 +1048,7 @@ async def run_browser_agent(
             # tool is the redundant narration the prompt now forbids; count it so
             # the bench can verify the prose actually went away.
             if any(t.strip() for t in text_parts) and any(
-                tu.name in _ACTION_TOOLS_REQUIRING_REPORT for tu in tool_uses
+                tu.name in ACTION_TOOLS_REQUIRING_REPORT for tu in tool_uses
             ):
                 narration_turns += 1
 
@@ -1088,7 +1088,7 @@ async def run_browser_agent(
             # the brain state is recorded before any actions execute.
             has_report_progress = any(tu.name == "ReportProgress" for tu in tool_uses)
             has_action_tools = any(
-                tu.name in _ACTION_TOOLS_REQUIRING_REPORT for tu in tool_uses
+                tu.name in ACTION_TOOLS_REQUIRING_REPORT for tu in tool_uses
             )
             # Violation: action tools without ReportProgress in the same turn.
             # The model MUST articulate its evaluation/memory/goal before acting.
@@ -1105,7 +1105,7 @@ async def run_browser_agent(
                 rp_violations += 1
                 rp_reminder_pending = True
                 if not current_next_goal or current_next_goal == task:
-                    _synth = next((t.name for t in tool_uses if t.name in _ACTION_TOOLS_REQUIRING_REPORT), "act")
+                    _synth = next((t.name for t in tool_uses if t.name in ACTION_TOOLS_REQUIRING_REPORT), "act")
                     current_next_goal = f"(continuing) {_synth.replace('Browser', '').lower()}"
                 logger.info(
                     f"[browser-agent {session_id}] ReportProgress omitted; running the action "
@@ -1119,7 +1119,7 @@ async def run_browser_agent(
 
             # Under-batching detector: the model ignores prompt-level batching
             # invitations, so measure each turn and nudge mechanically below.
-            _turn_actions = sum(1 for t in tool_uses_sorted if t.name in _BATCHABLE_ACTION_TOOLS)
+            _turn_actions = sum(1 for t in tool_uses_sorted if t.name in P_BATCHABLE_ACTION_TOOLS)
             _turn_has_batch = any(t.name in ("BrowserBatch", "BrowserRepeatFlow") for t in tool_uses_sorted)
             if _turn_actions >= 2 or _turn_has_batch:
                 multi_action_turns += 1
@@ -1139,7 +1139,7 @@ async def run_browser_agent(
             # it off with partial results. Re-reading the same page yields no new sig.
             _novel_read = False
             for _a in action_log:
-                if (_a.get("ok") and _a.get("tool") not in _BATCHABLE_ACTION_TOOLS
+                if (_a.get("ok") and _a.get("tool") not in P_BATCHABLE_ACTION_TOOLS
                         and _a.get("tool") not in ("ReportProgress", "Done")):
                     _sig = f"{_a.get('tool')}:{_a.get('result_summary') or ''}"
                     if _sig not in seen_read_sigs:
@@ -1166,7 +1166,7 @@ async def run_browser_agent(
                     # The general backstop only applies AFTER the agent has actually
                     # done something; early pure-perception is legitimate orienting on a
                     # cold/slow page, which we must never cut short.
-                    _acted = any(a.get("ok") and a.get("tool") in (_BATCHABLE_ACTION_TOOLS | {"BrowserBatch"})
+                    _acted = any(a.get("ok") and a.get("tool") in (P_BATCHABLE_ACTION_TOOLS | {"BrowserBatch"})
                                  for a in action_log)
                     _stall_limit = (_POST_SEND_STALL_LIMIT if send_confirmed
                                     else (_PERCEPTION_STALL_LIMIT if _acted else 10 ** 9))
@@ -1442,7 +1442,7 @@ async def run_browser_agent(
                 if tu.name == "RequestHumanIntervention":
                     problem = tu.input.get("problem", "")
                     instruction = tu.input.get("instruction", "")
-                    decision = await _request_browser_approval(
+                    decision = await p_request_browser_approval(
                         session, tu.name, {"problem": problem, "instruction": instruction},
                     )
                     if decision.get("behavior") != "deny":
@@ -1490,7 +1490,7 @@ async def run_browser_agent(
                     continue
 
                 if policy == "ask":
-                    decision = await _request_browser_approval(
+                    decision = await p_request_browser_approval(
                         session, tu.name, tu.input,
                     )
                     if decision.get("behavior") == "deny":
@@ -1562,7 +1562,7 @@ async def run_browser_agent(
                 # so the agent never claims a success it didn't see or re-fires blindly.
                 _expect = (str(tu.input.get("expect") or "").strip()
                            if isinstance(tu.input, dict) else "")
-                if _expect and "error" not in result and tu.name in _CONFIRM_TOOLS:
+                if _expect and "error" not in result and tu.name in P_CONFIRM_TOOLS:
                     # target_only: wait for the expected text to actually appear, don't
                     # call it 'not confirmed' just because the page settled first (a sent
                     # message lands in the thread a beat after settle, esp. under load)
@@ -1589,7 +1589,7 @@ async def run_browser_agent(
                 # across nodes, or scrolled off, so the text-probe is unreliable, which
                 # is exactly what left the model stalling to "double-check". A clean
                 # send click is proof enough; drive to the OUTCOME.
-                if task_is_send and not send_confirmed and "error" not in result and tu.name in _CONFIRM_TOOLS:
+                if task_is_send and not send_confirmed and "error" not in result and tu.name in P_CONFIRM_TOOLS:
                     _cn = result.get("clickedName") or ""
                     _cr = result.get("clickedRole") or ""
                     _send_click = browser_batch_replay.is_send_completed(
@@ -1643,7 +1643,7 @@ async def run_browser_agent(
                             result["text"] = (f"{result.get('error')}\n\n[recovery] That action did not "
                                               f"take effect, but the page is live. Current elements (re-act "
                                               f"from HERE, do not just retry the old index):\n"
-                                              f"{_truncate_state(str(_rl['text']))}")
+                                              f"{p_truncate_state(str(_rl['text']))}")
                             recovery_attaches += 1
                             logger.info(f"[browser-recovery {session_id}] attached fresh state after "
                                         f"recoverable error at turn {turn}: {str(result.get('error'))[:60]}")
@@ -1656,7 +1656,7 @@ async def run_browser_agent(
                     attached_state_seen.update(
                         l for l in str(result.get("text") or "").splitlines() if l.startswith("[")
                     )
-                _auto_state = await _post_action_state(
+                _auto_state = await post_action_state(
                     tu.name, tu.input, result, browser_id, tab_id, _wait_exec, current_next_goal,
                     seen_lines=attached_state_seen,
                 )
@@ -1669,7 +1669,7 @@ async def run_browser_agent(
 
                 # One gentle nudge per violating turn, folded onto the action that
                 # ran, so the model self-corrects next turn without us costing it one.
-                if rp_reminder_pending and tu.name in _ACTION_TOOLS_REQUIRING_REPORT:
+                if rp_reminder_pending and tu.name in ACTION_TOOLS_REQUIRING_REPORT:
                     rp_reminder_pending = False
                     result["text"] = (f"{result.get('text') or ''}\n\n[note] Action ran. Next turn, "
                                        "include ReportProgress (working_memory + next_goal) alongside "
@@ -1680,7 +1680,7 @@ async def run_browser_agent(
                 # per URL, only on the tight throwaway-dismiss vocabulary that
                 # never sits on a task-needed control, so it can't close anything
                 # required. After closing, re-list so the model sees the page beneath.
-                if tu.name in _AUTO_STATE_TOOLS and "error" not in result:
+                if tu.name in P_AUTO_STATE_TOOLS and "error" not in result:
                     _pop_url = (result.get("url") or last_seen_url or "").split("#")[0]
                     if _pop_url and _pop_url not in dismissed_popup_urls:
                         _close = interstitial_dismiss_target("\n".join(attached_state_seen))
@@ -1692,7 +1692,7 @@ async def run_browser_agent(
                             logger.info(f"[browser-popup {session_id}] auto-dismissed '{_close}' "
                                         f"ok={_dok} on {_pop_url[:80]}")
                             if _dok:
-                                _fresh = await _post_action_state(
+                                _fresh = await post_action_state(
                                     "BrowserClickByName", {}, _dres or {}, browser_id, tab_id,
                                     _wait_exec, current_next_goal, seen_lines=attached_state_seen)
                                 result["text"] = (f"{result.get('text') or ''}\n\n[auto] Closed a blocking "
@@ -1702,10 +1702,10 @@ async def run_browser_agent(
                 # costs a read-then-decide turn pair; the cheap aux model reads it
                 # now so the pick happens on this same turn. Capped, per-URL,
                 # fail-silent (a miss just means the old two-turn dance).
-                if (tu.name in _AUTO_STATE_TOOLS and "error" not in result
-                        and auto_scan_count < _AUTO_SCAN_MAX_PER_RUN):
+                if (tu.name in P_AUTO_STATE_TOOLS and "error" not in result
+                        and auto_scan_count < P_AUTO_SCAN_MAX_PER_RUN):
                     _scan_url = (result.get("url") or last_seen_url or "").split("#")[0]
-                    if _scan_url and _scan_url not in auto_scanned_urls and _RESULTS_URL_RE.search(_scan_url):
+                    if _scan_url and _scan_url not in auto_scanned_urls and RESULTS_URL_RE.search(_scan_url):
                         auto_scanned_urls.add(_scan_url)
                         _scan_json, _sc_ms = await _scan_results(task)
                         if _scan_json:
@@ -1771,22 +1771,22 @@ async def run_browser_agent(
                 # acknowledge it on its next turn.
                 # Loop detection only covers the non-excluded tools, so skip the
                 # hash entirely for the excluded ones; otherwise a screenshot/read
-                # serializes its full ~1MB result here just for _detect_loop to
+                # serializes its full ~1MB result here just for detect_loop to
                 # discard it (it short-circuits excluded tools to False anyway).
-                if tu.name in _LOOP_DETECTION_EXCLUDED_TOOLS:
+                if tu.name in LOOP_DETECTION_EXCLUDED_TOOLS:
                     is_loop = False
                 else:
-                    call_key = _hash_tool_call(tu.name, tu.input, result)
-                    is_loop = _detect_loop(recent_tool_calls, call_key)
+                    call_key = hash_tool_call(tu.name, tu.input, result)
+                    is_loop = detect_loop(recent_tool_calls, call_key)
                     recent_tool_calls.append(call_key)
-                    if len(recent_tool_calls) > _LOOP_WINDOW_SIZE * 2:
-                        recent_tool_calls = recent_tool_calls[-_LOOP_WINDOW_SIZE * 2:]
+                    if len(recent_tool_calls) > LOOP_WINDOW_SIZE * 2:
+                        recent_tool_calls = recent_tool_calls[-LOOP_WINDOW_SIZE * 2:]
 
-                content_blocks = _format_tool_result(result, tu.name)
+                content_blocks = format_tool_result(result, tu.name)
                 try:
                     url = result.get("url") or (tu.input or {}).get("url")
                     if url:
-                        domain = _extract_domain(str(url))
+                        domain = p_extract_domain(str(url))
                         if domain and domain not in session.browser_domains:
                             session.browser_domains.append(domain)
                 except Exception:
@@ -1809,7 +1809,7 @@ async def run_browser_agent(
                 if is_loop:
                     loop_trigger_count += 1
                     repeat_count = sum(1 for c in recent_tool_calls if c == call_key)
-                    warning = _LOOP_WARNING_TEXT.format(count=repeat_count)
+                    warning = LOOP_WARNING_TEXT.format(count=repeat_count)
                     logger.warning(
                         f"[browser-agent {session_id}] loop detected on {tu.name} "
                         f"(trigger #{loop_trigger_count}): {warning}"
@@ -1936,7 +1936,7 @@ async def run_browser_agent(
             # tool_results (a text block alongside them) so the model's next turn is
             # a clean Done instead of more looking.
             if wrapup_pending:
-                tool_results.append({"type": "text", "text": _WRAPUP_NUDGE})
+                tool_results.append({"type": "text", "text": P_WRAPUP_NUDGE})
             messages.append({"role": "user", "content": tool_results})
 
             if done_called:
@@ -1948,10 +1948,10 @@ async def run_browser_agent(
             # Hard cap on loops: if the model keeps repeating itself even
             # after we warn it, force-exit so we don't burn the entire turn
             # budget on a stuck agent.
-            if loop_trigger_count >= _LOOP_HARD_CAP:
+            if loop_trigger_count >= LOOP_HARD_CAP:
                 logger.warning(
                     f"[browser-agent {session_id}] hit loop hard cap "
-                    f"({_LOOP_HARD_CAP}); force-exiting"
+                    f"({LOOP_HARD_CAP}); force-exiting"
                 )
                 break
 
@@ -1959,7 +1959,7 @@ async def run_browser_agent(
             # out / the page never responds). Either way the agent can't make
             # progress, so stop retrying after a short streak and report honestly,
             # instead of the 20-minute spin on a wedged tab.
-            if card_gone_streak >= _CARD_GONE_LIMIT:
+            if card_gone_streak >= CARD_GONE_LIMIT:
                 logger.warning(
                     f"[browser-agent {session_id}] browser card {browser_id} is unusable "
                     f"({card_gone_streak} consecutive gone/hung results); aborting fast"
@@ -2005,18 +2005,18 @@ async def run_browser_agent(
 
         # Persist conversation history so the next BrowserAgent call on this
         # browser can resume rather than re-orient. Trim to the most recent
-        # _MAX_HISTORY_MESSAGES turns to keep token usage bounded; but
+        # MAX_HISTORY_MESSAGES turns to keep token usage bounded; but
         # never split a tool_use ↔ tool_result pair across the cut, or the
         # next API request will 400.
-        browser_history._browser_history[browser_id] = _trim_history_by_turns(
-            messages, _MAX_HISTORY_MESSAGES,
+        browser_history.BROWSER_HISTORY[browser_id] = trim_history_by_turns(
+            messages, MAX_HISTORY_MESSAGES,
         )
 
         # Honesty gate: the model declaring done is not proof the goal happened.
         # If the run did no real work (zero actions, all actions errored, or only
         # looked around), report the truth instead of a ghost "completed". A gone
         # card gets its own precise reason instead of the generic verdict.
-        if card_gone_streak >= _CARD_GONE_LIMIT:
+        if card_gone_streak >= CARD_GONE_LIMIT:
             honest, dishonest_reason = False, "the browser became unresponsive (the tab hung or was closed); it needs a fresh browser to continue"
         else:
             honest, dishonest_reason = completion_is_honest(action_log)
@@ -2073,7 +2073,7 @@ async def run_browser_agent(
         browser_metrics.record_task(session_id, browser_id, task, final_status,
                                     metrics_started_at, turn + 1, action_log, session.tokens,
                                     path="llm_fallback" if replay_attempted else "llm",
-                                    task_sig=browser_skills._sig(skill_key_task),
+                                    task_sig=browser_skills.compute_sig(skill_key_task),
                                     playbook_seeded=pb_seeded)
         # Learn this task ONLY from a genuinely successful run whose deliverable a
         # deterministic replay can actually reproduce. We skip recording when the
@@ -2202,13 +2202,13 @@ async def run_browser_agent(
 
 # Cards a sub-agent is actively driving in this process. Reuse must never hand
 # two agents one webview (their commands would interleave into chaos).
-_active_agent_cards: set[str] = set()
+ACTIVE_AGENT_CARDS: set[str] = set()
 # find+claim+create must be one critical section or two parallel dispatches
 # race to claim the same idle card (or both miss and double-create).
-_card_pick_lock = asyncio.Lock()
+p_card_pick_lock = asyncio.Lock()
 
 
-def _find_reusable_card(dashboard_id: str, url: str, parent_session_id: str | None) -> str:
+def find_reusable_card(dashboard_id: str, url: str, parent_session_id: str | None) -> str:
     """An existing same-host spawned card to drive instead of stacking another
     webview: concurrent same-site webviews wedge each other (shared-partition
     lock contention), so a retry must REUSE, not multiply. The parent's own
@@ -2226,7 +2226,7 @@ def _find_reusable_card(dashboard_id: str, url: str, parent_session_id: str | No
     own, orphan = "", ""
     for bid, card in cards.items():
         spawned = getattr(card, "spawned_by", None)
-        if not spawned or bid in _active_agent_cards:
+        if not spawned or bid in ACTIVE_AGENT_CARDS:
             continue
         if browser_skills.host_of(getattr(card, "url", "") or "") != want:
             continue
@@ -2239,7 +2239,7 @@ def _find_reusable_card(dashboard_id: str, url: str, parent_session_id: str | No
     return own or orphan
 
 
-async def _create_browser_card(dashboard_id: str, url: str, parent_session_id: str | None = None) -> str:
+async def p_create_browser_card(dashboard_id: str, url: str, parent_session_id: str | None = None) -> str:
     """Create a new browser card on the dashboard and return its browser_id."""
     from backend.apps.dashboards.dashboards import _load, _save
     from backend.apps.dashboards.models import BrowserCardPosition, BrowserTab
@@ -2326,15 +2326,15 @@ async def run_browser_agents(
             # the url param is often empty with the target buried in the task
             # text; a url there still names the host we must not duplicate
             host_src = url or entry_url or next(iter(re.findall(r"https?://[^\s)\"'<>]+", task_text)), "")
-            async with _card_pick_lock:
-                browser_id = _find_reusable_card(dashboard_id, host_src, parent_session_id)
+            async with p_card_pick_lock:
+                browser_id = find_reusable_card(dashboard_id, host_src, parent_session_id)
                 if browser_id:
                     reused = True
                 else:
-                    browser_id = await _create_browser_card(dashboard_id, url or entry_url, parent_session_id)
+                    browser_id = await p_create_browser_card(dashboard_id, url or entry_url, parent_session_id)
                     if entry_url and not url:
                         logger.info(f"[browser-cold] new card {browser_id} opens at brief entry {entry_url}")
-                _active_agent_cards.add(browser_id)
+                ACTIVE_AGENT_CARDS.add(browser_id)
             if reused:
                 logger.info(f"[browser-agent] reusing same-host card {browser_id} instead of stacking another webview")
                 if url:
@@ -2346,7 +2346,7 @@ async def run_browser_agents(
             else:
                 await asyncio.sleep(2.0)
         elif browser_id:
-            _active_agent_cards.add(browser_id)
+            ACTIVE_AGENT_CARDS.add(browser_id)
 
         is_pre_selected = browser_id in pre_selected
         _nav_url = url or ("" if reused else entry_url)
@@ -2362,7 +2362,7 @@ async def run_browser_agents(
                 parent_session_id=parent_session_id,
             )
         finally:
-            _active_agent_cards.discard(browser_id)
+            ACTIVE_AGENT_CARDS.discard(browser_id)
 
     results = await asyncio.gather(*[_run_one(t) for t in tasks], return_exceptions=True)
 

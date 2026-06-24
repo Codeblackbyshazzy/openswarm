@@ -1,9 +1,9 @@
 """Deterministic stagnation detection for the browser sub-agent."""
 
 from backend.apps.agents.browser.browser_loop import (
-    _STAGNATION_ESCALATION_AT,
-    _STAGNATION_MAX,
-    _looks_like_failure,
+    STAGNATION_ESCALATION_AT,
+    STAGNATION_MAX,
+    looks_like_failure,
     advance_stagnation,
     card_is_unavailable,
     completion_is_honest,
@@ -19,14 +19,14 @@ def _fail(url="https://a.com"):
 
 
 def test_looks_like_failure_positive():
-    assert _looks_like_failure("Element not found: '.foo'")
-    assert _looks_like_failure("Index 4 is no longer valid")
-    assert _looks_like_failure("Error: something broke")
+    assert looks_like_failure("Element not found: '.foo'")
+    assert looks_like_failure("Index 4 is no longer valid")
+    assert looks_like_failure("Error: something broke")
 
 
 def test_looks_like_failure_negative():
-    assert not _looks_like_failure("Clicked element: button#submit")
-    assert not _looks_like_failure("Typed into: input#email")
+    assert not looks_like_failure("Clicked element: button#submit")
+    assert not looks_like_failure("Typed into: input#email")
 
 
 def test_error_result_is_unproductive():
@@ -63,17 +63,17 @@ def test_neutral_read_tools_never_count():
 
 def test_nudge_mentions_human_intervention_only_at_max():
     assert "RequestHumanIntervention" not in stagnation_nudge(3)
-    assert "RequestHumanIntervention" in stagnation_nudge(_STAGNATION_MAX)
+    assert "RequestHumanIntervention" in stagnation_nudge(STAGNATION_MAX)
     assert "ladder" in stagnation_nudge(3)
 
 
 def test_advance_increments_on_failures_and_nudges_at_threshold():
     streak, url, text, nudge = 0, "", "", None
     nudges = []
-    for _ in range(_STAGNATION_ESCALATION_AT):
+    for _ in range(STAGNATION_ESCALATION_AT):
         streak, url, text, nudge = advance_stagnation(streak, url, text, "BrowserClick", _fail())
         nudges.append(nudge)
-    assert streak == _STAGNATION_ESCALATION_AT
+    assert streak == STAGNATION_ESCALATION_AT
     assert nudges[-1] is not None  # nudge fires exactly when the threshold is hit
     assert nudges[0] is None and nudges[1] is None
 
@@ -97,9 +97,9 @@ def test_advance_neutral_tools_pass_through_unchanged():
 
 
 def test_advance_fires_again_at_max():
-    streak, url, text = _STAGNATION_MAX - 1, "https://a.com", "prev different"
+    streak, url, text = STAGNATION_MAX - 1, "https://a.com", "prev different"
     streak, url, text, nudge = advance_stagnation(streak, url, text, "BrowserClick", _fail())
-    assert streak == _STAGNATION_MAX
+    assert streak == STAGNATION_MAX
     assert nudge is not None and "RequestHumanIntervention" in nudge
     assert stagnation_exhausted(streak)
 

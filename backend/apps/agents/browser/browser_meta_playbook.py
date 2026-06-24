@@ -21,18 +21,18 @@ import os
 import tempfile
 import time
 
-from backend.apps.agents.browser.browser_playbook import _clean_bullet
+from backend.apps.agents.browser.browser_playbook import clean_bullet
 
 logger = logging.getLogger(__name__)
 
-_VERSION = 1
-_MAX_BULLETS = 10          # a touch larger than per-site: these earn their keep everywhere
-_FILE = "meta_playbook.json"
+P_VERSION = 1
+MAX_BULLETS = 10          # a touch larger than per-site: these earn their keep everywhere
+P_FILE = "meta_playbook.json"
 
-_cache: list[str] | None = None
+CACHE: list[str] | None = None
 
 
-def _dir() -> str | None:
+def p_dir() -> str | None:
     base = os.environ.get("OPENSWARM_BROWSER_META_DIR")
     if not base:
         try:
@@ -47,34 +47,34 @@ def _dir() -> str | None:
     return base
 
 
-def _path() -> str | None:
-    d = _dir()
-    return os.path.join(d, _FILE) if d else None
+def p_path() -> str | None:
+    d = p_dir()
+    return os.path.join(d, P_FILE) if d else None
 
 
-def _load() -> list[str]:
-    path = _path()
+def load() -> list[str]:
+    path = p_path()
     if not path or not os.path.exists(path):
         return []
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
-        if data.get("version") != _VERSION:
+        if data.get("version") != P_VERSION:
             return []
         return [b for b in (data.get("bullets") or []) if isinstance(b, str)]
     except Exception:
         return []
 
 
-def _persist(bullets: list[str]) -> None:
-    path = _path()
+def persist(bullets: list[str]) -> None:
+    path = p_path()
     if not path:
         return
     try:
         d = os.path.dirname(path)
         fd, tmp = tempfile.mkstemp(dir=d, suffix=".tmp")
         with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump({"version": _VERSION, "bullets": bullets, "updated_at": time.time()}, f)
+            json.dump({"version": P_VERSION, "bullets": bullets, "updated_at": time.time()}, f)
         os.replace(tmp, path)  # atomic
     except Exception as e:
         logger.debug(f"[browser-meta] persist failed: {e}")
@@ -82,10 +82,10 @@ def _persist(bullets: list[str]) -> None:
 
 def get_meta() -> list[str]:
     """The cross-site bullets (cheap, no LLM). Cached after first read."""
-    global _cache
-    if _cache is None:
-        _cache = _load() or list(_SEED)
-    return _cache
+    global CACHE
+    if CACHE is None:
+        CACHE = load() or list(P_SEED)
+    return CACHE
 
 
 def format_for_prompt() -> str:
@@ -94,7 +94,7 @@ def format_for_prompt() -> str:
     bullets = get_meta()
     if not bullets:
         return ""
-    lines = "\n".join(f"- {b}" for b in bullets[:_MAX_BULLETS])
+    lines = "\n".join(f"- {b}" for b in bullets[:MAX_BULLETS])
     return (
         "\n\n## General web priors (learned across many sites, verify against THIS page)\n"
         + lines
@@ -113,26 +113,26 @@ def absorb(universal_bullets: list[str]) -> bool:
     truly_new: list[str] = []
     seen: set[str] = set()
     for b in universal_bullets:
-        cb = _clean_bullet(b)
+        cb = clean_bullet(b)
         if cb and cb.lower() not in existing_lower and cb.lower() not in seen:
             seen.add(cb.lower())
             truly_new.append(cb)
     if not truly_new:
         return False
-    merged = (truly_new + existing)[:_MAX_BULLETS]
-    global _cache
-    _cache = merged
-    _persist(merged)
+    merged = (truly_new + existing)[:MAX_BULLETS]
+    global CACHE
+    CACHE = merged
+    persist(merged)
     logger.info(f"[browser-meta] {len(merged)} cross-site prior(s) (was {len(existing)})")
     return True
 
 
 def clear(wipe_disk: bool = False) -> None:
     """Test/maintenance reset of the in-memory cache (and optionally disk)."""
-    global _cache
-    _cache = None
+    global CACHE
+    CACHE = None
     if wipe_disk:
-        path = _path()
+        path = p_path()
         if path and os.path.exists(path):
             try:
                 os.remove(path)
@@ -142,7 +142,7 @@ def clear(wipe_disk: bool = False) -> None:
 
 # Shipped starting priors: the hard-won universal lessons from this codebase's own
 # browser work, so tier 3 is useful on day one and accrues more as sites confirm them.
-_SEED = (
+P_SEED = (
     "A message composer CLEARS when the send goes through; the empty box IS your "
     "confirmation, do not hunt the thread for the sent text to 'verify'.",
     "An opener (Message/DM/Compose) only OPENS the box and is reversible; only the "

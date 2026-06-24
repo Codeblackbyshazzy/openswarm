@@ -30,7 +30,7 @@ def test_seed_makes_catalog_non_empty_offline(monkeypatch, tmp_path):
     seeded = sr._load_seed_cache()
     assert len(seeded) >= 10
 
-    sr._cache = seeded
+    sr.CACHE = seeded
     res = asyncio.run(sr.registry_search(q="", limit=100, offset=0, sort="name", category=""))
     assert res["total"] >= 10 and len(res["skills"]) >= 10
 

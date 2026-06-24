@@ -32,7 +32,7 @@ def _isolate_browser_state(monkeypatch):
         # where ITS env var points, not where the first test's pointed
         try:
             from backend.apps.agents.browser import browser_metrics as _bm
-            _bm._metrics_dir_cache = None
+            _bm.p_metrics_dir_cache = None
         except Exception:
             pass
     _reset()

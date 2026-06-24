@@ -135,7 +135,7 @@ def _install(monkeypatch, primary, aux):
 
 
 def test_full_loop_goal_stagnation_adjudication_and_hint_write(monkeypatch):
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     primary = FakeLLM([
         Resp([_rp("click the Search button"), _tu("BrowserListInteractives")]),
         Resp([_rp("click submit"), _tu("BrowserClick", selector=".s1")]),
@@ -174,7 +174,7 @@ def test_action_with_expect_is_confirmed(monkeypatch):
     # An action that declares `expect` is CONFIRMED after it runs: the loop issues a
     # target-aware confirm probe and feeds the next turn a tool_result stating the
     # expected change is present (observed success, never assumed).
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     primary = FakeLLM([
         Resp([_rp("click submit and confirm"),
               _tu("BrowserClickIndex", index=1, expect="Submitted")]),
@@ -196,7 +196,7 @@ def test_action_with_expect_is_confirmed(monkeypatch):
 def test_missing_report_progress_runs_the_action_and_reminds_not_rejects(monkeypatch):
     # The model acts WITHOUT ReportProgress. Old behavior rejected the turn (wasted
     # a round-trip); new behavior runs the action and folds in a one-line reminder.
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     primary = FakeLLM([
         Resp([_tu("BrowserClickIndex", index=2)]),  # NO ReportProgress this turn
         Resp([Blk("text", "done")], stop_reason="end_turn"),
@@ -218,7 +218,7 @@ def test_confirmed_send_ends_the_run_instead_of_stalling(monkeypatch):
     # After an irreversible send CONFIRMS, the model must not burn turns re-verifying.
     # Here it sends (index 99 = "Send", expect confirms) then tries to stall forever
     # with pure-perception turns; the loop must END within a turn or two, not spin.
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     primary = FakeLLM([
         Resp([_rp("send the message"), _tu("BrowserClickIndex", index=99, expect="Sent")]),
         # the model now STALLS, re-looking instead of finishing (the bug)
@@ -243,7 +243,7 @@ def test_confirmed_send_ends_the_run_instead_of_stalling(monkeypatch):
 def test_done_tool_delivers_a_clean_human_summary(monkeypatch):
     # Canonical finish: the model calls Done(message); that message is the user's
     # reply verbatim (no OUTCOME tag, no UI mechanics) and `done` is True.
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     primary = FakeLLM([
         Resp([_rp("open profile + send"), _tu("BrowserClickIndex", index=5, expect="Sent")]),
         Resp([_tu("Done", message="Sent your message to Tyler, it's in the thread now.")]),
@@ -259,7 +259,7 @@ def test_done_tool_delivers_a_clean_human_summary(monkeypatch):
 def test_done_tool_success_false_marks_not_done(monkeypatch):
     # Done(success=false) is the honest "couldn't finish": done is False so the
     # fast path knows to recover, and the message still reads like a person wrote it.
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     primary = FakeLLM([
         Resp([_rp("look for thread"), _tu("BrowserClickIndex", index=3)]),
         Resp([_tu("Done", message="I hit a login wall, so I couldn't open the chat.", success=False)]),
@@ -275,7 +275,7 @@ def test_run_that_never_calls_done_is_not_a_clean_success(monkeypatch):
     # A run that does real work but stops with plain text (never calls Done) is a
     # half-finish, not a clean success: done must be False so the fast path recovers
     # instead of shipping a silent stop (the 'Task completed.' that wasn't).
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     primary = FakeLLM([
         Resp([_rp("click it"), _tu("BrowserClickIndex", index=3)]),
         Resp([Blk("text", "I clicked the thing.")], stop_reason="end_turn"),
@@ -292,7 +292,7 @@ def test_send_shortcut_does_not_arm_on_a_gather_task(monkeypatch):
     # arm the send-completion shortcut, there is no send to confirm. If it did, the
     # run cuts at the 2-turn post-send limit and leaks the canned "message went
     # through" line. On a gather task it should run the full perception budget.
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     primary = FakeLLM([
         Resp([_rp("dismiss the cookie banner"), _tu("BrowserClickIndex", index=99)]),
         *[Resp([_rp("keep reading the list"), _tu("BrowserScreenshot")]) for _ in range(8)],
@@ -313,7 +313,7 @@ def test_browser_save_data_writes_a_file_and_returns_a_receipt(monkeypatch, tmp_
     # of a dozen reply-chunks. The mock's evaluate echoes its expression as the data.
     import os as _os
     monkeypatch.setattr(_os.path, "expanduser", lambda p: str(tmp_path))  # fallback workspace -> tmp
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     primary = FakeLLM([
         Resp([_rp("save the rows"), _tu("BrowserSaveData", expression="JSON.stringify(window.__rows)", filename="rows.json")]),
         Resp([_tu("Done", message="Saved the full set to rows.json.")]),
@@ -329,7 +329,7 @@ def test_browser_save_data_writes_a_file_and_returns_a_receipt(monkeypatch, tmp_
     # listings every turn) must NOT trip the spin backstop, gathering is the work,
     # not spinning. Here 9 straight Extract turns each return distinct data; the run
     # should keep going (no early wrap-up nudge) and finish on the model's own Done.
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     primary = FakeLLM([
         # each turn reads a DIFFERENT page (distinct expression -> distinct result)
         *[Resp([_rp(f"page {i}"), _tu("BrowserEvaluate", expression=f"parsePage({i})")]) for i in range(9)],
@@ -349,7 +349,7 @@ def test_spin_backstop_nudges_a_clean_wrapup_instead_of_a_midthought(monkeypatch
     # The Airbnb mid-thought bug: a read-heavy run that trips the spin backstop must
     # get ONE wrap-up nudge to summarize via Done, not be cut off mid-sentence. The
     # final reply is the model's clean Done answer, and the nudge actually reached it.
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     primary = FakeLLM([
         Resp([_rp("open the list"), _tu("BrowserClickIndex", index=3)]),   # an action arms the backstop
         # repeated identical screenshots (same result, no new data) = genuine spinning
@@ -368,7 +368,7 @@ def test_early_perception_is_not_cut_short_before_any_action(monkeypatch):
     # Orienting on a cold/slow page can take several look-only turns; the stall
     # backstop must NOT fire before the agent has done anything (it only bounds a
     # POST-action spin). Here 7 perception turns precede the finish; all must run.
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     # varied read tools so the (separate) identical-repeat loop detector doesn't trip;
     # this isolates the stall backstop, which must NOT fire pre-action
     _reads = ["BrowserListInteractives", "BrowserGetText", "BrowserScreenshot"]
@@ -387,7 +387,7 @@ def test_aux_adjudication_fires_even_when_loop_detector_trips(monkeypatch):
     # Repeated IDENTICAL failing clicks trip the exact-repeat loop detector AND
     # reach stagnation exhaustion on the same turn. The aux escape hatch must
     # still fire (it was previously suppressed by the `not is_loop` guard).
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     primary = FakeLLM([
         Resp([_rp("click submit"), _tu("BrowserListInteractives")]),
         *[Resp([_rp("retry same"), _tu("BrowserClick", selector=".same")]) for _ in range(6)],
@@ -410,7 +410,7 @@ def test_aux_adjudication_fires_even_when_loop_detector_trips(monkeypatch):
 def test_tier1_and_tier2_tools_drive_through_the_real_loop(monkeypatch):
     # The agent can call the new tier-1 (WebMCP detect) and tier-2 (list/replay)
     # tools through the actual run_browser_agent loop, and replay threads its url.
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     primary = FakeLLM([
         Resp([_rp("check for a faster path"), _tu("BrowserDetectWebMCP")]),
         Resp([_rp("list captured routes"), _tu("BrowserListRoutes")]),
@@ -438,7 +438,7 @@ def test_skill_is_recorded_then_replayed_with_zero_llm_calls(monkeypatch):
     # Run 2: same task/host -> replays via the no-LLM fast path (the speed win).
     import backend.apps.agents.browser.browser_skills as SK
     SK.clear()
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     primary = FakeLLM([
         Resp([_rp("click submit"), _tu("BrowserListInteractives")]),
         Resp([_rp("click it"), _tu("BrowserClickIndex", index=1)]),
@@ -471,7 +471,7 @@ def test_replay_falls_back_to_full_agent_when_a_step_fails(monkeypatch):
     # the full LLM agent instead (never ghost-succeed on a stale skill).
     import backend.apps.agents.browser.browser_skills as SK
     SK.clear()
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
     # Pre-seed a skill whose click target no longer exists on the page.
     SK.record_skill("docs.google.com", "click the Save button", [
         {"tool": "BrowserClickIndex", "input": {"index": 1}, "ok": True,
@@ -504,7 +504,7 @@ def test_deferred_replay_fires_after_navigating_to_the_right_host(monkeypatch):
     # deferred re-check must switch to replay instead of grinding the LLM loop.
     import backend.apps.agents.browser.browser_skills as SK
     SK.clear()
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
     SK.record_skill("docs.google.com", "click the Search button", [
         {"tool": "BrowserClickIndex", "input": {}, "ok": True,
          "clicked_role": "button", "clicked_name": "Search"},
@@ -535,7 +535,7 @@ def test_deferred_replay_fires_after_navigating_to_the_right_host(monkeypatch):
     assert any(c["action"] == "click_by_name" for c in sent), "replay re-resolved by name"
     assert len(primary.calls) == 1, "only the navigate turn ran; the re-check preempted the rest"
     # and the deferred replay still promotes the skill through the trust gate
-    assert SK.find_skill("docs.google.com", "click the Search button")["state"] == SK._TRUSTED
+    assert SK.find_skill("docs.google.com", "click the Search button")["state"] == SK.TRUSTED
 
 
 def test_deferred_replay_does_not_fire_after_the_page_was_dirtied(monkeypatch):
@@ -544,7 +544,7 @@ def test_deferred_replay_does_not_fire_after_the_page_was_dirtied(monkeypatch):
     # state is dirty), so the re-check must stay disabled and the LLM finishes.
     import backend.apps.agents.browser.browser_skills as SK
     SK.clear()
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
     SK.record_skill("docs.google.com", "click the Search button", [
         {"tool": "BrowserClickIndex", "input": {}, "ok": True,
          "clicked_role": "button", "clicked_name": "Search"},
@@ -582,7 +582,7 @@ def test_replay_resolves_host_from_live_page_when_no_initial_url(monkeypatch):
     # orchestrated flow (records skills it can never look up again).
     import backend.apps.agents.browser.browser_skills as SK
     SK.clear()
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
     # a skill exists for the host the live page will report (DOC_URL -> docs.google.com)
     SK.record_skill("docs.google.com", "click the Search button", [
         {"tool": "BrowserClickIndex", "input": {}, "ok": True,
@@ -608,7 +608,7 @@ def test_skill_keys_on_parent_user_message_so_reformulations_share_a_skill(monke
     import backend.apps.agents.browser.browser_skills as SK
     import backend.apps.agents.agent_manager as am_mod
     SK.clear()
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
 
     class _Msg:
         def __init__(self, role, content):
@@ -651,7 +651,7 @@ def test_skill_key_falls_back_to_delegated_task_on_multi_quote_message(monkeypat
     import backend.apps.agents.browser.browser_skills as SK
     import backend.apps.agents.agent_manager as am_mod
     SK.clear()
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
 
     class _Msg:
         def __init__(self, role, content):
@@ -680,7 +680,7 @@ def test_replay_success_promotes_skill_to_trusted_through_the_loop(monkeypatch):
     # it successfully, which must PROMOTE it to trusted (proven by a real replay).
     import backend.apps.agents.browser.browser_skills as SK
     SK.clear()
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     primary = FakeLLM([
         Resp([_rp("click submit"), _tu("BrowserListInteractives")]),
         Resp([_rp("click it"), _tu("BrowserClickIndex", index=1)]),
@@ -691,12 +691,12 @@ def test_replay_success_promotes_skill_to_trusted_through_the_loop(monkeypatch):
     asyncio.run(BA.run_browser_agent(
         task="click the Search button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
     ))
-    assert SK.find_skill("docs.google.com", "click the Search button")["state"] == SK._PROBATION
+    assert SK.find_skill("docs.google.com", "click the Search button")["state"] == SK.PROBATION
     r2 = asyncio.run(BA.run_browser_agent(
         task="click the Search button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
     ))
     assert r2.get("replayed") is True
-    assert SK.find_skill("docs.google.com", "click the Search button")["state"] == SK._TRUSTED
+    assert SK.find_skill("docs.google.com", "click the Search button")["state"] == SK.TRUSTED
 
 
 def test_skill_with_send_step_never_replays_silently(monkeypatch):
@@ -705,7 +705,7 @@ def test_skill_with_send_step_never_replays_silently(monkeypatch):
     # confirms before anything outward) runs instead, and trust is untouched.
     import backend.apps.agents.browser.browser_skills as SK
     SK.clear()
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
     SK.record_skill("docs.google.com", "message tyler saying hi", [
         {"tool": "BrowserClickIndex", "input": {}, "ok": True,
          "clicked_role": "button", "clicked_name": "Send"},
@@ -718,7 +718,7 @@ def test_skill_with_send_step_never_replays_silently(monkeypatch):
     assert not r.get("replayed"), "a send-step skill must never auto-replay"
     assert not any(c["action"] == "click_by_name" for c in sent), "the recorded Send was not re-fired"
     assert len(primary.calls) > 0, "the live agent ran instead"
-    assert SK.find_skill("docs.google.com", "message tyler saying hi")["state"] == SK._PROBATION, \
+    assert SK.find_skill("docs.google.com", "message tyler saying hi")["state"] == SK.PROBATION, \
         "skipping replay is not a replay failure; trust stays untouched"
 
 
@@ -728,7 +728,7 @@ def test_unproven_skill_that_fails_is_quarantined_and_never_retried(monkeypatch)
     # it goes straight to the pure-LLM baseline. A silent re-fail would be a ghost.
     import backend.apps.agents.browser.browser_skills as SK
     SK.clear()
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
     SK.record_skill("docs.google.com", "click the Save button", [
         {"tool": "BrowserClickIndex", "input": {"index": 1}, "ok": True,
          "clicked_role": "button", "clicked_name": "Save"},
@@ -750,7 +750,7 @@ def test_unproven_skill_that_fails_is_quarantined_and_never_retried(monkeypatch)
         task="click the Save button", browser_id="b1", model="sonnet", initial_url=DOC_URL,
     ))
     assert any(c["action"] == "click_by_name" for c in sent), "run 1 DID attempt the replay"
-    assert SK.list_skills("docs.google.com")[0]["state"] == SK._QUARANTINE
+    assert SK.list_skills("docs.google.com")[0]["state"] == SK.QUARANTINE
 
     # Run 2: the quarantined skill must NOT be replayed again.
     sent.clear()
@@ -769,7 +769,7 @@ def test_informational_run_records_no_skill_to_avoid_thin_ghost(monkeypatch):
     # falsely claim the whole task done without regenerating the judged list.
     import backend.apps.agents.browser.browser_skills as SK
     SK.clear()
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
     ten = "\n".join(f"{i}. Engineer {i}, very cracked, at Startup{i}" for i in range(1, 11))
     primary = FakeLLM([
         Resp([_rp("search"), _tu("BrowserClickIndex", index=1)]),  # a real productive action
@@ -790,7 +790,7 @@ def test_read_answered_from_frontloaded_perception_is_not_a_ghost(monkeypatch):
     # a read task straight from that (zero further tools), the honesty gate must
     # NOT flag it as 'declared done without taking a single action'. The front-
     # loaded reads are real and seed action_log. (This bug caused retry loops.)
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
     primary = FakeLLM([
         # the model answers immediately from the front-loaded page text, no tools
         Resp([Blk("text", "The first sentence is: Alan Turing was a mathematician.")], stop_reason="end_turn"),
@@ -819,7 +819,7 @@ def test_ghost_completion_is_reported_as_error_not_completed(monkeypatch):
     # and must NOT record a skill from a run that accomplished nothing.
     import backend.apps.agents.browser.browser_skills as SK
     SK.clear()
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
     primary = FakeLLM([
         Resp([_rp("click submit"), _tu("BrowserClick", selector=".s1")]),
         Resp([_rp("retry"), _tu("BrowserClick", selector=".s2")]),
@@ -854,7 +854,7 @@ def test_dead_browser_card_aborts_fast_without_spinning(monkeypatch):
     # turns, not the whole budget) and report the precise reason.
     import backend.apps.agents.browser.browser_skills as SK
     SK.clear()
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
     # the model would happily keep clicking for 8 turns if we let it
     primary = FakeLLM(
         [Resp([_rp("click"), _tu("BrowserClick", selector=f".s{i}")]) for i in range(8)]
@@ -890,7 +890,7 @@ def test_hung_browser_card_aborts_fast_not_a_20_minute_loop(monkeypatch):
     # feeds the same fast-fail streak and aborts in a couple of turns.
     import backend.apps.agents.browser.browser_skills as SK
     SK.clear()
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
     primary = FakeLLM(
         [Resp([_rp("read"), _tu("BrowserGetText")]) for _ in range(8)]
         + [Resp([Blk("text", "done")], stop_reason="end_turn")]
@@ -921,7 +921,7 @@ def test_perception_is_frontloaded_into_first_turn(monkeypatch):
     # With a known start URL, the agent should prefetch the element list + page
     # text and put them in the FIRST user message, so the model can act on turn 1
     # instead of spending early turns orienting.
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     primary = FakeLLM([Resp([Blk("text", "done")], stop_reason="end_turn")])
     aux = FakeAux()
     _install(monkeypatch, primary, aux)
@@ -939,7 +939,7 @@ def test_prompt_caching_markers_present(monkeypatch):
     # The fixed system+tools prefix must carry cache_control so it's cached
     # across turns (the first-run speed/cost win). Without the marker the
     # ~4k-token prefix is reprocessed every turn.
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     primary = FakeLLM([Resp([Blk("text", "done")], stop_reason="end_turn")])
     aux = FakeAux()
     _install(monkeypatch, primary, aux)
@@ -958,7 +958,7 @@ def test_agent_can_list_and_deprecate_its_own_skills(monkeypatch):
     # handled, never sent to the webview), giving it agency over its own memory.
     import backend.apps.agents.browser.browser_skills as SK
     SK.clear()
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
     # pre-seed a skill on this host
     SK.record_skill("docs.google.com", "share the doc now", [
         {"tool": "BrowserClickIndex", "input": {}, "ok": True, "clicked_role": "button", "clicked_name": "Share"},
@@ -992,7 +992,7 @@ def test_playbook_distills_on_success_survives_restart_and_seeds_next_run(monkey
     import backend.apps.agents.browser.browser_skills as SK
     import json as _json
     SK.clear(); PB.clear(wipe_disk=True)
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
 
     # aux returns a strategy playbook as JSON (the distill+reconcile reply)
     class PBAux:
@@ -1025,7 +1025,7 @@ def test_playbook_distills_on_success_survives_restart_and_seeds_next_run(monkey
 
     # Restart: drop in-memory, keep disk.
     PB.clear(wipe_disk=False)
-    assert not PB._cache
+    assert not PB.CACHE
 
     # Run 2: fresh task, same host -> playbook must be seeded into the system prompt.
     primary2 = FakeLLM([Resp([Blk("text", "done")], stop_reason="end_turn")])
@@ -1047,7 +1047,7 @@ def test_ambient_memory_signals_fire_calmly(monkeypatch):
     import backend.apps.agents.browser.browser_skills as SK
     import json as _json
     SK.clear(); PB.clear(wipe_disk=True)
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
 
     class PBAux:
         def __init__(self): self.messages = self
@@ -1095,7 +1095,7 @@ def test_playbook_not_learned_from_a_ghost_completion(monkeypatch):
     import backend.apps.agents.browser.browser_playbook as PB
     import backend.apps.agents.browser.browser_skills as SK
     SK.clear(); PB.clear(wipe_disk=True)
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
 
     class CountingAux:
         def __init__(self):
@@ -1126,7 +1126,7 @@ def test_playbook_not_learned_from_a_ghost_completion(monkeypatch):
 def test_batch_replay_runs_a_read_loop_for_all_values(monkeypatch):
     # The win: do one item the slow way, then BrowserRepeatFlow runs the same
     # read flow for the rest at machine speed, one tool turn, no screenshots.
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
     steps = [{"action": "navigate", "url": "https://docs.google.com/in/{{value}}"},
              {"action": "evaluate", "expression": "read('{{value}}')"}]
     primary = FakeLLM([
@@ -1159,7 +1159,7 @@ def test_batch_replay_is_ghost_proof_when_an_item_does_not_match(monkeypatch):
     # THE anti-ghost test: per-item pages vary. Value 'grace' errors mid-flow ->
     # it must be reported as needs-manual, the others still succeed, and the tally
     # is HONEST ('2 of 3'), never a silent 'did them all'.
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
     steps = [{"action": "navigate", "url": "https://docs.google.com/in/{{value}}"},
              {"action": "evaluate", "expression": "read('{{value}}')"}]
     primary = FakeLLM([
@@ -1191,7 +1191,7 @@ def test_batch_replay_is_ghost_proof_when_an_item_does_not_match(monkeypatch):
 def test_batch_replay_refuses_a_send_loop_and_executes_nothing(monkeypatch):
     # The send gate: a flow that clicks 'Send message' must be REFUSED outright,
     # nothing is clicked, so we can never auto-message N people.
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
     steps = [{"action": "navigate", "url": "https://docs.google.com/in/{{value}}"},
              {"action": "click", "role": "button", "name": "Message"},
              {"action": "type", "selector": "#msg", "text": "hi {{value}}"},
@@ -1212,7 +1212,7 @@ def test_batch_replay_refuses_a_send_loop_and_executes_nothing(monkeypatch):
 def test_batch_replay_uses_the_fast_network_route_per_value(monkeypatch):
     # Folds in the audit finding: a read-loop can hit a captured API endpoint
     # (replay_route) per value instead of clicking the UI, the fast tier.
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
     steps = [{"action": "replay_route", "url": "https://docs.google.com/api/p?u={{value}}"}]
     primary = FakeLLM([
         Resp([_rp("fetch via api"), _tu("BrowserRepeatFlow", steps=steps, values=["ada", "grace"])]),
@@ -1228,7 +1228,7 @@ def test_captured_routes_are_surfaced_once_per_host(monkeypatch):
     # Drives the dead network tier: when a READ shows safe GET routes were captured
     # (sampled on get_text, after the SPA's XHRs fired, not on navigate), the agent
     # gets a ONE-TIME nudge per host toward BrowserReplayRoute, not on every read.
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
     primary = FakeLLM([
         Resp([_rp("read 1"), _tu("BrowserEvaluate", expression="document.title")]),
         Resp([_rp("read 2"), _tu("BrowserEvaluate", expression="document.title")]),
@@ -1253,7 +1253,7 @@ def test_captured_routes_are_surfaced_once_per_host(monkeypatch):
 def test_browser_wait_routes_through_smart_wait_and_returns_early(monkeypatch):
     # BrowserWait must no longer be a blind sleep: it probes the page (evaluate)
     # and returns as soon as it's settled, well under the requested cap.
-    BH._browser_history.clear()
+    BH.BROWSER_HISTORY.clear()
     primary = FakeLLM([
         Resp([_rp("let it settle"), _tu("BrowserWait", milliseconds=8000)]),
         Resp([Blk("text", "Settled, moving on.")], stop_reason="end_turn"),
@@ -1271,7 +1271,7 @@ def test_browser_wait_routes_through_smart_wait_and_returns_early(monkeypatch):
 
 
 def test_prior_domain_hint_is_seeded_into_system_prompt(monkeypatch):
-    BH._browser_history.clear(); BH._domain_notes.clear()
+    BH.BROWSER_HISTORY.clear(); BH.DOMAIN_NOTES.clear()
     BH.set_domain_note("google.com", "REMEMBERED: Share button is index 43; Tab into the dialog.")
     primary = FakeLLM([Resp([Blk("text", "done")], stop_reason="end_turn")])
     aux = FakeAux()
@@ -1323,22 +1323,22 @@ def test_find_reusable_card_reuses_own_then_orphan_never_user(monkeypatch):
 
     target = "https://www.linkedin.com/search/results/people/?keywords=t"
     # the parent's own same-host card wins
-    assert BA._find_reusable_card("d1", target, "p1") == "b-own"
+    assert BA.find_reusable_card("d1", target, "p1") == "b-own"
     # a different parent skips p1's... unless that parent finished (orphan); first orphan wins
-    assert BA._find_reusable_card("d1", target, "p2") == "b-orphan"
+    assert BA.find_reusable_card("d1", target, "p2") == "b-orphan"
     # never a different host
-    assert BA._find_reusable_card("d1", "https://example.com/", "p1") == ""
+    assert BA.find_reusable_card("d1", "https://example.com/", "p1") == ""
     # an actively-driven card is never grabbed
-    BA._active_agent_cards.update({"b-own", "b-orphan"})
+    BA.ACTIVE_AGENT_CARDS.update({"b-own", "b-orphan"})
     try:
-        assert BA._find_reusable_card("d1", target, "p1") == ""
+        assert BA.find_reusable_card("d1", target, "p1") == ""
     finally:
-        BA._active_agent_cards.clear()
+        BA.ACTIVE_AGENT_CARDS.clear()
     # cards of a still-RUNNING other parent are off limits
     class _Running:
         status = "running"
     monkeypatch.setattr(am_mod.agent_manager, "get_session", lambda sid: _Running(), raising=False)
-    assert BA._find_reusable_card("d1", target, "p2") == ""
+    assert BA.find_reusable_card("d1", target, "p2") == ""
 
 
 def _fake_settle(calls):
@@ -1360,7 +1360,7 @@ def test_post_action_state_settles_then_attaches(monkeypatch):
     from backend.apps.agents.browser import browser_agent as ba
     calls = []
     monkeypatch.setattr(ba.browser_wait, "smart_wait", _fake_settle(calls))
-    out = asyncio.run(ba._post_action_state(
+    out = asyncio.run(ba.post_action_state(
         "BrowserClickIndex", {"index": 1}, {"text": "Clicked"},
         "b1", "", _fake_exec(calls), "find tyler",
     ))
@@ -1374,7 +1374,7 @@ def test_post_action_state_navigate_gets_longer_settle(monkeypatch):
     from backend.apps.agents.browser import browser_agent as ba
     calls = []
     monkeypatch.setattr(ba.browser_wait, "smart_wait", _fake_settle(calls))
-    asyncio.run(ba._post_action_state(
+    asyncio.run(ba.post_action_state(
         "BrowserNavigate", {"url": "https://x.com"}, {"text": "Navigated"},
         "b1", "", _fake_exec(calls), "",
     ))
@@ -1386,7 +1386,7 @@ def test_post_action_state_expect_skips_double_settle(monkeypatch):
     from backend.apps.agents.browser import browser_agent as ba
     calls = []
     monkeypatch.setattr(ba.browser_wait, "smart_wait", _fake_settle(calls))
-    out = asyncio.run(ba._post_action_state(
+    out = asyncio.run(ba.post_action_state(
         "BrowserClickIndex", {"index": 2, "expect": "Sent"}, {"text": "Clicked"},
         "b1", "", _fake_exec(calls), "",
     ))
@@ -1400,13 +1400,13 @@ def test_post_action_state_skips_errors_reads_and_batch_reads(monkeypatch):
     calls = []
     monkeypatch.setattr(ba.browser_wait, "smart_wait", _fake_settle(calls))
     exec_fn = _fake_exec(calls)
-    assert asyncio.run(ba._post_action_state(
+    assert asyncio.run(ba.post_action_state(
         "BrowserClickIndex", {"index": 1}, {"error": "nope"}, "b", "", exec_fn, "")) == ""
-    assert asyncio.run(ba._post_action_state(
+    assert asyncio.run(ba.post_action_state(
         "BrowserGetText", {}, {"text": "page text"}, "b", "", exec_fn, "")) == ""
     batch_in = {"actions": [{"type": "click_index", "params": {"index": 1}},
                             {"type": "list_interactives", "params": {}}]}
-    assert asyncio.run(ba._post_action_state(
+    assert asyncio.run(ba.post_action_state(
         "BrowserBatch", batch_in, {"text": "ran 2"}, "b", "", exec_fn, "")) == ""
     assert calls == []
 
@@ -1417,7 +1417,7 @@ def test_post_action_state_truncates_long_lists(monkeypatch):
     calls = []
     monkeypatch.setattr(ba.browser_wait, "smart_wait", _fake_settle(calls))
     long_list = "\n".join(f'[{i}]<button "b{i}">' for i in range(60))
-    out = asyncio.run(ba._post_action_state(
+    out = asyncio.run(ba.post_action_state(
         "BrowserType", {"selector": "#q", "text": "hi"}, {"text": "Typed"},
         "b1", "", _fake_exec(calls, long_list), "",
     ))
@@ -1431,7 +1431,7 @@ def test_post_action_state_hung_settle_attaches_nothing(monkeypatch):
     async def hung_wait(execute_fn, browser_id, tab_id, max_ms, **kw):
         return {"settled": False, "hung": True}
     monkeypatch.setattr(ba.browser_wait, "smart_wait", hung_wait)
-    out = asyncio.run(ba._post_action_state(
+    out = asyncio.run(ba.post_action_state(
         "BrowserClick", {"selector": "a"}, {"text": "Clicked"},
         "b1", "", _fake_exec(calls), "",
     ))
@@ -1439,20 +1439,20 @@ def test_post_action_state_hung_settle_attaches_nothing(monkeypatch):
 
 
 def test_delta_state_first_attach_sends_full_list():
-    from backend.apps.agents.browser.browser_agent import _delta_state
+    from backend.apps.agents.browser.browser_agent import delta_state
     seen = set()
     full = "8 interactive elements:\n" + "\n".join(f'[{i}]<button "b{i}">' for i in range(1, 9))
-    assert _delta_state(full, seen) == full
+    assert delta_state(full, seen) == full
     assert len(seen) == 8
 
 
 def test_delta_state_shrinks_to_changed_rows():
-    from backend.apps.agents.browser.browser_agent import _delta_state
+    from backend.apps.agents.browser.browser_agent import delta_state
     rows = [f'[{i}]<button "b{i}">' for i in range(1, 11)]
     seen = set()
-    _delta_state("\n".join(rows), seen)
+    delta_state("\n".join(rows), seen)
     nxt = rows[:9] + ['[10]<button "b10" value="typed">', '[11]*<button "new">']
-    out = _delta_state("\n".join(nxt), seen)
+    out = delta_state("\n".join(nxt), seen)
     assert '[11]*<button "new">' in out and 'value="typed"' in out
     assert '[3]<button "b3">' not in out
     assert "+9 rows unchanged" in out
@@ -1460,20 +1460,20 @@ def test_delta_state_shrinks_to_changed_rows():
 
 
 def test_delta_state_no_changes_collapses_to_one_line():
-    from backend.apps.agents.browser.browser_agent import _delta_state
+    from backend.apps.agents.browser.browser_agent import delta_state
     rows = "\n".join(f'[{i}]<link "l{i}">' for i in range(1, 13))
     seen = set()
-    _delta_state(rows, seen)
-    out = _delta_state(rows, seen)
+    delta_state(rows, seen)
+    out = delta_state(rows, seen)
     assert out.startswith("(all 12 element rows unchanged")
 
 
 def test_delta_state_reshuffle_resends_full():
-    from backend.apps.agents.browser.browser_agent import _delta_state
+    from backend.apps.agents.browser.browser_agent import delta_state
     seen = set()
-    _delta_state("\n".join(f'[{i}]<button "a{i}">' for i in range(1, 11)), seen)
+    delta_state("\n".join(f'[{i}]<button "a{i}">' for i in range(1, 11)), seen)
     new_page = "10 interactive elements:\n" + "\n".join(f'[{i}]<button "z{i}">' for i in range(1, 11))
-    assert _delta_state(new_page, seen) == new_page
+    assert delta_state(new_page, seen) == new_page
 
 
 def test_informational_gate_judges_the_task_ask_first():
@@ -1553,58 +1553,58 @@ def test_recoverable_tool_error_classifier():
 
 
 def test_message_pairing_validator_catches_both_orphan_and_dangling():
-    from backend.apps.agents.browser.browser_history import _validate_message_pairing
+    from backend.apps.agents.browser.browser_history import validate_message_pairing
     au = lambda i: {"role": "assistant", "content": [{"type": "tool_use", "id": i, "name": "X", "input": {}}]}
     tr = lambda i: {"role": "user", "content": [{"type": "tool_result", "tool_use_id": i, "content": []}]}
     # well-formed: every tool_use answered
-    assert _validate_message_pairing([au("t1"), tr("t1")]) is True
+    assert validate_message_pairing([au("t1"), tr("t1")]) is True
     # DANGLING tool_use (the exact 400: a call with no result) -> invalid
-    assert _validate_message_pairing([au("t1")]) is False
-    assert _validate_message_pairing([au("t1"), tr("t1"), au("t2")]) is False
+    assert validate_message_pairing([au("t1")]) is False
+    assert validate_message_pairing([au("t1"), tr("t1"), au("t2")]) is False
     # ORPHAN tool_result (result for a never-declared id) -> invalid
-    assert _validate_message_pairing([tr("ghost")]) is False
+    assert validate_message_pairing([tr("ghost")]) is False
     # plain text turns are fine
-    assert _validate_message_pairing([{"role": "user", "content": "hi"},
+    assert validate_message_pairing([{"role": "user", "content": "hi"},
                                       {"role": "assistant", "content": "done"}]) is True
 
 
 def test_composer_fill_detection():
     # detecting a composer fill is what arms the post-type wait for the Send button
     # to render before we re-list (so the model sees it instead of hunting)
-    from backend.apps.agents.browser.browser_agent import _is_composer_fill
-    assert _is_composer_fill("BrowserClickIndex", {"index": 4, "text": "hello world"})
-    assert _is_composer_fill("BrowserType", {"selector": "#m", "text": "hi"})
-    assert _is_composer_fill("BrowserBatch", {"actions": [
+    from backend.apps.agents.browser.browser_agent import is_composer_fill
+    assert is_composer_fill("BrowserClickIndex", {"index": 4, "text": "hello world"})
+    assert is_composer_fill("BrowserType", {"selector": "#m", "text": "hi"})
+    assert is_composer_fill("BrowserBatch", {"actions": [
         {"type": "click_index", "params": {"index": 4, "text": "hi there"}}]})
     # a plain click (no text) is NOT a fill
-    assert not _is_composer_fill("BrowserClickIndex", {"index": 4})
-    assert not _is_composer_fill("BrowserScroll", {})
+    assert not is_composer_fill("BrowserClickIndex", {"index": 4})
+    assert not is_composer_fill("BrowserScroll", {})
 
 
 def test_send_index_handoff_points_only_at_a_real_send_button():
     # after a composer fill we hand the model the Send button's index so it clicks
     # it directly instead of hunting; must never mistake an upsell/profile link for it
-    from backend.apps.agents.browser.browser_agent import _send_index_in_state
+    from backend.apps.agents.browser.browser_agent import send_index_in_state
     page = '[1]<link "Tyler Chen">\n[33]<textbox "Write a message">\n[44]<button "Send">'
-    assert _send_index_in_state(page) == (44, "Send")
-    assert _send_index_in_state('[12]<button "Send InMail credit">') is None
-    assert _send_index_in_state('[5]<button "Send a message to Maya">') is None
-    assert _send_index_in_state("") is None
+    assert send_index_in_state(page) == (44, "Send")
+    assert send_index_in_state('[12]<button "Send InMail credit">') is None
+    assert send_index_in_state('[5]<button "Send a message to Maya">') is None
+    assert send_index_in_state("") is None
 
 
 def test_strip_lone_surrogates():
-    from backend.apps.agents.browser.browser_agent import _strip_lone_surrogates, _format_tool_result
+    from backend.apps.agents.browser.browser_agent import strip_lone_surrogates, format_tool_result
     # an orphan UTF-16 surrogate (half an emoji from the webview) is what crashes
     # the turn at .encode('utf-8'); it must be swapped, not carried through
-    out = _strip_lone_surrogates("Twitch \ud83e live")
+    out = strip_lone_surrogates("Twitch \ud83e live")
     assert "\ud83e" not in out and "�" in out
     out.encode("utf-8")  # the operation that used to raise "surrogates not allowed"
     # valid emoji (a real code point) and plain text are left alone
-    assert _strip_lone_surrogates("cheese \U0001f9c0 ok") == "cheese \U0001f9c0 ok"
-    assert _strip_lone_surrogates("Search Amazon") == "Search Amazon"
-    assert _strip_lone_surrogates("") == ""
+    assert strip_lone_surrogates("cheese \U0001f9c0 ok") == "cheese \U0001f9c0 ok"
+    assert strip_lone_surrogates("Search Amazon") == "Search Amazon"
+    assert strip_lone_surrogates("") == ""
     # the boundary that feeds the model is sanitized for both result and error text
-    blocks = _format_tool_result({"text": "name \ud83e here"}, "BrowserListInteractives")
+    blocks = format_tool_result({"text": "name \ud83e here"}, "BrowserListInteractives")
     blocks[0]["text"].encode("utf-8")
-    err = _format_tool_result({"error": "bad \ud83e node"}, "BrowserClickIndex")
+    err = format_tool_result({"error": "bad \ud83e node"}, "BrowserClickIndex")
     err[0]["text"].encode("utf-8")

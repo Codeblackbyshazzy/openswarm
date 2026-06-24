@@ -2,7 +2,7 @@
 
 import asyncio
 
-from backend.apps.agents.browser.browser_validator import adjudicate_stuck, _extract_text
+from backend.apps.agents.browser.browser_validator import adjudicate_stuck, extract_text
 
 
 class _Block:
@@ -52,7 +52,7 @@ def test_swallows_provider_error_and_returns_empty():
 
 def test_extract_text_joins_text_blocks_and_ignores_others():
     resp = _Resp([_Block("text", "First."), _Block("tool_use"), _Block("text", "Second.")])
-    assert _extract_text(resp) == "First. Second."
+    assert extract_text(resp) == "First. Second."
 
 
 def test_handles_empty_inputs_without_crashing():

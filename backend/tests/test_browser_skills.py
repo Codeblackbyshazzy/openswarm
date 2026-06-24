@@ -124,7 +124,7 @@ def test_skill_persists_across_restart(_isolated_skills):
     # find must re-load it from disk.
     assert sk.record_skill("localhost:8901", "type hello and click Send", _log()) is True
     sk.clear(wipe_disk=False)            # in-memory gone, disk intact (== restart)
-    assert not sk._skills                # cache truly empty
+    assert not sk.SKILLS                # cache truly empty
     found = sk.find_skill("localhost:8901", "type hello and click Send")
     assert found is not None and found.get("persisted") is True
     assert [s["tool"] for s in found["steps"]] == ["BrowserNavigate", "BrowserType", "BrowserClickByName"]
@@ -138,7 +138,7 @@ def test_sensitive_text_is_NOT_persisted(_isolated_skills):
     ]
     assert sk.record_skill("site.com", "enter email and submit", log) is True   # stored in memory
     # nothing on disk for this skill
-    path = sk._skill_path("site.com", sk.normalize_task("enter email and submit"))
+    path = sk.skill_path("site.com", sk.normalize_task("enter email and submit"))
     assert path is not None and not os.path.exists(path)
     # and after a "restart" it's gone (was never persisted)
     sk.clear(wipe_disk=False)
@@ -151,18 +151,18 @@ def test_password_field_selector_blocks_persistence(_isolated_skills):
         {"tool": "BrowserClickIndex", "input": {}, "ok": True, "clicked_role": "button", "clicked_name": "Log in"},
     ]
     sk.record_skill("site.com", "log in", log)
-    assert not os.path.exists(sk._skill_path("site.com", sk.normalize_task("log in")))
+    assert not os.path.exists(sk.skill_path("site.com", sk.normalize_task("log in")))
 
 
 def test_sensitivity_detector():
-    assert sk._looks_sensitive("eric@example.com")
-    assert sk._looks_sensitive("4111 1111 1111 1111")          # card-shaped
-    assert sk._looks_sensitive("123-45-6789")                  # ssn
-    assert sk._looks_sensitive("sk-ant-api03-abc123")          # token prefix
-    assert sk._looks_sensitive("anything", selector="#pwd")    # password field
-    assert sk._looks_sensitive("aB3xK9mQ2pL7wR4tY8nZ")         # long high-entropy
-    assert not sk._looks_sensitive("hello world")
-    assert not sk._looks_sensitive("openswarm", selector="#search")
+    assert sk.looks_sensitive("eric@example.com")
+    assert sk.looks_sensitive("4111 1111 1111 1111")          # card-shaped
+    assert sk.looks_sensitive("123-45-6789")                  # ssn
+    assert sk.looks_sensitive("sk-ant-api03-abc123")          # token prefix
+    assert sk.looks_sensitive("anything", selector="#pwd")    # password field
+    assert sk.looks_sensitive("aB3xK9mQ2pL7wR4tY8nZ")         # long high-entropy
+    assert not sk.looks_sensitive("hello world")
+    assert not sk.looks_sensitive("openswarm", selector="#search")
 
 
 def test_navigate_url_userinfo_and_fragment_stripped_on_disk(_isolated_skills):
@@ -172,7 +172,7 @@ def test_navigate_url_userinfo_and_fragment_stripped_on_disk(_isolated_skills):
     ]
     # userinfo in the URL makes the whole skill non-persistable (credentialed URL)
     sk.record_skill("site.com", "search shoes", log)
-    assert not os.path.exists(sk._skill_path("site.com", sk.normalize_task("search shoes")))
+    assert not os.path.exists(sk.skill_path("site.com", sk.normalize_task("search shoes")))
     # but a clean URL with a fragment persists with the fragment stripped
     log2 = [
         {"tool": "BrowserNavigate", "input": {"url": "https://site.com/app#section"}, "ok": True},
@@ -189,7 +189,7 @@ def test_navigate_url_userinfo_and_fragment_stripped_on_disk(_isolated_skills):
 def test_format_version_mismatch_is_ignored(_isolated_skills, monkeypatch):
     sk.record_skill("v.com", "do a thing now", _log())
     sk.clear(wipe_disk=False)
-    monkeypatch.setattr(sk, "_SKILL_FORMAT_VERSION", 999)  # pretend the format moved on
+    monkeypatch.setattr(sk, "P_SKILL_FORMAT_VERSION", 999)  # pretend the format moved on
     assert sk.find_skill("v.com", "do a thing now") is None
 
 
@@ -216,7 +216,7 @@ def test_parameterized_value_is_not_persisted(_isolated_skills):
         {"tool": "BrowserClickIndex", "input": {}, "ok": True, "clicked_role": "button", "clicked_name": "Search"},
     ]
     sk.record_skill("shop.com", 'search for "running shoes"', log)
-    path = sk._skill_path("shop.com", sk._sig('search for "running shoes"'))
+    path = sk.skill_path("shop.com", sk.compute_sig('search for "running shoes"'))
     blob = open(path).read()
     assert "running shoes" not in blob   # the quoted value never hits disk
     assert '"value_slot": 0' in blob or '"value_slot":0' in blob
@@ -263,11 +263,11 @@ def test_list_skills_reads_disk_after_restart(_isolated_skills):
 
 def test_deprecate_removes_skill_from_memory_and_disk(_isolated_skills):
     sk.record_skill("shop.com", "search for shoes now", _log())
-    sig = sk._sig("search for shoes now")
-    assert os.path.exists(sk._skill_path("shop.com", sig))
+    sig = sk.compute_sig("search for shoes now")
+    assert os.path.exists(sk.skill_path("shop.com", sig))
     # deprecate using the task_sig as list_skills would surface it
     assert sk.deprecate_skill("shop.com", sig) is True
-    assert not os.path.exists(sk._skill_path("shop.com", sig))
+    assert not os.path.exists(sk.skill_path("shop.com", sig))
     assert sk.find_skill("shop.com", "search for shoes now") is None
 
 
@@ -283,14 +283,14 @@ def test_deprecate_unknown_is_false(_isolated_skills):
 def test_new_skill_starts_on_probation(_isolated_skills):
     sk.record_skill("shop.com", "do a thing now", _log())
     s = sk.find_skill("shop.com", "do a thing now")
-    assert s["state"] == sk._PROBATION and s["rev"] == 1 and s["replays"] == 0
+    assert s["state"] == sk.PROBATION and s["rev"] == 1 and s["replays"] == 0
 
 
 def test_replay_success_promotes_probation_to_trusted(_isolated_skills):
     sk.record_skill("shop.com", "do a thing now", _log())
     sk.mark_replay_succeeded("shop.com", "do a thing now")
     s = sk.find_skill("shop.com", "do a thing now")
-    assert s["state"] == sk._TRUSTED and s["replays"] == 1 and s["fails"] == 0
+    assert s["state"] == sk.TRUSTED and s["replays"] == 1 and s["fails"] == 0
 
 
 def test_probation_failure_quarantines_and_blocks_future_replay(_isolated_skills):
@@ -301,7 +301,7 @@ def test_probation_failure_quarantines_and_blocks_future_replay(_isolated_skills
     assert sk.find_skill("shop.com", "do a thing now") is None
     # ...but the record still exists (visible + deprecatable), it just won't run
     listed = sk.list_skills("shop.com")
-    assert len(listed) == 1 and listed[0]["state"] == sk._QUARANTINE
+    assert len(listed) == 1 and listed[0]["state"] == sk.QUARANTINE
 
 
 def test_quarantined_skill_re_recorded_identical_stays_quarantined(_isolated_skills):
@@ -311,7 +311,7 @@ def test_quarantined_skill_re_recorded_identical_stays_quarantined(_isolated_ski
     sk.record_skill("shop.com", "do a thing now", _log())
     # it must stay quarantined -> pure-LLM baseline, never a wasted replay again
     assert sk.find_skill("shop.com", "do a thing now") is None
-    assert sk.list_skills("shop.com")[0]["state"] == sk._QUARANTINE
+    assert sk.list_skills("shop.com")[0]["state"] == sk.QUARANTINE
 
 
 def test_quarantined_skill_unquarantines_on_a_real_edit(_isolated_skills):
@@ -323,7 +323,7 @@ def test_quarantined_skill_unquarantines_on_a_real_edit(_isolated_skills):
                              "clicked_role": "button", "clicked_name": "Submit"}]
     sk.record_skill("shop.com", "do a thing now", edited)
     s = sk.find_skill("shop.com", "do a thing now")
-    assert s is not None and s["state"] == sk._PROBATION and s["rev"] == 2
+    assert s is not None and s["state"] == sk.PROBATION and s["rev"] == 2
 
 
 def test_trusted_skill_tolerates_one_transient_miss_then_demotes(_isolated_skills):
@@ -331,9 +331,9 @@ def test_trusted_skill_tolerates_one_transient_miss_then_demotes(_isolated_skill
     sk.mark_replay_succeeded("shop.com", "do a thing now")         # trusted
     assert sk.mark_replay_failed("shop.com", "do a thing now") == "kept"
     s = sk.find_skill("shop.com", "do a thing now")
-    assert s["state"] == sk._TRUSTED and s["fails"] == 1           # still usable
+    assert s["state"] == sk.TRUSTED and s["fails"] == 1           # still usable
     assert sk.mark_replay_failed("shop.com", "do a thing now") == "demoted"
-    assert sk.find_skill("shop.com", "do a thing now")["state"] == sk._PROBATION
+    assert sk.find_skill("shop.com", "do a thing now")["state"] == sk.PROBATION
 
 
 def test_re_record_identical_keeps_trust_and_rev(_isolated_skills):
@@ -342,7 +342,7 @@ def test_re_record_identical_keeps_trust_and_rev(_isolated_skills):
     sk.find_skill("shop.com", "do a thing now")["replays"] = 5     # pretend reused a lot
     sk.record_skill("shop.com", "do a thing now", _log())          # identical re-derive
     s = sk.find_skill("shop.com", "do a thing now")
-    assert s["state"] == sk._TRUSTED and s["rev"] == 1 and s["replays"] == 5
+    assert s["state"] == sk.TRUSTED and s["rev"] == 1 and s["replays"] == 5
 
 
 def test_re_record_different_is_an_edit_that_reversions_to_probation(_isolated_skills):
@@ -352,7 +352,7 @@ def test_re_record_different_is_an_edit_that_reversions_to_probation(_isolated_s
                              "clicked_role": "button", "clicked_name": "Submit"}]
     sk.record_skill("shop.com", "do a thing now", edited)          # different -> EDIT
     s = sk.find_skill("shop.com", "do a thing now")
-    assert s["rev"] == 2 and s["state"] == sk._PROBATION and s["replays"] == 0
+    assert s["rev"] == 2 and s["state"] == sk.PROBATION and s["replays"] == 0
     cbn = next(x for x in s["steps"] if x["tool"] == "BrowserClickByName")
     assert cbn["params"]["name"] == "Submit"                       # the new step stuck
 
@@ -365,7 +365,7 @@ def test_rev_and_state_persist_across_restart(_isolated_skills):
     sk.record_skill("shop.com", "do a thing now", edited)          # rev 2, probation
     sk.clear(wipe_disk=False)                                      # restart
     s = sk.find_skill("shop.com", "do a thing now")
-    assert s["rev"] == 2 and s["state"] == sk._PROBATION
+    assert s["rev"] == 2 and s["state"] == sk.PROBATION
 
 
 def test_steps_equal_distinguishes_slot_from_literal_and_changed_click():
@@ -375,9 +375,9 @@ def test_steps_equal_distinguishes_slot_from_literal_and_changed_click():
     slot = {"tool": "BrowserType", "params": {"selector": "#q", "value_slot": 0}}
     send = {"tool": "BrowserClickByName", "params": {"role": "button", "name": "Send"}}
     submit = {"tool": "BrowserClickByName", "params": {"role": "button", "name": "Submit"}}
-    assert sk._steps_equal([nav], [nav2])           # fragment-only diff is NOT an edit
-    assert not sk._steps_equal([lit], [slot])       # literal vs parameterized IS an edit
-    assert not sk._steps_equal([send], [submit])    # renamed button IS an edit
+    assert sk.steps_equal([nav], [nav2])           # fragment-only diff is NOT an edit
+    assert not sk.steps_equal([lit], [slot])       # literal vs parameterized IS an edit
+    assert not sk.steps_equal([send], [submit])    # renamed button IS an edit
 
 
 def test_mark_replay_helpers_on_unknown_are_safe(_isolated_skills):
@@ -390,9 +390,9 @@ def test_demoted_skill_can_be_re_proven(_isolated_skills):
     sk.mark_replay_succeeded("shop.com", "do a thing now")    # trusted
     sk.mark_replay_failed("shop.com", "do a thing now")
     sk.mark_replay_failed("shop.com", "do a thing now")       # demoted to probation
-    assert sk.find_skill("shop.com", "do a thing now")["state"] == sk._PROBATION
+    assert sk.find_skill("shop.com", "do a thing now")["state"] == sk.PROBATION
     sk.mark_replay_succeeded("shop.com", "do a thing now")    # earns trust back
-    assert sk.find_skill("shop.com", "do a thing now")["state"] == sk._TRUSTED
+    assert sk.find_skill("shop.com", "do a thing now")["state"] == sk.TRUSTED
 
 
 # --- composition: build on what's already proven, propagate staleness -------
@@ -412,7 +412,7 @@ def test_composition_links_to_trusted_sub_skill(_isolated_skills):
     _trust("shop.com", "search shoes now", _log())                # trusted foundation
     sk.record_skill("shop.com", "search shoes and checkout now", _log_plus())
     c = sk.find_skill("shop.com", "search shoes and checkout now")
-    assert c["composed_of"] == [sk._sig("search shoes now")]
+    assert c["composed_of"] == [sk.compute_sig("search shoes now")]
 
 
 def test_composition_ignores_untrusted_foundation(_isolated_skills):
@@ -425,11 +425,11 @@ def test_composition_ignores_untrusted_foundation(_isolated_skills):
 def test_deprecating_a_foundation_demotes_everything_built_on_it(_isolated_skills):
     _trust("shop.com", "search shoes now", _log())
     _trust("shop.com", "search shoes and checkout now", _log_plus())   # composed + trusted
-    assert sk.find_skill("shop.com", "search shoes and checkout now")["state"] == sk._TRUSTED
+    assert sk.find_skill("shop.com", "search shoes and checkout now")["state"] == sk.TRUSTED
     sk.deprecate_skill("shop.com", "search shoes now")            # foundation pulled
     # the ghost guard for composition: the dependent must NOT stay trusted on a
     # foundation that no longer exists; it's knocked back to re-prove
-    assert sk.find_skill("shop.com", "search shoes and checkout now")["state"] == sk._PROBATION
+    assert sk.find_skill("shop.com", "search shoes and checkout now")["state"] == sk.PROBATION
 
 
 def test_demoting_a_foundation_demotes_its_dependents(_isolated_skills):
@@ -437,7 +437,7 @@ def test_demoting_a_foundation_demotes_its_dependents(_isolated_skills):
     _trust("shop.com", "search shoes and checkout now", _log_plus())
     sk.mark_replay_failed("shop.com", "search shoes now")
     sk.mark_replay_failed("shop.com", "search shoes now")         # foundation demoted
-    assert sk.find_skill("shop.com", "search shoes and checkout now")["state"] == sk._PROBATION
+    assert sk.find_skill("shop.com", "search shoes and checkout now")["state"] == sk.PROBATION
 
 
 def test_editing_a_foundation_demotes_its_dependents(_isolated_skills):
@@ -446,17 +446,17 @@ def test_editing_a_foundation_demotes_its_dependents(_isolated_skills):
     edited = _log()[:-1] + [{"tool": "BrowserClickIndex", "input": {}, "ok": True,
                              "clicked_role": "button", "clicked_name": "Find"}]
     sk.record_skill("shop.com", "search shoes now", edited)       # foundation changed
-    assert sk.find_skill("shop.com", "search shoes and checkout now")["state"] == sk._PROBATION
+    assert sk.find_skill("shop.com", "search shoes and checkout now")["state"] == sk.PROBATION
 
 
 def test_list_skills_surfaces_state_rev_and_builds_on(_isolated_skills):
     _trust("shop.com", "search shoes now", _log())
     sk.record_skill("shop.com", "search shoes and checkout now", _log_plus())
     listed = {x["task"]: x for x in sk.list_skills("shop.com")}
-    foundation = listed[sk._sig("search shoes now")]
-    composed = listed[sk._sig("search shoes and checkout now")]
-    assert foundation["state"] == sk._TRUSTED and foundation["builds_on"] == []
-    assert composed["builds_on"] == [sk._sig("search shoes now")]
+    foundation = listed[sk.compute_sig("search shoes now")]
+    composed = listed[sk.compute_sig("search shoes and checkout now")]
+    assert foundation["state"] == sk.TRUSTED and foundation["builds_on"] == []
+    assert composed["builds_on"] == [sk.compute_sig("search shoes now")]
     assert "rev" in composed and "steps" in composed
 
 
@@ -478,24 +478,24 @@ def test_replay_safety_refuses_send_steps_and_passes_reads():
 
 
 def test_extract_first_json_strips_fences_and_prose():
-    from backend.apps.agents.browser.browser_extract import _first_json
-    assert _first_json('```json\n{"a": 1}\n```') == '{"a": 1}'
-    assert _first_json('Here you go: [{"n": "x"}] hope that helps') == '[{"n": "x"}]'
-    assert _first_json("no json here") == ""
-    assert _first_json('{"broken": ') == ""
+    from backend.apps.agents.browser.browser_extract import first_json
+    assert first_json('```json\n{"a": 1}\n```') == '{"a": 1}'
+    assert first_json('Here you go: [{"n": "x"}] hope that helps') == '[{"n": "x"}]'
+    assert first_json("no json here") == ""
+    assert first_json('{"broken": ') == ""
 
 
 def test_widened_redaction_catches_audit_bypasses():
     # the audit's three named bypasses: bare 2FA digits, credential-shaped
     # fields the old regex missed, and seed/recovery phrase boxes
-    assert sk._looks_sensitive("481922", "")
-    assert sk._looks_sensitive("hunter2", "#user")
-    assert sk._looks_sensitive("me@corp.com", "#login-email")
-    assert sk._looks_sensitive("correct horse battery staple", "#seed-phrase")
-    assert sk._looks_sensitive("123456", "input[name='verification-code']")
+    assert sk.looks_sensitive("481922", "")
+    assert sk.looks_sensitive("hunter2", "#user")
+    assert sk.looks_sensitive("me@corp.com", "#login-email")
+    assert sk.looks_sensitive("correct horse battery staple", "#seed-phrase")
+    assert sk.looks_sensitive("123456", "input[name='verification-code']")
     # the bread-and-butter skill (a search query) still persists
-    assert not sk._looks_sensitive("shoes", "#search-input")
-    assert not sk._looks_sensitive("Ada Lovelace", ".search-global-typeahead input")
+    assert not sk.looks_sensitive("shoes", "#search-input")
+    assert not sk.looks_sensitive("Ada Lovelace", ".search-global-typeahead input")
 
 
 def test_first_unsafe_step_splits_send_skills():
@@ -517,13 +517,13 @@ def test_first_unsafe_step_splits_send_skills():
 
 
 def test_template_task_ignores_possessive_apostrophes():
-    from backend.apps.agents.browser.browser_skills import template_task, _sig
+    from backend.apps.agents.browser.browser_skills import template_task, compute_sig
     r14 = "go to tyler chen's linkedin hes in entrepreneurs first and text him '[test] hello world r14-os'"
     r15 = "go to tyler chen's linkedin hes in entrepreneurs first and text him '[test] hello world r15-os'"
     t14, v14 = template_task(r14)
     assert v14 == ["[test] hello world r14-os"]
     assert "chen's linkedin" in t14
-    assert _sig(r14) == _sig(r15)
+    assert compute_sig(r14) == compute_sig(r15)
     assert template_task("no quotes here at all") == ("no quotes here at all", [])
 
 

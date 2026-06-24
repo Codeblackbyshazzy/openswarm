@@ -68,4 +68,4 @@ def test_tier_mapping_present():
     # the analyzer's _PRODUCTIVE set must include the real mutation tools
     m = _load()
     for t in ("BrowserClick", "BrowserClickIndex", "BrowserType", "BrowserNavigate", "BrowserReplayRoute"):
-        assert t in m._PRODUCTIVE
+        assert t in m.PRODUCTIVE

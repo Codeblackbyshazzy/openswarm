@@ -4,7 +4,7 @@ from backend.apps.agents.browser import browser_history as bh
 
 
 def setup_function(_):
-    bh._domain_notes.clear()
+    bh.DOMAIN_NOTES.clear()
 
 
 def test_set_get_roundtrip():
@@ -14,7 +14,7 @@ def test_set_get_roundtrip():
 
 def test_caps_length():
     bh.set_domain_note("x.com", "a" * 5000)
-    assert len(bh.get_domain_note("x.com")) == bh._MAX_DOMAIN_NOTE_CHARS
+    assert len(bh.get_domain_note("x.com")) == bh.MAX_DOMAIN_NOTE_CHARS
 
 
 def test_ignores_empty_domain_or_note():

@@ -18,7 +18,7 @@ from collections import Counter, defaultdict
 
 # Tools that actually change page state (vs. read/meta). A "completed" task that
 # never ran one of these did nothing but look around, suspicious.
-_PRODUCTIVE = {
+PRODUCTIVE = {
     "BrowserClick", "BrowserClickIndex", "BrowserType", "BrowserNavigate",
     "BrowserPressKey", "BrowserBatch", "BrowserReplayRoute",
 }
@@ -34,7 +34,7 @@ def _default_dir():
     return os.path.join(os.path.dirname(__file__), "..", "backend", "data", "browser_metrics")
 
 
-def _load(path):
+def load(path):
     if not os.path.exists(path):
         return []
     out = []
@@ -56,7 +56,7 @@ def ghost_verdict(task, events_for_task):
         return False, []
     reasons = []
     tools = [e["tool"] for e in events_for_task]
-    productive = [t for t in tools if t in _PRODUCTIVE]
+    productive = [t for t in tools if t in PRODUCTIVE]
     errs = sum(1 for e in events_for_task if not e.get("ok"))
     total = len(events_for_task)
     # A read/extract task legitimately has no state-changing action; its evidence
@@ -76,7 +76,7 @@ def ghost_verdict(task, events_for_task):
         reasons.append(f"{errs}/{total} tool calls errored but still marked completed")
     if any(e.get("is_loop") for e in events_for_task):
         reasons.append("loop detector fired during a 'completed' task")
-    prod_ok = [e for e in events_for_task if e["tool"] in _PRODUCTIVE and e.get("ok")]
+    prod_ok = [e for e in events_for_task if e["tool"] in PRODUCTIVE and e.get("ok")]
     if productive and not prod_ok:
         reasons.append("every state-changing action errored, yet marked completed")
     return (len(reasons) > 0), reasons
@@ -172,9 +172,9 @@ def playbook_report(tasks):
 
 def main():
     d = sys.argv[1] if len(sys.argv) > 1 else _default_dir()
-    events = _load(os.path.join(d, "events.jsonl"))
-    tasks = _load(os.path.join(d, "tasks.jsonl"))
-    skill_events = _load(os.path.join(d, "skill_events.jsonl"))
+    events = load(os.path.join(d, "events.jsonl"))
+    tasks = load(os.path.join(d, "tasks.jsonl"))
+    skill_events = load(os.path.join(d, "skill_events.jsonl"))
     print(f"metrics dir: {d}")
     print(f"events: {len(events)}  tasks: {len(tasks)}  skill_events: {len(skill_events)}\n")
     if not tasks and not events:

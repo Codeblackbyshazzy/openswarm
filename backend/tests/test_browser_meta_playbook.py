@@ -33,13 +33,13 @@ def test_absorb_adds_dedups_and_caps():
     assert meta.absorb([]) is False
     # capped: flooding never exceeds the cap
     meta.absorb([f"unique universal lesson number {i}" for i in range(50)])
-    assert len(meta.get_meta()) <= meta._MAX_BULLETS
+    assert len(meta.get_meta()) <= meta.MAX_BULLETS
 
 
 def test_survives_a_restart():
     meta.absorb(["a durable cross-site lesson worth keeping"])
     meta.clear(wipe_disk=False)          # in-memory gone, disk intact (== restart)
-    assert meta._cache is None
+    assert meta.CACHE is None
     assert any("durable cross-site lesson" in x for x in meta.get_meta())
 
 

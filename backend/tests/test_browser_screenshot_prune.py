@@ -8,7 +8,7 @@ text stay). These pin the keep-set, the in-place mutation, and tool_result safet
 
 from backend.apps.agents.browser.browser_history import (
     prune_old_screenshots,
-    _OMITTED_SCREENSHOT_STUB,
+    OMITTED_SCREENSHOT_STUB,
 )
 
 
@@ -58,7 +58,7 @@ def test_stub_preserves_the_url_text_block():
     prune_old_screenshots(msgs)
     # the collapsed shot (#1) keeps its "URL:" text, only the image became a stub
     collapsed_tr = msgs[1]["content"][0]["content"]
-    assert any(b.get("text") == _OMITTED_SCREENSHOT_STUB for b in collapsed_tr)
+    assert any(b.get("text") == OMITTED_SCREENSHOT_STUB for b in collapsed_tr)
     assert any("URL: https://site/1" in b.get("text", "") for b in collapsed_tr)
 
 
@@ -71,7 +71,7 @@ def test_handles_direct_image_blocks_too():
     ]
     collapsed = prune_old_screenshots(msgs)
     assert collapsed == 1  # keep a (first), c+d (last two); stub b
-    assert msgs[1]["content"][0] == {"type": "text", "text": _OMITTED_SCREENSHOT_STUB}
+    assert msgs[1]["content"][0] == {"type": "text", "text": OMITTED_SCREENSHOT_STUB}
 
 
 def test_keep_recent_is_tunable():

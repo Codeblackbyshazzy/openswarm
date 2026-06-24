@@ -65,9 +65,9 @@ def test_audit_fires_every_n_finished_tasks(monkeypatch, tmp_path):
     # threads synchronous so the test is deterministic, and use a small N.
     from backend.apps.agents.browser import browser_metrics as m
     monkeypatch.setenv("OPENSWARM_BROWSER_METRICS_DIR", str(tmp_path))
-    m._metrics_dir_cache = None
-    m._task_count = 0
-    monkeypatch.setattr(m, "_AUDIT_EVERY_N", 5)
+    m.p_metrics_dir_cache = None
+    m.p_task_count = 0
+    monkeypatch.setattr(m, "P_AUDIT_EVERY_N", 5)
 
     class _SyncThread:
         def __init__(self, target=None, **kw):
