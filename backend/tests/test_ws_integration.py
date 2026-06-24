@@ -31,7 +31,7 @@ def _result():
 
 
 def test_ws_endpoint_streams_a_full_turn_end_to_end(monkeypatch):
-    monkeypatch.setattr(main_mod, "_ws_auth_ok", lambda ws: True, raising=True)
+    monkeypatch.setattr(main_mod, "p_ws_auth_ok", lambda ws: True, raising=True)
 
     async def fake_query(*args, **kwargs):
         yield _assistant()

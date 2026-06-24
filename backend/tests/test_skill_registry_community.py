@@ -150,9 +150,9 @@ def test_confirm_install_writes_folder_lists_and_injects(skills_dir, monkeypatch
     from backend.main import app
     from backend.apps.agents.manager.prompt.prompt_context import resolve_attached_skills
     import backend.auth as auth_mod
-    if not auth_mod._TOKEN:
-        auth_mod._TOKEN = p_secrets.token_urlsafe(32)
-    client = TestClient(app, headers={"Authorization": f"Bearer {auth_mod._TOKEN}"})
+    if not auth_mod.TOKEN:
+        auth_mod.TOKEN = p_secrets.token_urlsafe(32)
+    client = TestClient(app, headers={"Authorization": f"Bearer {auth_mod.TOKEN}"})
 
     async def fake_resolve(source, skill_id):
         return {

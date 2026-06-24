@@ -181,7 +181,7 @@ async def execute_backend_code(
     Security boundaries (defense in depth; none alone is sufficient):
       1. AST allowlist on imports + blocked-builtin call list.
       2. Subprocess cwd = fresh temp dir (not the OpenSwarm process cwd).
-      3. Subprocess env strips PATH, all *_TOKEN / *_API_KEY inheritance.
+      3. Subprocess env strips PATH, all *TOKEN / *_API_KEY inheritance.
       4. Preamble scrubs dangerous attrs off `builtins` inside the subprocess
          to catch AST-bypass tricks (e.g. metaclass shenanigans).
       5. 30s wall-clock timeout, killed on overrun.

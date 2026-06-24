@@ -40,8 +40,8 @@ def _free_port() -> int:
 @pytest.fixture
 def live_backend():
     import backend.auth as auth_mod
-    if not auth_mod._TOKEN:
-        auth_mod._TOKEN = secrets.token_urlsafe(32)
+    if not auth_mod.TOKEN:
+        auth_mod.TOKEN = secrets.token_urlsafe(32)
     port = _free_port()
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
     thread = threading.Thread(target=server.run, daemon=True)
@@ -51,7 +51,7 @@ def live_backend():
             break
         time.sleep(0.05)
     assert getattr(server, "started", False), "uvicorn did not start"
-    yield port, auth_mod._TOKEN
+    yield port, auth_mod.TOKEN
     server.should_exit = True
     thread.join(timeout=5)
 

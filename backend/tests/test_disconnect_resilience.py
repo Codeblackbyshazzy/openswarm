@@ -449,7 +449,7 @@ def test_concurrent_broadcast_preserves_order(trial, _patch_persist_dir):
 
 # ---------------------------------------------------------------------------
 # Auth/security smoke: the WS endpoint here is unauth'd by design (test
-# scaffolding), but main.py's _ws_auth_ok must remain in place. This
+# scaffolding), but main.py's p_ws_auth_ok must remain in place. This
 # test pins that contract so a future refactor can't accidentally
 # strip it.
 # ---------------------------------------------------------------------------
@@ -532,8 +532,8 @@ def test_disconnect_does_not_touch_agent_task(_patch_persist_dir):
 
 def test_main_ws_endpoints_still_gated_by_auth(_patch_persist_dir):
     src = open(os.path.join(os.path.dirname(__file__), "..", "main.py")).read()
-    assert "_ws_auth_ok(websocket)" in src, (
-        "main.py WS endpoints must still call _ws_auth_ok before accepting "
+    assert "p_ws_auth_ok(websocket)" in src, (
+        "main.py WS endpoints must still call p_ws_auth_ok before accepting "
         "the connection, otherwise any local web page can read agent traffic."
     )
     # And the disconnect handler must NOT call any task-cancel helper

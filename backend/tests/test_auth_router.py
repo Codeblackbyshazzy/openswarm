@@ -19,13 +19,13 @@ def client():
     """Returns a TestClient pre-loaded with the local backend's auth token
     so the LocalAuthMiddleware doesn't reject our requests with 401."""
     import backend.auth as auth_mod
-    if not auth_mod._TOKEN:
+    if not auth_mod.TOKEN:
         # Tests sometimes run without backend.main's startup hook firing.
         # Generate a token directly so request_matches_token has something
         # to compare against.
         import secrets
-        auth_mod._TOKEN = secrets.token_urlsafe(32)
-    return TestClient(app, headers={"Authorization": f"Bearer {auth_mod._TOKEN}"})
+        auth_mod.TOKEN = secrets.token_urlsafe(32)
+    return TestClient(app, headers={"Authorization": f"Bearer {auth_mod.TOKEN}"})
 
 
 @pytest.fixture
@@ -200,7 +200,7 @@ def test_dev_token_is_dev_only():
     os.environ.pop("OPENSWARM_PACKAGED", None)
     r = noauth.get("/api/dev/token")
     assert r.status_code == 200
-    assert r.json()["token"] == auth_mod._TOKEN
+    assert r.json()["token"] == auth_mod.TOKEN
 
     os.environ["OPENSWARM_PACKAGED"] = "1"
     try:

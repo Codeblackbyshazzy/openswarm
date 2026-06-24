@@ -20,10 +20,10 @@ from backend.main import app
 @pytest.fixture
 def client():
     import backend.auth as auth_mod
-    if not auth_mod._TOKEN:
+    if not auth_mod.TOKEN:
         import secrets
-        auth_mod._TOKEN = secrets.token_urlsafe(32)
-    return TestClient(app, headers={"Authorization": f"Bearer {auth_mod._TOKEN}"})
+        auth_mod.TOKEN = secrets.token_urlsafe(32)
+    return TestClient(app, headers={"Authorization": f"Bearer {auth_mod.TOKEN}"})
 
 
 @pytest.fixture
