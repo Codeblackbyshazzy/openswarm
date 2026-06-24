@@ -939,17 +939,21 @@ async def run_browser_agent(
     # from past successful runs) so the model skips re-discovery. Advisory text,
     # re-verified by the agent, never auto-run. Keyed by full host like skills.
     pb_seeded = False  # whether tier-2 strategy was injected, for measuring its effect
-    # Playbooks are web-only (keyed by host); app mode has no host, the bridge is
-    # the whole strategy, so skip both tiers.
+    # Playbook key: web keys by site host; app mode keys by the stable app id
+    # (app:<output_id>). A no-bridge canvas app (Paint, Doom) has no URL host, so
+    # without this it re-discovers its own geography ("red swatch ~8%,12%, canvas
+    # is the white region, left-drag draws") cold on every run. Keying the durable
+    # playbook by browser_id lets that knowledge accumulate across runs instead.
+    pb_host = browser_id if app_mode else browser_skills.host_of(initial_url or current_url or "")
+    if pb_host:
+        _pb_block = browser_playbook.format_for_prompt(pb_host)
+        if _pb_block:
+            run_system_prompt = run_system_prompt + _pb_block
+            pb_seeded = True
+    # Tier-3 memory: cross-site priors learned on EVERY other site, injected on
+    # every web run (host-agnostic) so a brand-new site isn't fully cold. Web-only:
+    # generic site heuristics don't transfer to a bespoke app canvas.
     if not app_mode:
-        _pb_host = browser_skills.host_of(initial_url or current_url or "")
-        if _pb_host:
-            _pb_block = browser_playbook.format_for_prompt(_pb_host)
-            if _pb_block:
-                run_system_prompt = run_system_prompt + _pb_block
-                pb_seeded = True
-        # Tier-3 memory: the cross-site priors learned on EVERY other site, injected
-        # on every run (host-agnostic) so a brand-new site isn't fully cold.
         try:
             _meta_block = browser_meta_playbook.format_for_prompt()
             if _meta_block:
