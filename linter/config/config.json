@@ -55,7 +55,6 @@
   ],
   "exceptions": {
     "max-file-lines": [
-      "backend/apps/agents/agent_manager.py",
       "backend/apps/agents/agents.py",
       "backend/apps/agents/proxy/anthropic_proxy.py",
       "backend/apps/agents/proxy/anthropic_to_openai.py",
