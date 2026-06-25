@@ -50,6 +50,7 @@ openswarm-cloud
 # Personal/per-machine AI working notes. Shared, enforced conventions live in committed
 # CLAUDE.md files (root + per-package); personal notes go in CLAUDE.local.md instead.
 CLAUDE.local.md
+/CLAUDE.md
 # Local-only operator helpers (never commit)
 scripts/set-fly-*.sh
 # Local-only background dev-team state/docs (personal, never commit)
