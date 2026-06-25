@@ -158,14 +158,23 @@ def test_workflow_sanitize_disables_schedule_and_strips_pii():
     assert out["title"] == "Daily digest"
 
 
-def test_workflow_unavailable_on_this_branch():
-    # The workflow store isn't on eric/dev, so load() degrades gracefully and
-    # importing a workflow bundle fails with a clear message (no half-write).
+def test_workflow_round_trips_through_the_store(isolated_workflows_data):
+    # The workflow store landed on this branch, so a workflow bundle imports into an
+    # (isolated) store: an unknown id loads as None, import_ creates a fresh row with its
+    # schedule forced OFF (so an imported workflow never auto-runs on someone else's machine),
+    # and load reads it back. Supersedes test_workflow_unavailable_on_this_branch, which dated
+    # from before the workflow store was on eric/dev.
     from backend.apps.swarm.entities.workflows import WorkflowExportable
     from backend.apps.swarm.exportable import RemapTable
-    assert WorkflowExportable.load("anything") is None
-    with pytest.raises(BundleError):
-        WorkflowExportable.import_({"title": "x"}, {}, RemapTable())
+    assert WorkflowExportable.load("nonexistent") is None
+    new_id = WorkflowExportable.import_(
+        {"title": "Shared WF", "schedule": {"enabled": True}}, {}, RemapTable()
+    )
+    assert new_id
+    loaded = WorkflowExportable.load(new_id)
+    assert loaded is not None
+    assert loaded.name == "Shared WF"
+    assert loaded.p_data["schedule"]["enabled"] is False
 
 
 def test_session_export_carries_transcript_drops_runtime_and_secrets():
@@ -509,10 +518,17 @@ def test_skill_rollback_removes_it(skill_store):
     assert sid not in store.load_index()
 
 
-def test_commit_rolls_back_created_on_failure(skill_store, tmp_path):
-    # A bundle of [skill, workflow]: skill imports first, then the workflow import
-    # fails (no workflow store on this branch), so the skill must be rolled back.
+def test_commit_rolls_back_created_on_failure(skill_store, tmp_path, monkeypatch):
+    # A bundle of [skill, workflow]: the skill imports first and lands, then the workflow
+    # import fails, so the skill must be rolled back (all-or-nothing, no half-write). The
+    # failure used to come for free (no workflow store on this branch); now the store exists,
+    # so force it deterministically by making the workflow import raise.
     from backend.apps.swarm.models import BundlePreview, EntityRef, Manifest
+    from backend.apps.swarm.entities.workflows import WorkflowExportable
+
+    def p_boom(*a, **k):
+        raise BundleError("simulated workflow import failure")
+    monkeypatch.setattr(WorkflowExportable, "import_", p_boom)
 
     sb = tmp_path / "sb"
     skill_ref = EntityRef(type=EntityType.skill, bundle_id="s1", name="S", path="entities/s1")
