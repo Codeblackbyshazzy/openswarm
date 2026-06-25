@@ -56,8 +56,7 @@ export default function SchedulePopover({
 }: Props) {
   const showSearch = chatHistoryOnly || mode === 'search';
   const c = useClaudeTokens();
-  // List leads: it's the at-a-glance "what's coming up" the user wants first,
-  // with Week/Month as the calendar grids behind it.
+  // List leads: it's the at-a-glance "what's coming up" the user wants first, with Week/Month as the calendar grids behind it.
   const [calendarView, setCalendarView] = useState<'Week' | 'Month' | 'List'>('List');
   const [refDate, setRefDate] = useState<Date>(() => new Date());
   const workflows = useAppSelector((s) => s.workflows.items);
@@ -94,9 +93,7 @@ export default function SchedulePopover({
     return m;
   }, [workflows]);
 
-  // Both Search and Schedule modes render at the same fixed dimensions so
-  // toggling chips doesn't resize the popover. Schedule sets the floor:
-  // its 7-day calendar needs ~620w x ~420h, search inherits the same.
+  // Both Search and Schedule modes render at the same fixed dimensions so toggling chips doesn't resize the popover. Schedule sets the floor: its 7-day calendar needs ~620w x ~420h, search inherits the same.
   const POPOVER_W = 620;
   const CONTENT_H = 420;
 
@@ -244,8 +241,7 @@ export default function SchedulePopover({
   );
 }
 
-// Floating chip rendered ABOVE the popover card (image #30). Active gets a
-// subtle filled-elevated bg + 1px border; inactive is borderless ghost.
+// Floating chip rendered ABOVE the popover card (image #30). Active gets a subtle filled-elevated bg + 1px border; inactive is borderless ghost.
 function ModeChip({ label, icon, active, onClick }: { label: string; icon: React.ReactNode; active: boolean; onClick: () => void }) {
   const c = useClaudeTokens();
   return (

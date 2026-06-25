@@ -5,9 +5,7 @@ import { hasAnyAgentLaunched, hasModelConnected, hasFreeTrialActive } from './sk
 export const step03: OnboardingStep = {
   id: 'launch_agent',
   stage: 'get_started',
-  // Value first: this leads WHEN there's a way to run (free trial armed, or a
-  // model connected). With nothing to run on, it skips so connect-model leads
-  // instead, which restores today's flow exactly (no trial = no regression).
+  // Value first: this leads WHEN there's a way to run (free trial armed, or a model connected). With nothing to run on, it skips so connect-model leads instead, which restores today's flow exactly (no trial = no regression).
   index: 1,
   title: 'Launch your first Agent',
   description: 'Tell the chat what you want done and a team gets to work.',
@@ -15,9 +13,7 @@ export const step03: OnboardingStep = {
   videoDurationLabel: '0:24',
   skipIf: (s) => hasAnyAgentLaunched(s) || (!hasModelConnected(s) && !hasFreeTrialActive(s)),
   requiresDashboard: true,
-  // The cursor opens the chat FOR the user, then asks what they want. No canned
-  // prompt and no LLM here: it's a static move + simulated click + a hardcoded
-  // line; the user types their own thing and their team runs.
+  // The cursor opens the chat FOR the user, then asks what they want. No canned prompt and no LLM here: it's a static move + simulated click + a hardcoded line; the user types their own thing and their team runs.
   ops: [
     { kind: 'move_to', target: S.newAgentButton },
     { kind: 'popup', text: 'Let me open a chat for you.' },

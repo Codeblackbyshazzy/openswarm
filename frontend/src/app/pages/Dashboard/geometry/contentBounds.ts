@@ -13,8 +13,7 @@ export interface ContentBounds {
   maxY: number;
 }
 
-// Bounding box over agent + view + browser cards (notes intentionally
-// excluded, same as before). Returns undefined for an empty canvas.
+// Bounding box over agent + view + browser cards (notes intentionally excluded, same as before). Returns undefined for an empty canvas.
 export function computeContentBounds(
   cards: Record<string, CardPosition>,
   viewCards: Record<string, ViewCardPosition>,

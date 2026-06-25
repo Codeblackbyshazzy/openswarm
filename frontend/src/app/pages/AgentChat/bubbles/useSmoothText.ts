@@ -40,16 +40,14 @@ export function useSmoothText(
   const targetRef = useRef(target);
   targetRef.current = target;
 
-  // Controller state lives in refs so the rAF loop reads the latest without the
-  // effect re-subscribing every character.
+  // Controller state lives in refs so the rAF loop reads the latest without the effect re-subscribing every character.
   const posRef = useRef<number>(enabled ? 0 : target.length); // float reveal position
   const cpsRef = useRef<number>(0);                            // current reveal speed
   const lastRef = useRef<number>(0);                           // last frame timestamp
   const committedRef = useRef<number>(committedLen);
   const lastCommitAtRef = useRef<number>(0);
 
-  // Imperative-tail bookkeeping: which committedLen the DOM reflects, and the
-  // text node + its committed baseline that per-frame appends write into.
+  // Imperative-tail bookkeeping: which committedLen the DOM reflects, and the text node + its committed baseline that per-frame appends write into.
   const domLenRef = useRef<number>(committedLen);
   const nodeRef = useRef<Text | null>(null);
   const baseRef = useRef<string>('');
@@ -64,9 +62,7 @@ export function useSmoothText(
     return last;
   };
 
-  // After each committed render, re-anchor the tail on the fresh DOM and
-  // re-apply any chars the reveal position is already past, so a commit never
-  // rewinds visible text.
+  // After each committed render, re-anchor the tail on the fresh DOM and re-apply any chars the reveal position is already past, so a commit never rewinds visible text.
   useLayoutEffect(() => {
     if (!enabled) return;
     const node = findLastTextNode();
@@ -80,9 +76,7 @@ export function useSmoothText(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [committedLen, enabled]);
 
-  // ONE persistent loop, keyed only on `enabled`. It must NOT restart per token:
-  // an effect that depends on target.length tears the rAF down and rebuilds it on
-  // every delta, and that churn is what stalls the reveal.
+  // ONE persistent loop, keyed only on `enabled`. It must NOT restart per token: an effect that depends on target.length tears the rAF down and rebuilds it on every delta, and that churn is what stalls the reveal.
   useEffect(() => {
     if (!enabled) {
       posRef.current = targetRef.current.length;
@@ -134,8 +128,7 @@ export function useSmoothText(
     };
   }, [enabled]);
 
-  // Target shrank (new turn / reset / branch switch): re-sync so we don't slice
-  // past the end of a shorter string and so a fresh turn starts from zero.
+  // Target shrank (new turn / reset / branch switch): re-sync so we don't slice past the end of a shorter string and so a fresh turn starts from zero.
   useEffect(() => {
     if (posRef.current > target.length) {
       posRef.current = enabled ? 0 : target.length;

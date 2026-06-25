@@ -1,7 +1,4 @@
-// Clickable "your {workflow} is running now" nudge for scheduled runs that
-// fire while the user isn't looking. Detection lives in the upsertRun reducer
-// (it owns the into-running edge); this just renders the redux toast state and,
-// on View, opens the Workflows app to that workflow's live detail.
+// Clickable "your {workflow} is running now" nudge for scheduled runs that fire while the user isn't looking. Detection lives in the upsertRun reducer (it owns the into-running edge); this just renders the redux toast state and, on View, opens the Workflows app to that workflow's live detail.
 
 import React from 'react';
 import Snackbar from '@mui/material/Snackbar';

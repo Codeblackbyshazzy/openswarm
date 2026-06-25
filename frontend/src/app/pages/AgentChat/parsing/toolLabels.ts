@@ -456,9 +456,7 @@ function _labelForMcpTool(toolName: string, seed?: string): ToolLabel | null {
   }
 
   const human = _humanizeName(actionRaw.replace(/^_+|_+$/g, ''));
-  // Internal openswarm-* tools read as a plain action with no brand prefix
-  // ("Settings read", not "settings: Settings read"); external connectors keep
-  // the brand so the user knows which app it touched ("Gmail: Send email").
+  // Internal openswarm-* tools read as a plain action with no brand prefix ("Settings read", not "settings: Settings read"); external connectors keep the brand so the user knows which app it touched ("Gmail: Send email").
   if (server.startsWith('openswarm-')) {
     return { present: human, past: human };
   }

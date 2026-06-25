@@ -37,8 +37,7 @@ const OPENSWARM_GRADIENT =
 // Module-scope: remember the last open tab across modal closes (System Settings style).
 let lastOpenTab: string | null = null;
 
-// Shown only in the brief window before the live model list loads from the
-// backend. Keep the flagship current so the default-model dropdown isn't stale.
+// Shown only in the brief window before the live model list loads from the backend. Keep the flagship current so the default-model dropdown isn't stale.
 const DEFAULT_MODEL_FALLBACK = [
   { value: 'opus-4-8', label: 'Claude Opus 4.8' },
   { value: 'sonnet', label: 'Claude Sonnet 4.6' },
@@ -75,10 +74,7 @@ const Settings: React.FC = () => {
       grouped[prov] = models.map((m) => ({ value: m.value, label: m.label }));
       for (const m of models) flat.push({ value: m.value, label: m.label, provider: prov });
     }
-    // Guarantee the currently-selected default is always a valid option, even if
-    // the live list doesn't carry it (custom/OpenRouter value, or a stored model
-    // not in the current registry). Without this the dropdown gets an MUI
-    // "out-of-range value" warning and renders blank.
+    // Guarantee the currently-selected default is always a valid option, even if the live list doesn't carry it (custom/OpenRouter value, or a stored model not in the current registry). Without this the dropdown gets an MUI "out-of-range value" warning and renders blank.
     const sel = settings.default_model;
     if (sel && !flat.some((m) => m.value === sel)) {
       const other = 'Other';
@@ -134,9 +130,7 @@ const Settings: React.FC = () => {
     lastOpenTab = activeTab;
   }, [activeTab]);
 
-  // Sync form on modal open + first load only; including `settings` in deps wipes in-flight edits on background fetches (issue #25).
-  // baseline = the snapshot the user started editing from, so we can tell user edits
-  // apart from fields the backend changed underneath us (OAuth connects, free-trial mints).
+  // Sync form on modal open + first load only; including `settings` in deps wipes in-flight edits on background fetches (issue #25). baseline = the snapshot the user started editing from, so we can tell user edits apart from fields the backend changed underneath us (OAuth connects, free-trial mints).
   const baselineRef = useRef<AppSettings>(settings);
   useEffect(() => {
     if (open && loaded) {
@@ -146,21 +140,18 @@ const Settings: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, loaded]);
 
-  // Apply-on-change (System Settings style): edits save themselves after a short
-  // debounce, so text fields settle between keystrokes and toggles feel instant.
+  // Apply-on-change (System Settings style): edits save themselves after a short debounce, so text fields settle between keystrokes and toggles feel instant.
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlight = useRef(false);
 
-  // Only the fields the user touched ride on top of the LATEST settings; submitting the
-  // whole stale form would clobber background updates and ping-pong with server-owned fields.
+  // Only the fields the user touched ride on top of the LATEST settings; submitting the whole stale form would clobber background updates and ping-pong with server-owned fields.
   const buildSubmit = useCallback((): { touched: string[]; patch: Partial<AppSettings> } | null => {
     const base = baselineRef.current as unknown as Record<string, unknown>;
     const f = form as unknown as Record<string, unknown>;
     const touched = Array.from(new Set([...Object.keys(base), ...Object.keys(f)]))
       .filter((k) => JSON.stringify(f[k]) !== JSON.stringify(base[k]));
     if (touched.length === 0) return null;
-    // Send ONLY what the user changed; the server merges it onto fresh state, so
-    // we never re-send (and clobber) a field something else updated underneath us.
+    // Send ONLY what the user changed; the server merges it onto fresh state, so we never re-send (and clobber) a field something else updated underneath us.
     const patch: Record<string, unknown> = {};
     for (const k of touched) patch[k] = f[k];
     return { touched, patch: patch as Partial<AppSettings> };
@@ -177,8 +168,7 @@ const Settings: React.FC = () => {
     if (!buildSubmit()) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
-      // A save already in flight will update `settings` when it lands, re-running
-      // this effect to pick up whatever is still unsaved.
+      // A save already in flight will update `settings` when it lands, re-running this effect to pick up whatever is still unsaved.
       if (inFlight.current) return;
       const payload = buildSubmit();
       if (!payload) return;

@@ -123,6 +123,5 @@ function BrowserReplayOverlay({
   );
 }
 
-// memo: re-render only when the inputs actually change (cheap, but free insurance
-// against parent BrowserCard re-renders during an agent run).
+// memo: re-render only when the inputs actually change (cheap, but free insurance against parent BrowserCard re-renders during an agent run).
 export default React.memo(BrowserReplayOverlay);

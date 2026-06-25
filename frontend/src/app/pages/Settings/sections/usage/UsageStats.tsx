@@ -120,8 +120,7 @@ const UsageStats: React.FC = () => {
   const isSubscription = stats.cost_source === '9router';
   const costSourceLabel = isSubscription ? 'saved with your subscription' : stats.cost_source === 'sdk' ? 'via API' : '';
 
-  // Quirky savings nudge (subscription users only): what their token usage would've cost at API
-  // rates, framed a little differently each day so it stays fun without nagging.
+  // Quirky savings nudge (subscription users only): what their token usage would've cost at API rates, framed a little differently each day so it stays fun without nagging.
   const savedAmt = stats.total_cost_usd || 0;
   const sessionsLabel = (stats.total_sessions || 0).toLocaleString();
   const lattes = Math.max(1, Math.round(savedAmt / 5.75));

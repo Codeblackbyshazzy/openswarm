@@ -4,21 +4,13 @@ import { API_BASE, getAuthToken } from '@/shared/config';
 import { ForcedToolGroup } from '../types';
 import { basename } from '../helpers';
 
-// Only auto-shrink a file when it literally won't fit (98%+ of the window on its
-// own). Below that, send it NATIVELY (base64 document block) the way claude.ai /
-// OpenAI / Gemini do — the model reads the PDF server-side, instantly, no separate
-// summarize round-trip. The old 50% trigger was force-summarizing files that fit
-// fine, which is the entire reason our file flow felt 60s-slow vs their instant: we
-// were doing pre-processing work the big providers simply don't do. 98% (not 100%)
-// leaves a sliver for the prompt itself so a barely-fitting file doesn't 4xx; if the
-// conversation later grows past the window, auto-compact handles it.
+// Only auto-shrink a file when it literally won't fit (98%+ of the window on its own). Below that, send it NATIVELY (base64 document block) the way claude.ai / OpenAI / Gemini do — the model reads the PDF server-side, instantly, no separate summarize round-trip. The old 50% trigger was force-summarizing files that fit fine, which is the entire reason our file flow felt 60s-slow vs their instant: we were doing pre-processing work the big providers simply don't do. 98% (not 100%) leaves a sliver for the prompt itself so a barely-fitting file doesn't 4xx; if the conversation later grows past the window, auto-compact handles it.
 function shrinkThreshold(modelCtx: number): number {
   return Math.floor(modelCtx * 0.98);
 }
 
 export type SendBlock = null | {
-  // 'compacting' = history overflow, auto-compact can fix it.
-  // 'too_long'   = this single message exceeds the window on its own; hard block.
+  // 'compacting' = history overflow, auto-compact can fix it. 'too_long'   = this single message exceeds the window on its own; hard block.
   kind: 'compacting' | 'too_long';
   estimate: number;
   window: number;
@@ -45,8 +37,7 @@ export function useContextFiles(
   const [summarizingAll, setSummarizingAll] = useState(false);
   const [summarizeError, setSummarizeError] = useState<string | null>(null);
   const [sendBlock, setSendBlock] = useState<SendBlock>(null);
-  // Set when user clicked Send but oversize popup intercepted. Once the queue drains,
-  // we trigger the send automatically so the user doesn't have to click Send a second time.
+  // Set when user clicked Send but oversize popup intercepted. Once the queue drains, we trigger the send automatically so the user doesn't have to click Send a second time.
   const pendingSendRef = useRef<(() => void) | null>(null);
 
   const uploadAndAttachFiles = useCallback(async (files: File[]) => {
@@ -96,9 +87,7 @@ export function useContextFiles(
     setOversizeQueue((q) => q.filter((o) => o.path !== path));
   }, []);
 
-  // Single-click batch: remove EVERY oversize file. The auto-retry effect below
-  // notices the queue went empty and fires the pending send (if any), so going
-  // from 5 too-big files to a sent message is 1 click instead of 6.
+  // Single-click batch: remove EVERY oversize file. The auto-retry effect below notices the queue went empty and fires the pending send (if any), so going from 5 too-big files to a sent message is 1 click instead of 6.
   const detachAllOversize = useCallback(() => {
     setOversizeQueue((q) => {
       const paths = new Set(q.map((o) => o.path));
@@ -130,9 +119,7 @@ export function useContextFiles(
       setContextPaths((prev) => prev.map((cp) => cp.path === path ? { ...cp, path: newPath, tokens: newTokens, kind: 'text', media_type: 'text/plain' } : cp));
       setOversizeQueue((q) => q.filter((o) => o.path !== path));
     } catch (err) {
-      // Don't show backend stack traces / model error JSON to users. The raw error
-      // ("Error code: 400 - {'error': {'message': '[claude/...] prompt is too long...'}}")
-      // is logged in console for devs; users see a plain English ask.
+      // Don't show backend stack traces / model error JSON to users. The raw error ("Error code: 400 - {'error': {'message': '[claude/...] prompt is too long...'}}") is logged in console for devs; users see a plain English ask.
       if (err instanceof Error) console.error('[summarize] failed:', err.message);
       setSummarizeError('Could not shrink the file. Try removing it, or pick a model with a bigger window in Settings.');
     } finally {
@@ -140,10 +127,7 @@ export function useContextFiles(
     }
   }, [currentModelCtx, model, summarizingPath]);
 
-  // Single-click batch: shrink EVERY oversize file in parallel. Server-side each
-  // call already chunks-and-merges via asyncio.gather, so N files at once is bounded
-  // by the slowest one's chunk count, not N x single-file time. Errors from any
-  // one file land in summarizeError; others continue.
+  // Single-click batch: shrink EVERY oversize file in parallel. Server-side each call already chunks-and-merges via asyncio.gather, so N files at once is bounded by the slowest one's chunk count, not N x single-file time. Errors from any one file land in summarizeError; others continue.
   const summarizeAllOversize = useCallback(async () => {
     if (summarizingAll) return;
     const snapshot = oversizeQueue.slice();
@@ -188,12 +172,7 @@ export function useContextFiles(
     }
   }, [oversizeQueue, summarizingAll, currentModelCtx, model]);
 
-  // Auto-shrink: as soon as a file lands oversize, fire the shrink. No "this file is
-  // too big, what do you want to do?" prompt — there's no real choice, we KNOW the only
-  // reasonable answer is "shrink it". The popup becomes a status indicator ("Shrinking
-  // X") not a question, and disappears the moment shrinking finishes. If the user wanted
-  // the original unshrunk file they'd not have attached something bigger than the model's
-  // window in the first place; we still expose detach-on-chip if they change their mind.
+  // Auto-shrink: as soon as a file lands oversize, fire the shrink. No "this file is too big, what do you want to do?" prompt — there's no real choice, we KNOW the only reasonable answer is "shrink it". The popup becomes a status indicator ("Shrinking X") not a question, and disappears the moment shrinking finishes. If the user wanted the original unshrunk file they'd not have attached something bigger than the model's window in the first place; we still expose detach-on-chip if they change their mind.
   const lastAutoShrinkSig = useRef('');
   useEffect(() => {
     if (oversizeQueue.length === 0) return;
@@ -204,8 +183,7 @@ export function useContextFiles(
     summarizeAllOversize();
   }, [oversizeQueue, summarizingAll, summarizingPath, summarizeAllOversize]);
 
-  // Auto-retry: when the queue drains AND the user had a pending send, fire it.
-  // Zero extra clicks; user types "hi" with attached files, the shrink happens, send fires.
+  // Auto-retry: when the queue drains AND the user had a pending send, fire it. Zero extra clicks; user types "hi" with attached files, the shrink happens, send fires.
   useEffect(() => {
     if (oversizeQueue.length === 0 && !summarizingAll && !summarizingPath && pendingSendRef.current) {
       const send = pendingSendRef.current;

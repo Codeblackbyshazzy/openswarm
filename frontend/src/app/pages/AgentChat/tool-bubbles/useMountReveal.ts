@@ -23,10 +23,7 @@ export function useMountReveal(durationMs = 280, travelPx = 10) {
     const r = requestAnimationFrame(() => setShown(true));
     return () => cancelAnimationFrame(r);
   }, []);
-  // No willChange: transform/opacity already composite in Chromium, and a
-  // permanent willChange would pin every tool bubble to its own layer for the
-  // life of a long transcript. The one-frame promotion hitch is imperceptible
-  // for a mount fade.
+  // No willChange: transform/opacity already composite in Chromium, and a permanent willChange would pin every tool bubble to its own layer for the life of a long transcript. The one-frame promotion hitch is imperceptible for a mount fade.
   return {
     opacity: shown ? 1 : 0,
     transform: shown ? 'translateY(0)' : `translateY(${travelPx}px)`,

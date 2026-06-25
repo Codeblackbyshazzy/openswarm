@@ -7,9 +7,7 @@ import { useAppDispatch, useAppSelector } from '@/shared/hooks';
 import { clearRateLimited } from '@/shared/state/agentsSlice';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 
-// Muted, transient pill shown only after a real provider throttle outlasted the
-// silent backoff. No card, no red, no CTA; it fades and auto-clears once the
-// window should have passed. The "why" lives in the hover, not on the surface.
+// Muted, transient pill shown only after a real provider throttle outlasted the silent backoff. No card, no red, no CTA; it fades and auto-clears once the window should have passed. The "why" lives in the hover, not on the surface.
 export const RateLimitPill: React.FC<{ sessionId: string }> = ({ sessionId }) => {
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();

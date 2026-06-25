@@ -44,8 +44,7 @@ const HomeView: React.FC<{ nav: AppNav }> = ({ nav }) => {
     };
   }), [active, items, allRuns]);
 
-  // Fetch the 7-day window from the backend's recurrence engine (single source
-  // of truth) instead of recomputing fire times in JS.
+  // Fetch the 7-day window from the backend's recurrence engine (single source of truth) instead of recomputing fire times in JS.
   const dayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
   const { fromIso, toIso } = useMemo(() => {
     const from = new Date(now); from.setHours(0, 0, 0, 0);

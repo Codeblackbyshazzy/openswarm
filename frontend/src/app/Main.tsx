@@ -223,14 +223,9 @@ const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) =
   useEffect(() => {
     dispatch(fetchSettings());
     dispatch(fetchModels());
-    // Report the app launch with the browser's canonical tz/locale so the backend
-    // can emit analytics app_lifecycle.opened with values that work in packaged,
-    // dev, and open-source builds. Guarded once per page load; backend dedupes per process.
+    // Report the app launch with the browser's canonical tz/locale so the backend can emit analytics app_lifecycle.opened with values that work in packaged, dev, and open-source builds. Guarded once per page load; backend dedupes per process.
     reportAppOpened();
-    // Connected subscriptions live in their own slice; without this the dashboard
-    // (and the onboarding gate) think no model is connected until the user opens
-    // Settings > Models, so a fresh launch shows a false "connect a model" empty
-    // state and the welcome cursor never fires. Refetched after sync + on focus below.
+    // Connected subscriptions live in their own slice; without this the dashboard (and the onboarding gate) think no model is connected until the user opens Settings > Models, so a fresh launch shows a false "connect a model" empty state and the welcome cursor never fires. Refetched after sync + on focus below.
     dispatch(fetchSubscriptionStatus());
     fetch(`${API_BASE}/subscription/sync`, { method: 'POST' })
       .then((r) => {
@@ -238,14 +233,10 @@ const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) =
       })
       .catch(() => {})
       .finally(() => {
-        // Arm the zero-config free trial when nothing is connected so a brand-new
-        // user can run an agent immediately. The backend no-ops if a real key or
-        // subscription exists, so this is safe to fire on every launch.
+        // Arm the zero-config free trial when nothing is connected so a brand-new user can run an agent immediately. The backend no-ops if a real key or subscription exists, so this is safe to fire on every launch.
         fetch(`${API_BASE}/subscription/free-trial/mint`, { method: 'POST' })
           .catch(() => {})
-          // The backend arms server-side regardless of whether the browser can read the mint
-          // response (a transient boot-time CORS/timing miss makes `data` unreadable), so refetch
-          // unconditionally, the GET is the only reliable signal the UI gets that it armed.
+          // The backend arms server-side regardless of whether the browser can read the mint response (a transient boot-time CORS/timing miss makes `data` unreadable), so refetch unconditionally, the GET is the only reliable signal the UI gets that it armed.
           .finally(() => { dispatch(fetchSettings()); dispatch(fetchSubscriptionStatus()); dispatch(markFreeTrialArmSettled()); });
       });
   }, [dispatch]);
@@ -256,21 +247,11 @@ const SettingsLoader: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return () => window.removeEventListener('focus', onFocus);
   }, [dispatch]);
 
-  // 9Router starts in the BACKGROUND now, so the boot fetches above can land while
-  // it's still coming up: /models omits subscription models and /subscriptions/status
-  // reports nothing connected, leaving the picker empty and a real sub looking
-  // disconnected. The only other re-sync is window 'focus', which never fires on a
-  // window that's already focused at launch, so it used to stay broken until a manual
-  // Cmd+Shift+R. Re-pull models + status until 9Router answers (running), capped so a
-  // machine where it never comes up doesn't poll forever.
+  // 9Router starts in the BACKGROUND now, so the boot fetches above can land while it's still coming up: /models omits subscription models and /subscriptions/status reports nothing connected, leaving the picker empty and a real sub looking disconnected. The only other re-sync is window 'focus', which never fires on a window that's already focused at launch, so it used to stay broken until a manual Cmd+Shift+R. Re-pull models + status until 9Router answers (running), capped so a machine where it never comes up doesn't poll forever.
   const nineRouterUp = useAppSelector((s) => s.subscriptions.status?.running === true);
   useEffect(() => {
     if (nineRouterUp) {
-      // 9Router answered, but its provider list (/api/providers) can lag is_running by
-      // a beat on a cold start, so the fetch that flipped us 'up' may still be missing
-      // subscription rows. Two bounded follow-up pulls catch them, then we stop. When
-      // there's genuinely no sub this is just a couple of cheap localhost GETs, never a
-      // wait on something that doesn't exist.
+      // 9Router answered, but its provider list (/api/providers) can lag is_running by a beat on a cold start, so the fetch that flipped us 'up' may still be missing subscription rows. Two bounded follow-up pulls catch them, then we stop. When there's genuinely no sub this is just a couple of cheap localhost GETs, never a wait on something that doesn't exist.
       const t1 = window.setTimeout(() => { dispatch(fetchSubscriptionStatus()); dispatch(fetchModels()); }, 1500);
       const t2 = window.setTimeout(() => { dispatch(fetchSubscriptionStatus()); dispatch(fetchModels()); }, 3500);
       return () => { window.clearTimeout(t1); window.clearTimeout(t2); };
@@ -339,10 +320,7 @@ const DefaultModelGuard: React.FC<{ children: React.ReactNode }> = ({ children }
   const settingsLoaded = useAppSelector((s) => s.settings.loaded);
   const byProvider = useAppSelector((s) => s.models.byProvider);
   const modelsLoaded = useAppSelector((s) => s.models.loaded);
-  // Until 9Router answers, /models omits subscription models, so the saved default
-  // can look "no longer available" when it's really just not loaded yet. Reconciling
-  // then would clobber a real sub user's default down to a fallback (and persist it).
-  // Only reconcile against the complete list.
+  // Until 9Router answers, /models omits subscription models, so the saved default can look "no longer available" when it's really just not loaded yet. Reconciling then would clobber a real sub user's default down to a fallback (and persist it). Only reconcile against the complete list.
   const nineRouterUp = useAppSelector((s) => s.subscriptions.status?.running === true);
 
   const [warning, setWarning] = useState<{ from: string; to: string; provider: string } | null>(null);

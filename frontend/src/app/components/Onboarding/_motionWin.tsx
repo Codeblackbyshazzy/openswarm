@@ -24,14 +24,7 @@ const stripFramerProps = (props: any) => {
   return out;
 };
 
-// Components that drive position via `animate={{ x, y }}` (ACPopup, ACMultiChoice, etc.) would otherwise lose their layout when the animate prop is stripped, because they have no fallback style.transform. We salvage the latest numeric x/y from animate and apply them as a transform so the div lands in the right place; no animation, just static placement.
-// One cached component per tag. CRITICAL: without the cache the Proxy getter
-// returns a NEW forwardRef component on every `motion.div` access, so React
-// sees a different component type each render and REMOUNTS the DOM node every
-// time. A freshly-mounted node has no previous transform to ease from, so CSS
-// transitions never run (getAnimations() stays empty) and the cursor jumps
-// instantly instead of gliding; the breathing pulse never animates either.
-// Caching gives each tag a stable identity so React reconciles in place.
+// Components that drive position via `animate={{ x, y }}` (ACPopup, ACMultiChoice, etc.) would otherwise lose their layout when the animate prop is stripped, because they have no fallback style.transform. We salvage the latest numeric x/y from animate and apply them as a transform so the div lands in the right place; no animation, just static placement. One cached component per tag. CRITICAL: without the cache the Proxy getter returns a NEW forwardRef component on every `motion.div` access, so React sees a different component type each render and REMOUNTS the DOM node every time. A freshly-mounted node has no previous transform to ease from, so CSS transitions never run (getAnimations() stays empty) and the cursor jumps instantly instead of gliding; the breathing pulse never animates either. Caching gives each tag a stable identity so React reconciles in place.
 const tagComponentCache: Record<string, any> = {};
 const motionShim: any = new Proxy({}, {
   get: (_target, tag: string) => {

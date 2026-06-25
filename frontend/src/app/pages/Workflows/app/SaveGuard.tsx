@@ -1,8 +1,7 @@
 import React from 'react';
 import { useWC } from './uiKit';
 
-// Test-first nudge before scheduling: a test run grants the tool access the
-// workflow needs, so unattended runs don't stall reaching for them.
+// Test-first nudge before scheduling: a test run grants the tool access the workflow needs, so unattended runs don't stall reaching for them.
 const SaveGuard: React.FC<{
   title: string;
   onClose: () => void;

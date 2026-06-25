@@ -48,8 +48,7 @@ const ViewCard: React.FC<Props> = ({ output, onClick, onDelete, onRun, onHistory
       <Box
         sx={{
           height: 160,
-          // Whisper of warmth fading into the card surface, no hard tint block,
-          // so preview and title read as one continuous panel (matches dashboards).
+          // Whisper of warmth fading into the card surface, no hard tint block, so preview and title read as one continuous panel (matches dashboards).
           background: `radial-gradient(120% 90% at 50% 0%, ${c.accent.primary}1F 0%, transparent 62%)`,
           display: 'flex',
           alignItems: 'center',

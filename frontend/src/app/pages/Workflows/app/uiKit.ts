@@ -2,11 +2,7 @@ import type { CSSProperties } from 'react';
 import { useThemeMode, useClaudeTokens } from '@/shared/styles/ThemeContext';
 import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
 
-// The Workflows app renders in its own warm-paper visual language (from the
-// Claude design), deliberately separate from the MUI theme so the window reads
-// as a focused app. Two palettes (light/dark) keyed to the app theme; grab one
-// per component with useWC(). inkRGB is the ink color as a bare "r,g,b" so the
-// many rgba(ink, opacity) borders/hovers can flip with the theme too.
+// The Workflows app renders in its own warm-paper visual language (from the Claude design), deliberately separate from the MUI theme so the window reads as a focused app. Two palettes (light/dark) keyed to the app theme; grab one per component with useWC(). inkRGB is the ink color as a bare "r,g,b" so the many rgba(ink, opacity) borders/hovers can flip with the theme too.
 export interface WCPalette {
   accent: string;
   paper: string;
@@ -34,16 +30,13 @@ export interface WCPalette {
   warn: string;
   warnBg: string;
   trackOff: string;
-  // Structural primitives shared with the rest of OpenSwarm (sourced from
-  // claudeTokens in useWC), so the window stops looking built-separate.
+  // Structural primitives shared with the rest of OpenSwarm (sourced from claudeTokens in useWC), so the window stops looking built-separate.
   shadow: ClaudeTokens['shadow'];
   radius: ClaudeTokens['radius'];
   border: ClaudeTokens['border'];
 }
 
-// The identity half of the palette: accent, text, status, hairlines. The neutral
-// surfaces + structural primitives are blended in from claudeTokens by useWC(),
-// so the window is the same material as every other card.
+// The identity half of the palette: accent, text, status, hairlines. The neutral surfaces + structural primitives are blended in from claudeTokens by useWC(), so the window is the same material as every other card.
 type WCColors = Omit<WCPalette, 'shadow' | 'radius' | 'border' | 'paper' | 'page' | 'panel' | 'rail' | 'inset' | 'raised'>;
 
 export const WC_LIGHT: WCColors = {
@@ -98,16 +91,7 @@ export function useWC(): WCPalette {
   const base = mode === 'dark' ? WC_DARK : WC_LIGHT;
   return {
     ...base,
-    // Three-tone depth from the app tokens (matches the Claude design): the
-    // content area sits on `page`, cards/title bar pop on `surface` above it,
-    // and the sidebar/right rail recede on `secondary`. surface > page in BOTH
-    // themes, so cards always pop (no light/dark inversion).
-    // Light's palette inverts (elevated is lighter than surface in light, darker
-    // in dark), so the mid content tone must flip per mode: in light it steps UP
-    // to bg.elevated so the window stands apart from the bg.page canvas behind it
-    // and cards still pop on bg.surface above; in dark bg.page is already darker
-    // than the cards, so it stays. Rows mirror it (surface in light, elevated in
-    // dark) so they always sit above the content.
+    // Three-tone depth from the app tokens (matches the Claude design): the content area sits on `page`, cards/title bar pop on `surface` above it, and the sidebar/right rail recede on `secondary`. surface > page in BOTH themes, so cards always pop (no light/dark inversion). Light's palette inverts (elevated is lighter than surface in light, darker in dark), so the mid content tone must flip per mode: in light it steps UP to bg.elevated so the window stands apart from the bg.page canvas behind it and cards still pop on bg.surface above; in dark bg.page is already darker than the cards, so it stays. Rows mirror it (surface in light, elevated in dark) so they always sit above the content.
     paper: c.bg.surface,                                       // cards, title bar, popovers
     page: mode === 'dark' ? c.bg.secondary : c.bg.elevated,   // content area: one step above the canvas in both modes
     panel: c.bg.surface,                                       // title bar
@@ -124,9 +108,7 @@ export const FONT_SERIF = "'Newsreader', Georgia, serif";
 export const FONT_SANS = "'Hanken Grotesk', system-ui, sans-serif";
 export const FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
 
-// Stable per-workflow color: the backend has no color field, so derive a
-// vivid-but-deterministic swatch from the id. Same id always lands the same
-// hue, so dots/bars stay consistent across panes without persistence.
+// Stable per-workflow color: the backend has no color field, so derive a vivid-but-deterministic swatch from the id. Same id always lands the same hue, so dots/bars stay consistent across panes without persistence.
 export const WORKFLOW_PALETTE = [
   '#C25A36', '#3F8E83', '#5B6CB8', '#9A5B86',
   '#B5852E', '#C2483A', '#4B7A4B', '#4B463E',
@@ -138,8 +120,7 @@ export function colorForId(id: string): string {
   return WORKFLOW_PALETTE[h % WORKFLOW_PALETTE.length];
 }
 
-// Prefer the user's chosen swatch; fall back to the stable id-hash hue when
-// they haven't picked one. Single source of truth for every dot/bar.
+// Prefer the user's chosen swatch; fall back to the stable id-hash hue when they haven't picked one. Single source of truth for every dot/bar.
 export function colorForWorkflow(wf: { id: string; color?: string | null }): string {
   return wf.color || colorForId(wf.id);
 }

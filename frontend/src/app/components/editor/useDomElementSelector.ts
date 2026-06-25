@@ -9,8 +9,7 @@ const SELECT_META_ATTR = 'data-select-meta';
 const DRAG_SELECT_TYPES = ['agent-card', 'view-card', 'browser-card', 'workflow-card', 'settings-option'] as const;
 const DRAG_SELECTOR = DRAG_SELECT_TYPES.map((t) => `[${SELECT_ATTR}="${t}"]`).join(',');
 
-// The Workflows app window is a full app surface, not a card you attach as
-// context, so the selection tool never targets it (neither drag nor click).
+// The Workflows app window is a full app surface, not a card you attach as context, so the selection tool never targets it (neither drag nor click).
 const NON_SELECTABLE_TYPES = new Set<string>(['workflows-hub-card']);
 
 export interface OverlayState {
@@ -415,9 +414,7 @@ export function useDomElementSelector(): DomSelectorState {
     const prevUserSelect = document.body.style.userSelect;
     document.body.style.userSelect = 'none';
 
-    // Escape just exits the tool: turn select mode off but leave the already
-    // attached elements alone. Capture + stopPropagation so it doesn't also
-    // clear the canvas selection while the tool is the thing in focus.
+    // Escape just exits the tool: turn select mode off but leave the already attached elements alone. Capture + stopPropagation so it doesn't also clear the canvas selection while the tool is the thing in focus.
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.preventDefault();

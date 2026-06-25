@@ -39,8 +39,7 @@ export const step05: OnboardingStep = {
       condition: { kind: 'event_bus', event: 'agent:attached_to_browser' },
       timeoutMs: 90000,
     },
-    // Guide, don't commandeer: invite the user to ask for any web task in their
-    // own words instead of typing + sending a canned prompt for them.
+    // Guide, don't commandeer: invite the user to ask for any web task in their own words instead of typing + sending a canned prompt for them.
     { kind: 'move_to', target: S.chatInput },
     {
       kind: 'popup',

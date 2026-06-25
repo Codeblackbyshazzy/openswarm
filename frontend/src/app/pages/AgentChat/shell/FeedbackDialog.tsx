@@ -25,8 +25,7 @@ const FeedbackDialog: React.FC<Props> = ({ open, sentiment, sessionId, messageId
   const isUp = sentiment === 'up';
 
   const handleSubmit = () => {
-    // Rides the same analytics channel as everything else (batches + offline
-    // spools to the cloud). Fire-and-forget, so the dialog closes instantly.
+    // Rides the same analytics channel as everything else (batches + offline spools to the cloud). Fire-and-forget, so the dialog closes instantly.
     report('feedback', sentiment, { message_id: messageId, session_id: sessionId, comment: comment.trim() }, { immediate: true });
     setComment('');
     onSubmitted();

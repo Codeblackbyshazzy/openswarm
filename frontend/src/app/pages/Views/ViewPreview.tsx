@@ -14,9 +14,7 @@ const isElectron = navigator.userAgent.includes('Electron');
 const THUMB_WIDTH = 600;
 const THUMB_QUALITY = 0.7;
 
-// NativeImage -> small JPEG data URL. We resize on the native image (cheap) then
-// re-encode via canvas because NativeImage.toJPEG hands back a Node Buffer that
-// the sandboxed renderer can't base64 on its own.
+// NativeImage -> small JPEG data URL. We resize on the native image (cheap) then re-encode via canvas because NativeImage.toJPEG hands back a Node Buffer that the sandboxed renderer can't base64 on its own.
 async function nativeImageToJpegDataUrl(img: any, width: number, quality: number): Promise<string | null> {
   const sized = typeof img.resize === 'function' ? img.resize({ width }) : img;
   const pngUrl: string = sized.toDataURL();
@@ -201,8 +199,7 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
       const wv = webviewRef.current;
       // Only the webview path is reliably snapshottable; iframe/dev or a hidden window (about:blank) returns null.
       if (!useWebview || !wv || windowHidden || typeof wv.capturePage !== 'function') return null;
-      // Never snapshot a guest that's detaching, crashed, or mid-navigation: capturePage on a
-      // WebContents being torn down can segfault the main process (the whole-app quit on fast app-switching).
+      // Never snapshot a guest that's detaching, crashed, or mid-navigation: capturePage on a WebContents being torn down can segfault the main process (the whole-app quit on fast app-switching).
       try {
         if (wv.isConnected === false) return null;
         if (typeof wv.isCrashed === 'function' && wv.isCrashed()) return null;
@@ -225,9 +222,7 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
     }
   }, [srcdoc, useWebview]);
 
-  // Listen for preload IPC: console forwarding, canvas wheel forwarding
-  // (matches BrowserCard so apps share the same dashboard pan/zoom defaults),
-  // and the app-clicked notification that flips the card into interact mode.
+  // Listen for preload IPC: console forwarding, canvas wheel forwarding (matches BrowserCard so apps share the same dashboard pan/zoom defaults), and the app-clicked notification that flips the card into interact mode.
   useEffect(() => {
     if (!useWebview) return;
     const wv = webviewRef.current;
@@ -281,8 +276,7 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
     };
   }, [useWebview, onConsoleMessage, onAppClicked, iframeSrc]);
 
-  // Mirror `interactive` into a ref so the once-per-load did-finish-load
-  // listener can read the latest value when it pushes initial state.
+  // Mirror `interactive` into a ref so the once-per-load did-finish-load listener can read the latest value when it pushes initial state.
   const interactiveRef = useRef(interactive);
   interactiveRef.current = interactive;
   useEffect(() => {
@@ -397,8 +391,7 @@ const ViewPreview = forwardRef<ViewPreviewHandle, Props>(({
             width: '100%',
             height: '100%',
             border: 'none',
-            // Best-effort: newer Chromium clips a <webview>'s own radius even though
-            // it ignores a parent's. Square in older builds, harmless either way.
+            // Best-effort: newer Chromium clips a <webview>'s own radius even though it ignores a parent's. Square in older builds, harmless either way.
             borderRadius: '12px',
             overflow: 'hidden',
             background: _hostBg,

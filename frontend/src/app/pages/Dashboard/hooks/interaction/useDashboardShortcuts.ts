@@ -94,8 +94,7 @@ export function useDashboardShortcuts({
     return () => window.removeEventListener('keydown', handleDelete);
   }, [selection, dispatch]);
 
-  // Cmd/Ctrl+A selects every card so it can be deleted in one go. Skipped
-  // inside text fields so Cmd+A there still selects text, not cards.
+  // Cmd/Ctrl+A selects every card so it can be deleted in one go. Skipped inside text fields so Cmd+A there still selects text, not cards.
   useEffect(() => {
     const handleSelectAll = (e: KeyboardEvent) => {
       if (!isActive) return;

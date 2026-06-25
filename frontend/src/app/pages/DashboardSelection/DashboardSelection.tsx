@@ -255,8 +255,7 @@ const DashboardSelection: React.FC = () => {
                 <Box
                   sx={{
                     height: 120,
-                    // Whisper of warmth at the top that fades into the card surface,
-                    // no hard tint block, so preview and title read as one panel.
+                    // Whisper of warmth at the top that fades into the card surface, no hard tint block, so preview and title read as one panel.
                     background: `radial-gradient(120% 90% at 50% 0%, ${c.accent.primary}1F 0%, transparent 62%)`,
                     display: 'flex',
                     alignItems: 'center',

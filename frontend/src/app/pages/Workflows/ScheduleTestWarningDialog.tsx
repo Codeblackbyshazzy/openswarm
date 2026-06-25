@@ -14,9 +14,7 @@ interface Props {
   onScheduleAnyway: () => void;
 }
 
-// Shown before scheduling a workflow whose current steps haven't been validated
-// by a test run. Scheduled fires can't pause to ask for tool permission, so an
-// untested workflow that needs approval would silently fail on its first run.
+// Shown before scheduling a workflow whose current steps haven't been validated by a test run. Scheduled fires can't pause to ask for tool permission, so an untested workflow that needs approval would silently fail on its first run.
 export default function ScheduleTestWarningDialog({ open, onClose, onTestFirst, onScheduleAnyway }: Props) {
   const c = useClaudeTokens();
   return (

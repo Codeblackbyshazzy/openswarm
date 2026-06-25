@@ -1,8 +1,4 @@
-// The "what's inside this bundle" panel, shared by the Share and Import modals.
-// Kept deliberately spare: the bundle's name already lives in the modal title, so
-// here it's just one line of type + counts, the requirements as small icon chips,
-// and an optional expand for the full contents. No boxes, the modal's whitespace
-// does the grouping.
+// The "what's inside this bundle" panel, shared by the Share and Import modals. Kept deliberately spare: the bundle's name already lives in the modal title, so here it's just one line of type + counts, the requirements as small icon chips, and an optional expand for the full contents. No boxes, the modal's whitespace does the grouping.
 import React, { useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';

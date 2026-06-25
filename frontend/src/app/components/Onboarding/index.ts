@@ -1,5 +1,4 @@
-// Public surface for the Onboarding v2 system. AppShell mounts
-// <OnboardingRoot/> once; everything else is internal.
+// Public surface for the Onboarding v2 system. AppShell mounts <OnboardingRoot/> once; everything else is internal.
 
 export { default as OnboardingRoot } from './OnboardingRoot';
 export { onboardingDirector } from './OnboardingDirector';

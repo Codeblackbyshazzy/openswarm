@@ -3,10 +3,7 @@ import { useAppDispatch } from '@/shared/hooks';
 import { fetchSession } from '@/shared/state/agentsSlice';
 import { ensureEditAgentSession } from './api';
 
-// Boots (or reattaches) the sticky edit-agent session for a workflow and returns
-// its id once ready. The opener is deterministic: an existing workflow gets a
-// fixed intro message from the backend; a brand-new build starts empty and the
-// compose page shows its own starter prompts.
+// Boots (or reattaches) the sticky edit-agent session for a workflow and returns its id once ready. The opener is deterministic: an existing workflow gets a fixed intro message from the backend; a brand-new build starts empty and the compose page shows its own starter prompts.
 export function useEditAgentSession(workflowId: string): string | null {
   const dispatch = useAppDispatch();
   const [sessionId, setSessionId] = useState<string | null>(null);

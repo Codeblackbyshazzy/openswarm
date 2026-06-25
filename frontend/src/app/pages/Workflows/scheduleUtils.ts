@@ -5,9 +5,7 @@ export const WEEKDAY_LABEL_SHORT = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'S
 export const WEEKDAY_FULL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export function defaultSchedule(): ScheduleConfig {
-  // Pick the host's IANA tz so new schedules start with an explicit zone
-  // instead of the legacy "local" sentinel. Backend storage still coerces
-  // "local" if a record predates this default; new records skip that path.
+  // Pick the host's IANA tz so new schedules start with an explicit zone instead of the legacy "local" sentinel. Backend storage still coerces "local" if a record predates this default; new records skip that path.
   let tz = 'local';
   try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local'; } catch { /* keep 'local' */ }
   return {
@@ -39,17 +37,12 @@ export function isWorkflowSchedulable(workflow: Workflow): boolean {
   return isScheduleConfigured(workflow.schedule);
 }
 
-// Stable fingerprint of the steps that actually drive behavior (order + id +
-// text). label is just the at-a-glance headline, so it's left out. Computed
-// only here so the backend stores exactly what the FE compares: no cross-
-// language hashing drift.
+// Stable fingerprint of the steps that actually drive behavior (order + id + text). label is just the at-a-glance headline, so it's left out. Computed only here so the backend stores exactly what the FE compares: no cross- language hashing drift.
 export function stepsSignature(steps: WorkflowStep[] | null | undefined): string {
   return JSON.stringify((steps || []).map((s) => [s.id, s.text]));
 }
 
-// True when the current steps haven't been validated by a test run (or seeded
-// at chat conversion) since they were last edited. Drives the test-first
-// warning before scheduling.
+// True when the current steps haven't been validated by a test run (or seeded at chat conversion) since they were last edited. Drives the test-first warning before scheduling.
 export function needsScheduleTestWarning(workflow: Workflow): boolean {
   const steps = workflow.draft_steps ?? workflow.steps;
   if (!steps || steps.length === 0) return false;
@@ -63,8 +56,7 @@ export function formatTime(hour: number, minute: number): string {
   return minute === 0 ? `${h12}${suffix}` : `${h12}:${mm}${suffix}`;
 }
 
-// Used in the roomy hub calendar: "10 AM", "12 PM", "1 PM"...
-// Matches Figma image #8 styling for the left-column time labels.
+// Used in the roomy hub calendar: "10 AM", "12 PM", "1 PM"... Matches Figma image #8 styling for the left-column time labels.
 export function formatHourLabel(hour: number): string {
   const h12 = ((hour + 11) % 12) + 1;
   const suffix = hour < 12 ? 'AM' : 'PM';

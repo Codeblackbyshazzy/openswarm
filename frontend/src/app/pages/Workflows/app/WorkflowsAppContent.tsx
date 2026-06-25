@@ -14,8 +14,7 @@ import DetailView from './DetailView';
 import ComposeView from './ComposeView';
 import TrashView from './TrashView';
 
-// The three-pane Workflows body, independent of how it's framed (canvas card).
-// Holds nav + data; the card chrome (title bar drag handle, resize) wraps it.
+// The three-pane Workflows body, independent of how it's framed (canvas card). Holds nav + data; the card chrome (title bar drag handle, resize) wraps it.
 const WorkflowsAppContent: React.FC = () => {
   const WC = useWC();
   const dispatch = useAppDispatch();
@@ -36,8 +35,7 @@ const WorkflowsAppContent: React.FC = () => {
     dispatch(fetchDeletedWorkflows(dashboardId));
   }, [dashboardId, dispatch]);
 
-  // A deep-link target (history/notifications/toasts) jumps to that workflow's
-  // detail, then clears so a later manual Home nav isn't overridden.
+  // A deep-link target (history/notifications/toasts) jumps to that workflow's detail, then clears so a later manual Home nav isn't overridden.
   useEffect(() => {
     if (target) {
       setSelectedId(target);

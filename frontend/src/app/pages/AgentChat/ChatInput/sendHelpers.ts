@@ -14,14 +14,7 @@ interface SendBlockInputs {
   sessionFrameworkOverhead: number;
 }
 
-// Pre-send dry-run guard. Sums every known component of next-turn input
-// (history estimate from props, system prompt, framework/MCP overhead
-// last reported by the API, attached file token estimates, and the
-// prompt itself). If the sum exceeds 95% of the model's window, returns a
-// block with concrete recovery actions instead of round-tripping to a
-// doomed API call. Conservative on purpose: tokenizers differ across
-// providers (char/4 is rough), so we leave 5% headroom plus the API's
-// own response budget.
+// Pre-send dry-run guard. Sums every known component of next-turn input (history estimate from props, system prompt, framework/MCP overhead last reported by the API, attached file token estimates, and the prompt itself). If the sum exceeds 95% of the model's window, returns a block with concrete recovery actions instead of round-tripping to a doomed API call. Conservative on purpose: tokenizers differ across providers (char/4 is rough), so we leave 5% headroom plus the API's own response budget.
 export function computeSendBlock({ trimmed, currentModelCtx, historyUsed, contextPaths, sessionFrameworkOverhead }: SendBlockInputs): NonNullable<SendBlock> | null {
   const win = currentModelCtx;
   const history = Math.max(0, historyUsed);
@@ -35,11 +28,7 @@ export function computeSendBlock({ trimmed, currentModelCtx, historyUsed, contex
     for (const cp of contextPaths) {
       if ((cp.tokens || 0) > (largest?.tokens || 0)) largest = { path: cp.path, tokens: cp.tokens || 0 };
     }
-    // Distinguish "history is the culprit" (compaction can fix it) from "this one
-    // message is too big on its own" (compaction can't help: dropping all prior
-    // turns still leaves framework+files+prompt over the window). The latter only
-    // happens with a giant pasted prompt, since attached files auto-shrink on
-    // attach. We surface that as a hard block instead of a doomed compact loop.
+    // Distinguish "history is the culprit" (compaction can fix it) from "this one message is too big on its own" (compaction can't help: dropping all prior turns still leaves framework+files+prompt over the window). The latter only happens with a giant pasted prompt, since attached files auto-shrink on attach. We surface that as a hard block instead of a doomed compact loop.
     const nonHistory = framework + filesSum + promptTokens + systemTokens;
     const kind: 'compacting' | 'too_long' =
       nonHistory > Math.floor(win * 0.95) ? 'too_long' : 'compacting';

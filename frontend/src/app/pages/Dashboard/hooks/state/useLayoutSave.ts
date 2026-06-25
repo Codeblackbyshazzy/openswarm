@@ -24,10 +24,7 @@ interface UseLayoutSaveArgs {
   captureNow: () => void;
 }
 
-// Debounced layout persistence. The buffered pendingSaveRef + the unmount
-// flush live together here, and this hook tears down exactly when
-// DashboardInner does, so the launchAndSendFirstMessage-vs-unmount race
-// keeps the same cadence it had inline.
+// Debounced layout persistence. The buffered pendingSaveRef + the unmount flush live together here, and this hook tears down exactly when DashboardInner does, so the launchAndSendFirstMessage-vs-unmount race keeps the same cadence it had inline.
 export function useLayoutSave({
   isActive,
   layoutInitialized,

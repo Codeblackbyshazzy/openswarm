@@ -30,8 +30,7 @@ import { clearPendingBrowserUrl, clearPendingFocusAgentId } from '@/shared/state
 import { API_BASE } from '@/shared/config';
 import type { CanvasActions } from '../interaction/useCanvasControls';
 
-// Module-level so the missed-runs review pops exactly once per app launch,
-// not again on every dashboard switch.
+// Module-level so the missed-runs review pops exactly once per app launch, not again on every dashboard switch.
 let missedRunsCheckedThisSession = false;
 
 interface UseDashboardLifecycleArgs {
@@ -66,10 +65,7 @@ export function useDashboardLifecycle({
   restoredExpandedRef,
 }: UseDashboardLifecycleArgs) {
   const dispatch = useAppDispatch();
-  // True once THIS dashboard open has refetched outputs. The orphan-prune below
-  // keys off this, not the sticky global outputsLoaded, so it never wipes a
-  // just-imported app card by judging it against a stale (previous-dashboard)
-  // apps list before the fresh fetch lands.
+  // True once THIS dashboard open has refetched outputs. The orphan-prune below keys off this, not the sticky global outputsLoaded, so it never wipes a just-imported app card by judging it against a stale (previous-dashboard) apps list before the fresh fetch lands.
   const [outputsRefetched, setOutputsRefetched] = useState(false);
   const pendingBrowserUrl = useAppSelector((state) => state.tempState.pendingBrowserUrl);
   const pendingFocusAgentId = useAppSelector((state) => state.tempState.pendingFocusAgentId);
@@ -77,9 +73,7 @@ export function useDashboardLifecycle({
   const pendingFocusWorkflowId = useAppSelector((state) => state.dashboardLayout.pendingFocusWorkflowId);
   const pendingFocusWorkflowsHub = useAppSelector((state) => state.dashboardLayout.pendingFocusWorkflowsHub);
 
-  // Once per app launch: if scheduled fires elapsed while we were closed, fetch
-  // them. The slice flips its toast flag on fulfilled, so a bottom-left nudge
-  // shows instead of a card popping unrequested; the user opens the card from it.
+  // Once per app launch: if scheduled fires elapsed while we were closed, fetch them. The slice flips its toast flag on fulfilled, so a bottom-left nudge shows instead of a card popping unrequested; the user opens the card from it.
   useEffect(() => {
     if (!isActive || missedRunsCheckedThisSession) return;
     missedRunsCheckedThisSession = true;
@@ -105,33 +99,23 @@ export function useDashboardLifecycle({
     restoredExpandedRef.current = false;
     setOutputsRefetched(false);
     dispatch(resetLayout());
-    // CRITICAL path: these populate the cards the user expects to see
-    // on first paint. Don't defer.
+    // CRITICAL path: these populate the cards the user expects to see on first paint. Don't defer.
     dispatch(fetchSessions({ dashboardId }));
     dispatch(fetchLayout({ dashboardId }));
     const cleanupBrowserHandler = initBrowserCommandHandler();
-    // Global broadcasts (spawned browser cards) skip the replay log, so a
-    // socket gap loses them; a reconnect refetch is the only way they return.
+    // Global broadcasts (spawned browser cards) skip the replay log, so a socket gap loses them; a reconnect refetch is the only way they return.
     const unsubReconnect = dashboardWs.on('dashboard:reconnected', () => {
       dispatch(fetchSessions({ dashboardId }));
       dispatch(fetchLayout({ dashboardId, isReconnect: true }));
-      // workflow:run/updated/deleted are global broadcasts that skip the replay
-      // log, so a socket gap drops them: refetch to heal stale "running" cards,
-      // ghost workflows, and missed run history on reconnect.
+      // workflow:run/updated/deleted are global broadcasts that skip the replay log, so a socket gap drops them: refetch to heal stale "running" cards, ghost workflows, and missed run history on reconnect.
       dispatch(fetchWorkflows(dashboardId));
       dispatch(fetchAllRuns(200));
       dispatch(fetchActiveRuns());
     });
-    // DEFERRABLE: history list (for the search palette) and outputs
-    // (for the apps panel) aren't on the first-paint path. Same for the
-    // dashboard WS connection (it carries cross-session events; opens
-    // ~100ms later costs nothing). Pushing these into the post-paint
-    // window measurably improves LCP because the initial render
-    // pipeline isn't competing with their thunks/network setup.
+    // DEFERRABLE: history list (for the search palette) and outputs (for the apps panel) aren't on the first-paint path. Same for the dashboard WS connection (it carries cross-session events; opens ~100ms later costs nothing). Pushing these into the post-paint window measurably improves LCP because the initial render pipeline isn't competing with their thunks/network setup.
     const loadDeferred = () => {
       dispatch(fetchHistory({ dashboardId }));
-      // Mark outputs fresh only after a SUCCESSFUL fetch, so the prune below
-      // judges view cards against this dashboard's real apps, not a stale list.
+      // Mark outputs fresh only after a SUCCESSFUL fetch, so the prune below judges view cards against this dashboard's real apps, not a stale list.
       dispatch(fetchOutputs()).then((res) => {
         if (fetchOutputs.fulfilled.match(res)) setOutputsRefetched(true);
       });
@@ -142,12 +126,7 @@ export function useDashboardLifecycle({
       ? (window as any).requestIdleCallback(loadDeferred, { timeout: 2000 })
       : window.setTimeout(loadDeferred, 200);
 
-    // Pre-warm Anthropic's prompt cache for sessions on this dashboard
-    // ~250ms after mount (debounced; AbortController cancels on
-    // dashboard switch). Fires a max_tokens=1 ping per session so the
-    // user's first real message hits a warm cache instead of paying
-    // cold-start TTFT. Cheap (~$0.0001/session) and non-blocking. Skips
-    // for non-Anthropic sessions server-side.
+    // Pre-warm Anthropic's prompt cache for sessions on this dashboard ~250ms after mount (debounced; AbortController cancels on dashboard switch). Fires a max_tokens=1 ping per session so the user's first real message hits a warm cache instead of paying cold-start TTFT. Cheap (~$0.0001/session) and non-blocking. Skips for non-Anthropic sessions server-side.
     const warmAbort = new AbortController();
     const warmTimer = setTimeout(async () => {
       try {
@@ -161,8 +140,7 @@ export function useDashboardLifecycle({
         );
         for (const s of dashSessions) {
           if (warmAbort.signal.aborted) break;
-          // Fire-and-forget , the endpoint always 200s and the side
-          // effect is invisible cache population.
+          // Fire-and-forget, the endpoint always 200s and the side effect is invisible cache population.
           fetch(`${API_BASE}/agents/sessions/${s.id}/warm-cache`, {
             method: 'POST',
             signal: warmAbort.signal,
@@ -179,8 +157,7 @@ export function useDashboardLifecycle({
       cleanupBrowserHandler();
       unsubReconnect();
       dashboardWs.disconnect();
-      // Cancel any not-yet-fired idle work; the cleanup handler can't
-      // run partially if the dashboard switches before idle fired.
+      // Cancel any not-yet-fired idle work; the cleanup handler can't run partially if the dashboard switches before idle fired.
       if (typeof window !== 'undefined') {
         const cancelIdle = (window as any).cancelIdleCallback;
         if (cancelIdle && typeof idleHandle === 'number') cancelIdle(idleHandle);
@@ -224,18 +201,7 @@ export function useDashboardLifecycle({
     }, 350);
   }, [isActive, pendingFocusAgentId, layoutInitialized, dispatch, canvasActions, handleHighlightCard]);
 
-  // Auto-focus a newly created browser card. The reducer that handles
-  // addBrowserCard sets pendingFocusBrowserId to the new card's id; this
-  // effect picks it up, pans/zooms the canvas to center on it, briefly
-  // highlights it, then clears the signal. Mirrors the pendingFocusAgentId
-  // pattern above so link clicks (intercepted in AppShell) get the same
-  // auto-focus behavior as the "+ Browser" toolbar button.
-  //
-  // Uses zoom=0.8 (the same value handleCardClick uses for browser cards
-  // at line ~344) instead of letting fitToCards auto-derive a zoom from
-  // padding. Browser cards are large (1280x800), so the auto-derived zoom
-  // would land around ~58% which feels too far back; 0.8 matches the
-  // "click on a browser to focus" experience the user expects.
+  // Auto-focus a newly created browser card. The reducer that handles addBrowserCard sets pendingFocusBrowserId to the new card's id; this effect picks it up, pans/zooms the canvas to center on it, briefly highlights it, then clears the signal. Mirrors the pendingFocusAgentId pattern above so link clicks (intercepted in AppShell) get the same auto-focus behavior as the "+ Browser" toolbar button. Uses zoom=0.8 (the same value handleCardClick uses for browser cards at line ~344) instead of letting fitToCards auto-derive a zoom from padding. Browser cards are large (1280x800), so the auto-derived zoom would land around ~58% which feels too far back; 0.8 matches the "click on a browser to focus" experience the user expects.
   useEffect(() => {
     if (!isActive) return;
     if (!pendingFocusBrowserId || !layoutInitialized) return;
@@ -313,13 +279,7 @@ export function useDashboardLifecycle({
     dispatch(reconcileSessions({ sessionIds: dashboardSessionIds, expandedSessionIds }));
   }, [sessions, layoutInitialized, dispatch, dashboardId, expandedSessionIds]);
 
-  // Prune orphan view cards whose underlying output was deleted (e.g. via
-  // the Views page). Without this, the layout entry persists in the minimap
-  // and contentBounds even though DashboardViewCard renders nothing. Gated on
-  // outputsRefetched (THIS open's fresh fetch), NOT the sticky global
-  // outputsLoaded: on a freshly-imported dashboard the global flag is already
-  // true from a prior dashboard, so the old gate pruned the just-imported app
-  // card against a stale apps list and the debounced save persisted the wipe.
+  // Prune orphan view cards whose underlying output was deleted (e.g. via the Views page). Without this, the layout entry persists in the minimap and contentBounds even though DashboardViewCard renders nothing. Gated on outputsRefetched (THIS open's fresh fetch), NOT the sticky global outputsLoaded: on a freshly-imported dashboard the global flag is already true from a prior dashboard, so the old gate pruned the just-imported app card against a stale apps list and the debounced save persisted the wipe.
   useEffect(() => {
     if (!layoutInitialized || !outputsRefetched) return;
     for (const outputId of Object.keys(viewCards)) {
@@ -327,16 +287,7 @@ export function useDashboardLifecycle({
     }
   }, [layoutInitialized, outputsRefetched, viewCards, outputs, dispatch]);
 
-  // On first load after outputs settle, snapshot every existing Output id as
-  // "already accounted for." Any output that ARRIVES later (typically the
-  // agent:output_upserted WS broadcast the backend fires the instant a
-  // view-builder session is seeded, at session start) whose session_id points
-  // at a view-builder chat on this dashboard gets a view card dropped on the
-  // canvas right away. Per-mount tracked so a manual close after auto-open
-  // stays closed. Prior approach keyed off a pending-set populated inside
-  // launchAndSendFirstMessage.then(): the WS upsert won the race and the
-  // effect saw an empty set, so the card didn't pop until the session-end
-  // meta-sync re-broadcast.
+  // On first load after outputs settle, snapshot every existing Output id as "already accounted for." Any output that ARRIVES later (typically the agent:output_upserted WS broadcast the backend fires the instant a view-builder session is seeded, at session start) whose session_id points at a view-builder chat on this dashboard gets a view card dropped on the canvas right away. Per-mount tracked so a manual close after auto-open stays closed. Prior approach keyed off a pending-set populated inside launchAndSendFirstMessage.then(): the WS upsert won the race and the effect saw an empty set, so the card didn't pop until the session-end meta-sync re-broadcast.
   const autoOpenedOutputsRef = useRef<Set<string>>(new Set());
   const outputsSnapshottedRef = useRef<boolean>(false);
   useEffect(() => {

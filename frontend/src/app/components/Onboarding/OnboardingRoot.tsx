@@ -34,9 +34,7 @@ const OnboardingRoot: React.FC = () => {
   const settingsLoaded = useAppSelector((s) => s.settings.loaded);
   const firstAgentDone = useAppSelector(hasAnyAgentCompleted);
 
-  // The one gentle nudge: open the quiet pill ONCE, but only AFTER the first agent
-  // actually finishes, so it never pops mid-run. Respects a panel they've hidden or
-  // already expanded themselves, and never re-fires (revealedAfterWin sticks).
+  // The one gentle nudge: open the quiet pill ONCE, but only AFTER the first agent actually finishes, so it never pops mid-run. Respects a panel they've hidden or already expanded themselves, and never re-fires (revealedAfterWin sticks).
   useEffect(() => {
     if (!progress.initialized || !firstAgentDone) return;
     if (progress.revealedAfterWin || progress.panelMode !== 'pill') return;
@@ -50,20 +48,14 @@ const OnboardingRoot: React.FC = () => {
     dispatch,
   ]);
 
-  // The welcome chat IS the user launching their first agent, so once it finishes, mark
-  // launch_agent done. Without this the post-win nudge repeats "Launch your first Agent" they
-  // just did: the skipIf baseline-capture re-arms on every completedSteps change and tends to
-  // snapshot the real send as "pre-existing", which freezes the step as un-completable.
+  // The welcome chat IS the user launching their first agent, so once it finishes, mark launch_agent done. Without this the post-win nudge repeats "Launch your first Agent" they just did: the skipIf baseline-capture re-arms on every completedSteps change and tends to snapshot the real send as "pre-existing", which freezes the step as un-completable.
   useEffect(() => {
     if (!progress.initialized || !firstAgentDone) return;
     if ((progress.completedSteps ?? []).includes('launch_agent')) return;
     dispatch(markStepCompleted('launch_agent'));
   }, [firstAgentDone, progress.initialized, progress.completedSteps, dispatch]);
 
-  // First run: the cursor pops into existence, pauses, then moves to and clicks the New Agent
-  // button (welcome_open step) which spawns the welcome chat. Fires once, only on the dashboard
-  // with a way to run and nothing launched yet. Fail-safe: if the cursor can't run, a manual
-  // New Agent click spawns the same welcome chat (handleNewAgent is welcome-aware).
+  // First run: the cursor pops into existence, pauses, then moves to and clicks the New Agent button (welcome_open step) which spawns the welcome chat. Fires once, only on the dashboard with a way to run and nothing launched yet. Fail-safe: if the cursor can't run, a manual New Agent click spawns the same welcome chat (handleNewAgent is welcome-aware).
   const welcomeOpenReady = useAppSelector(
     (s) =>
       s.settings.loaded &&

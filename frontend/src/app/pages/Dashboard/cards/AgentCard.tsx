@@ -260,12 +260,7 @@ const HANDLE_DEFS: { dir: ResizeDir; sx: Record<string, any> }[] = [
 interface OuterProps {
   sessionId: string;
   expanded: boolean;
-  // Stable getter , cards read pan/zoom on demand (drag math) instead of
-  // receiving them as props. Without this, every wheel/pan tick on the
-  // canvas re-rendered every card, even though the canvas root's CSS
-  // transform is what actually moves them visually. Cards only need the
-  // values inside drag callbacks; making it a ref-backed getter keeps
-  // pan/zoom out of memo equality entirely.
+  // Stable getter, cards read pan/zoom on demand (drag math) instead of receiving them as props. Without this, every wheel/pan tick on the canvas re-rendered every card, even though the canvas root's CSS transform is what actually moves them visually. Cards only need the values inside drag callbacks; making it a ref-backed getter keeps pan/zoom out of memo equality entirely.
   getCanvasState: () => { panX: number; panY: number; zoom: number };
   spawnFrom?: { x: number; y: number; type?: 'branch' };
   exitTarget?: { x: number; y: number };
@@ -319,12 +314,7 @@ const AgentCard: React.FC<Props> = ({
   const modelsByProvider = useAppSelector((s) => s.models.byProvider);
   const expandedSessionIds = useAppSelector((s) => s.agents.expandedSessionIds);
   const workflowSuggestion = useMemo(() => findWorkflowSuggestion(session), [session]);
-  // Suppress the convert-suggestion glow when this chat is already entangled
-  // with a workflow. Two cases:
-  //  (a) The session is one of a workflow's runner sessions, OR
-  //  (b) The session is the source the workflow was originally derived
-  //      from. Either way a fresh convert would just clone the workflow,
-  //      which is confusing identity collapse.
+  // Suppress the convert-suggestion glow when this chat is already entangled with a workflow. Two cases: (a) The session is one of a workflow's runner sessions, OR (b) The session is the source the workflow was originally derived from. Either way a fresh convert would just clone the workflow, which is confusing identity collapse.
   const workflowRunsMap = useAppSelector((s) => s.workflows.runs);
   const workflowItems = useAppSelector((s) => s.workflows.items);
   const linkedWorkflowSidecarId = useAppSelector((s) => {
@@ -338,8 +328,7 @@ const AgentCard: React.FC<Props> = ({
     return null;
   }, [workflowItems, session.id]);
   const isWorkflowRunnerSession = useMemo(() => {
-    // A Test Agent (spawned to validate a workflow draft) isn't a chat to
-    // convert; it carries workflow_test_state.
+    // A Test Agent (spawned to validate a workflow draft) isn't a chat to convert; it carries workflow_test_state.
     if (session.workflow_test_state) return true;
     for (const arr of Object.values(workflowRunsMap || {})) {
       for (const r of arr || []) {
@@ -390,9 +379,7 @@ const AgentCard: React.FC<Props> = ({
     dispatch(fadeGlowingAgentCard(session.id));
   }, [workflowSuggestion, canConvertToWorkflow, dispatch, session.id]);
 
-  // When the agent schedules a workflow from this chat, open it in the
-  // Workflows app. Baseline the count once on mount so historical schedules
-  // (e.g. after an app reload) don't re-open on their own.
+  // When the agent schedules a workflow from this chat, open it in the Workflows app. Baseline the count once on mount so historical schedules (e.g. after an app reload) don't re-open on their own.
   const scheduleWorkflowCount = useMemo(() => countScheduleWorkflowCalls(session), [session]);
   const baselineScheduleCountRef = useRef<number | null>(null);
   const autoOpenedWorkflowIdsRef = useRef<Set<string>>(new Set());
@@ -420,8 +407,7 @@ const AgentCard: React.FC<Props> = ({
     // Stash height during pan/drag/zoom; flush on gesture end so layout reconciles.
     let suppressedHeight: number | null = null;
     const ro = new ResizeObserver((entries) => {
-      // Short-circuit when dashboard is hidden , observer stays attached so
-      // the next resize after returning to the dashboard fires correctly.
+      // Short-circuit when dashboard is hidden, observer stays attached so the next resize after returning to the dashboard fires correctly.
       if (!isDashboardActiveRef.current) return;
       // Re-measuring per streamed character mid-pan was forcing Dashboard re-renders via setMeasuredHeightsTick.
       if (isCanvasInteractionActive()) {
@@ -733,10 +719,7 @@ const AgentCard: React.FC<Props> = ({
       }}
       sx={{
         position: 'relative',
-        // contain: streaming chat updates inside don't reflow the dashboard.
-        // Skipping `paint` here because the highlighted/selected/glow
-        // boxShadows legitimately extend past the card border , `paint`
-        // containment would clip those visuals.
+        // contain: streaming chat updates inside don't reflow the dashboard. Skipping `paint` here because the highlighted/selected/glow boxShadows legitimately extend past the card border, `paint` containment would clip those visuals.
         contain: 'layout style',
         // Each card gets its own compositor layer; hover-cross used to cost 100-200ms PRESENTATION by re-painting the whole canvas.
         willChange: 'transform',

@@ -89,9 +89,7 @@ export function useArrowNav({
 
   // Compute which directions have neighbors from the focused card
   const neighborDirections = useMemo(() => {
-    // Lowered the zoom floor from 0.9 to 0.4 so arrow nav still works
-    // when users zoom out to see the whole canvas. Below 0.4 the cards
-    // are too small to be a useful navigation target.
+    // Lowered the zoom floor from 0.9 to 0.4 so arrow nav still works when users zoom out to see the whole canvas. Below 0.4 the cards are too small to be a useful navigation target.
     if (!focusedCardId || zoom < 0.4) return { left: false, right: false, up: false, down: false };
     return {
       left: !!findNearestCard(focusedCardId, 'left'),
@@ -112,19 +110,14 @@ export function useArrowNav({
   canvasZoomRef.current = zoom;
 
   useEffect(() => {
-    // Helper: is the currently-focused element a text-entry field the
-    // user is actively editing? We only want to suppress dashboard
-    // navigation when the user is genuinely typing, not just because an
-    // input somewhere happens to have focus from a click long ago.
+    // Helper: is the currently-focused element a text-entry field the user is actively editing? We only want to suppress dashboard navigation when the user is genuinely typing, not just because an input somewhere happens to have focus from a click long ago.
     const isActivelyEditing = (target: EventTarget | null): boolean => {
       const el = (target as HTMLElement) || (document.activeElement as HTMLElement | null);
       if (!el) return false;
       const tag = el.tagName;
       const editable = (el as any).isContentEditable;
       if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !editable) return false;
-      // Only suppress when the input actually has content to navigate
-      // within. An empty input doesn't need arrow keys for cursor
-      // movement, so we can safely repurpose arrows for dashboard nav.
+      // Only suppress when the input actually has content to navigate within. An empty input doesn't need arrow keys for cursor movement, so we can safely repurpose arrows for dashboard nav.
       const val = (el as HTMLInputElement | HTMLTextAreaElement).value;
       if (typeof val === 'string' && val.length === 0) return false;
       if (editable && (el.textContent ?? '').length === 0) return false;
@@ -134,8 +127,7 @@ export function useArrowNav({
     const handleKey = (e: KeyboardEvent) => {
       if (!isActive) return;  // Don't fire shortcuts when dashboard is hidden
 
-      // Escape blurs any active input and restores focus to the canvas ,
-      // so you can quickly "unstick" keyboard focus and start navigating.
+      // Escape blurs any active input and restores focus to the canvas, so you can quickly "unstick" keyboard focus and start navigating.
       if (e.key === 'Escape') {
         const active = document.activeElement as HTMLElement | null;
         const tag = active?.tagName;
@@ -160,8 +152,7 @@ export function useArrowNav({
       // Lowered zoom floor from 0.9 → 0.4 so nav still works zoomed out
       if (canvasZoomRef.current < 0.4) return;
 
-      // If no card is focused, pick the front-most one as a fallback so
-      // nav works after the user clicked on empty canvas.
+      // If no card is focused, pick the front-most one as a fallback so nav works after the user clicked on empty canvas.
       let currentFocused = focusedCardIdRef.current;
       if (!currentFocused) {
         const anyCardId = Object.keys(cards)[0] || Object.keys(viewCards)[0] || Object.keys(browserCards)[0];
@@ -174,7 +165,7 @@ export function useArrowNav({
       const target = findNearestCard(currentFocused, direction);
 
       if (!target) {
-        // No card in that direction , shake
+        // No card in that direction, shake
         if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current);
         setShakeDirection(direction);
         shakeTimerRef.current = setTimeout(() => {
@@ -199,9 +190,7 @@ export function useArrowNav({
       }, 100);
     };
 
-    // Capture phase so we beat MUI Menus/Selects that also listen for
-    // arrows. We still bail early on isActivelyEditing, so this doesn't
-    // interfere with typing.
+    // Capture phase so we beat MUI Menus/Selects that also listen for arrows. We still bail early on isActivelyEditing, so this doesn't interfere with typing.
     window.addEventListener('keydown', handleKey, true);
     return () => window.removeEventListener('keydown', handleKey, true);
   }, [findNearestCard, getCardRect, canvasActions, dispatch, isActive, cards, viewCards, browserCards, setFocusedCardId]);

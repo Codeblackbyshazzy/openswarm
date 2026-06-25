@@ -149,8 +149,7 @@ export function useAgentSpawn({
       }
 
       const config: AgentConfig = { name: 'New chat', model, mode, dashboard_id: dashboardId };
-      // Editing an existing app: bind the launch to it so the backend edits in
-      // place instead of seeding a duplicate empty app (App Builder mode only).
+      // Editing an existing app: bind the launch to it so the backend edits in place instead of seeding a duplicate empty app (App Builder mode only).
       if (selectedAppIds?.length) config.selected_app_output_ids = selectedAppIds;
 
       dispatch(
@@ -178,14 +177,7 @@ export function useAgentSpawn({
             if (selectedBrowserIds.length === 1) {
               const bc = store.getState().dashboardLayout.browserCards[selectedBrowserIds[0]];
               if (bc) {
-                // Use placeCard (collision-aware) instead of
-                // setCardPosition (blind setter). The "left of the
-                // browser" anchor is the IDEAL spot , but if it's
-                // already taken by an existing chat (e.g. step 3's
-                // YouTube agent that's still on canvas when step 5
-                // creates a new chat for the same browser), placeCard
-                // cascades to the nearest free cell instead of
-                // stacking on top.
+                // Use placeCard (collision-aware) instead of setCardPosition (blind setter). The "left of the browser" anchor is the IDEAL spot, but if it's already taken by an existing chat (e.g. step 3's YouTube agent that's still on canvas when step 5 creates a new chat for the same browser), placeCard cascades to the nearest free cell instead of stacking on top.
                 dispatch(placeCard({
                   sessionId: realId,
                   x: bc.x - DEFAULT_CARD_W - GRID_GAP * 12,

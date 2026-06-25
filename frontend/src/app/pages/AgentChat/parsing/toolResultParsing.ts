@@ -19,8 +19,7 @@ export function isBashTool(name: string) {
 
 export function getInputSummary(toolName: string, input: any): string {
   try {
-    // Settings tool first: legible change list, secrets masked. Must precede the
-    // generic MCP path (it is an MCP tool) or it renders raw changes JSON.
+    // Settings tool first: legible change list, secrets masked. Must precede the generic MCP path (it is an MCP tool) or it renders raw changes JSON.
     if (isSettingsWriteTool(toolName)) return settingsWriteSummary(input);
     if (isSettingsReadTool(toolName)) return '';
 
@@ -66,8 +65,7 @@ function formatMcpInputDisplay(input: any): string {
 
 export function formatInputDisplay(toolName: string, input: any): string {
   try {
-    // Masked, one-per-line change list instead of raw changes JSON (which would
-    // paint a secret value the agent tried to set).
+    // Masked, one-per-line change list instead of raw changes JSON (which would paint a secret value the agent tried to set).
     if (isSettingsWriteTool(toolName)) return settingsWriteDisplay(input);
     if (isSettingsReadTool(toolName)) return '';
 

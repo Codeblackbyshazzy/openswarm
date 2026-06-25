@@ -84,9 +84,7 @@ interface OutputsState {
   items: Record<string, Output>;
   loading: boolean;
   loaded: boolean;
-  // Bumped per app whenever a version is captured (auto after a build, or manual).
-  // Lets an already-open History panel know to refetch without polling or timing
-  // guesses: the editor and the panel are siblings, so this is their only shared signal.
+  // Bumped per app whenever a version is captured (auto after a build, or manual). Lets an already-open History panel know to refetch without polling or timing guesses: the editor and the panel are siblings, so this is their only shared signal.
   captureSignal: Record<string, number>;
 }
 

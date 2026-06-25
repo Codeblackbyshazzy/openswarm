@@ -1,9 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useWC } from './uiKit';
 
-// Combobox for the run limit: pick a preset OR type any count. Self-rendered
-// (no native <select>, no portal) because a native popup over the canvas card
-// is a separate compositor layer and gets dismissed before you can click it.
+// Combobox for the run limit: pick a preset OR type any count. Self-rendered (no native <select>, no portal) because a native popup over the canvas card is a separate compositor layer and gets dismissed before you can click it.
 const OPTIONS: Array<{ label: string; val: number | null }> = [
   { label: 'Forever', val: null },
   { label: 'Once', val: 1 },

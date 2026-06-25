@@ -149,16 +149,12 @@ const RichPromptEditor: React.FC<RichPromptEditorProps> = ({
     if (result) {
       setPicker(result);
     } else {
-      // See ChatInput: bail when already hidden to avoid a per-keystroke
-      // re-render of the whole editor on every keypress.
+      // See ChatInput: bail when already hidden to avoid a per-keystroke re-render of the whole editor on every keypress.
       setPicker((p) => p.visible ? { ...p, visible: false } : p);
     }
   }, []);
 
-  // See ChatInput.handleInput: paste skips the heavy DOM scans that
-  // paste can't invalidate (never adds skill pills, never starts a
-  // slash/at trigger). emitChange still runs because Modes settings
-  // is controlled and the parent needs the new value.
+  // See ChatInput.handleInput: paste skips the heavy DOM scans that paste can't invalidate (never adds skill pills, never starts a slash/at trigger). emitChange still runs because Modes settings is controlled and the parent needs the new value.
   const justPastedRef = useRef(false);
 
   const handleInput = useCallback(() => {

@@ -124,8 +124,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           display: 'flex',
           alignItems: 'center',
           gap: 0.75,
-          // macOS-toolbar vibrancy: a faint translucent material + blur so the
-          // title stays legible over the dot grid without a hard box.
+          // macOS-toolbar vibrancy: a faint translucent material + blur so the title stays legible over the dot grid without a hard box.
           bgcolor: expanded ? c.bg.surface : `${c.bg.surface}40`,
           backdropFilter: 'blur(16px) saturate(180%)',
           WebkitBackdropFilter: 'blur(16px) saturate(180%)',
@@ -170,9 +169,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               target={{ kind: 'dashboard', id: dashboardId, name: dashboardName || 'Dashboard' }}
               iconFontSize={15}
               onOpen={() => {
-                // Layout saves are debounced, so a just-added app/agent card may
-                // not be on disk yet. The export reads disk, flush the live
-                // layout now so Share captures the current board, not a stale one.
+                // Layout saves are debounced, so a just-added app/agent card may not be on disk yet. The export reads disk, flush the live layout now so Share captures the current board, not a stale one.
                 if (!dashboardId) return;
                 dispatch(saveLayout({ dashboardId, cards, viewCards, browserCards, workflowCards, workflowsHub, notes, expandedSessionIds }));
               }}

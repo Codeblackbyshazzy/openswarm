@@ -41,17 +41,7 @@ export const store = configureStore({
     missedRuns: missedRunsReducer,
     onboardingProgress: onboardingProgressReducer,
   },
-  // Disable Redux Toolkit's dev-mode invariant middleware (serializable +
-  // immutable checks). These deep-walk the entire state on every dispatch,
-  // and our state is large enough to trigger 30-50ms pauses on hot paths
-  // (agent streaming, websocket heartbeats, settings sync). Console warns
-  // "SerializableStateInvariantMiddleware took 41ms" repeatedly under load.
-  //
-  // Production builds skip these middlewares anyway, so disabling them in
-  // dev makes dev behavior match prod , no surprises at packaging time.
-  // Trade-off: serializability bugs (e.g. accidentally putting a Map or
-  // Date directly into state) won't be caught at dev time. We've shipped
-  // many versions with stable slice shapes; that risk is now low.
+  // Disable Redux Toolkit's dev-mode invariant middleware (serializable + immutable checks). These deep-walk the entire state on every dispatch, and our state is large enough to trigger 30-50ms pauses on hot paths (agent streaming, websocket heartbeats, settings sync). Console warns "SerializableStateInvariantMiddleware took 41ms" repeatedly under load. Production builds skip these middlewares anyway, so disabling them in dev makes dev behavior match prod, no surprises at packaging time. Trade-off: serializability bugs (e.g. accidentally putting a Map or Date directly into state) won't be caught at dev time. We've shipped many versions with stable slice shapes; that risk is now low.
   middleware: (getDefault) =>
     getDefault({
       serializableCheck: false,
@@ -62,10 +52,7 @@ export const store = configureStore({
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
 
-// Expose the store on window in dev. In production it stays hidden UNLESS the
-// renderer was launched with __OPENSWARM_E2E__ pre-set by a Playwright init
-// script, which is the only way the e2e visibility recorder can subscribe to
-// state diffs against the packaged build. Normal user runs never set the flag.
+// Expose the store on window in dev. In production it stays hidden UNLESS the renderer was launched with __OPENSWARM_E2E__ pre-set by a Playwright init script, which is the only way the e2e visibility recorder can subscribe to state diffs against the packaged build. Normal user runs never set the flag.
 if (typeof window !== 'undefined' && (process.env.NODE_ENV !== 'production' || (window as unknown as { __OPENSWARM_E2E__?: boolean }).__OPENSWARM_E2E__ === true)) {
   (window as unknown as { __OPENSWARM_STORE__?: typeof store }).__OPENSWARM_STORE__ = store;
 }

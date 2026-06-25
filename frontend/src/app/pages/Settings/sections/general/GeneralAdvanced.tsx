@@ -24,9 +24,7 @@ const GeneralAdvanced: React.FC<{
   const appVersion = useAppSelector((s) => s.update.appVersion);
   const { sectionSx, rowSx, inlineRowSx, inlineRowLastSx, labelSx, descSx } = styles;
 
-  // Provenance: the exact commit this build was cut from. Surfaced so a support
-  // screenshot of Settings is enough to identify the shipped code. Empty in dev
-  // / web (no Electron bridge or unknown sha), in which case we hide the row.
+  // Provenance: the exact commit this build was cut from. Surfaced so a support screenshot of Settings is enough to identify the shipped code. Empty in dev / web (no Electron bridge or unknown sha), in which case we hide the row.
   const [buildLabel, setBuildLabel] = React.useState<string | null>(null);
   React.useEffect(() => {
     const api = (window as { openswarm?: { getBuildInfo?: () => Promise<{ shortSha: string; channel: string }> } }).openswarm;
@@ -118,9 +116,7 @@ const GeneralAdvanced: React.FC<{
             dispatch(resetTour());
             dispatch(closeSettingsModal());
             onboardingBus.emit('settings:closed');
-            // In-place reset can't re-arm the welcome cursor's once-per-mount
-            // guard, so the tour never re-fired without a reload; reload from the
-            // now-cleared storage is the reliable restart (matches the workaround).
+            // In-place reset can't re-arm the welcome cursor's once-per-mount guard, so the tour never re-fired without a reload; reload from the now-cleared storage is the reliable restart (matches the workaround).
             window.location.reload();
           }}
           sx={{

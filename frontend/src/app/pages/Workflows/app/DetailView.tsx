@@ -26,8 +26,7 @@ const DetailView: React.FC<{ workflowId: string; nav: AppNav }> = ({ workflowId 
   const sessionId = useEditAgentSession(workflowId);
   const detailRuns = useAppSelector((s) => s.workflows.runs[workflowId]);
   const runContext = useAppSelector((s) => s.dashboardLayout.workflowsRunContext);
-  // When you Run now from this chat, attach that run as a context chip once it
-  // finishes, so the next question rides on its transcript (removable, no popup).
+  // When you Run now from this chat, attach that run as a context chip once it finishes, so the next question rides on its transcript (removable, no popup).
   const autoCtxRunId = useRef<string | null>(null);
 
   useEffect(() => {

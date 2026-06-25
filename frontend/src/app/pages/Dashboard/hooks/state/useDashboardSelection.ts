@@ -71,8 +71,7 @@ export function useDashboardSelection(
 
   const deselectAll = useCallback(() => setSelectedIds(new Map()), []);
 
-  // Cmd/Ctrl+A: select every card on the canvas so the user can wipe the
-  // board in one keystroke. Mirrors the per-type id keys the marquee uses.
+  // Cmd/Ctrl+A: select every card on the canvas so the user can wipe the board in one keystroke. Mirrors the per-type id keys the marquee uses.
   const selectAll = useCallback(() => {
     const next = new Map<string, CardType>();
     for (const card of Object.values(cards)) next.set(card.session_id, 'agent');
@@ -282,14 +281,7 @@ export function useDashboardSelection(
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [deselectAll]);
 
-  // Inject (once) a global CSS rule that makes browser webviews and iframes
-  // transparent to mouse events while a marquee drag is active. Without this,
-  // the Electron <webview> hit-tests the cursor at the OS level , when the
-  // cursor lands on an interactable element inside the browser (button,
-  // link, text), the webview steals the cursor and the marquee drag visually
-  // freezes until the cursor escapes. Setting `pointer-events: none` makes
-  // the cursor pass straight through, so the dashboard's mousemove handler
-  // continues to fire and the marquee keeps growing smoothly.
+  // Inject (once) a global CSS rule that makes browser webviews and iframes transparent to mouse events while a marquee drag is active. Without this, the Electron <webview> hit-tests the cursor at the OS level, when the cursor lands on an interactable element inside the browser (button, link, text), the webview steals the cursor and the marquee drag visually freezes until the cursor escapes. Setting `pointer-events: none` makes the cursor pass straight through, so the dashboard's mousemove handler continues to fire and the marquee keeps growing smoothly.
   useEffect(() => {
     const id = 'dashboard-marquee-style';
     if (document.getElementById(id)) return;

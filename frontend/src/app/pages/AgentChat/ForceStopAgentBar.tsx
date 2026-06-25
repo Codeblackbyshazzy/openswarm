@@ -1,8 +1,4 @@
-// Footer for an agent card that's a workflow sidecar (Test Agent, or a
-// watched run). It replaces the normal composer: while the agent runs you
-// can't meaningfully chat, but you often want to kill it. Once a Test Agent
-// finishes, the red "Force Stop" becomes the decision point: keep editing the
-// workflow, or save the edits (which commits the draft and closes this card).
+// Footer for an agent card that's a workflow sidecar (Test Agent, or a watched run). It replaces the normal composer: while the agent runs you can't meaningfully chat, but you often want to kill it. Once a Test Agent finishes, the red "Force Stop" becomes the decision point: keep editing the workflow, or save the edits (which commits the draft and closes this card).
 
 import React from 'react';
 import Box from '@mui/material/Box';
@@ -15,8 +11,7 @@ interface Props {
   onStop: () => void;
   onSaveWorkflow: () => void;
   onContinueEditing: () => void;
-  // 'running' while a test drives the steps; 'complete'/'error' when done.
-  // null for a watched (non-test) run, which only ever offers Force Stop.
+  // 'running' while a test drives the steps; 'complete'/'error' when done. null for a watched (non-test) run, which only ever offers Force Stop.
   testState?: 'running' | 'complete' | 'error' | null;
 }
 

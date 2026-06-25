@@ -197,11 +197,7 @@ function runAuthCodeFlow(ctx: ConnectCtx) {
       try { body = await r.json(); } catch {}
       succeeded = r.ok && !!body?.success;
     } catch {}
-    // /providers lags /exchange by a few seconds, so confirm an actually-active
-    // node within a short window instead of trusting bare HTTP success. A handoff
-    // that returns success but never lands a usable node must NOT show "Connected"
-    // (that was the card-says-connected-but-every-run-fails bug); it resets so the
-    // user sees Connect/retry.
+    // /providers lags /exchange by a few seconds, so confirm an actually-active node within a short window instead of trusting bare HTTP success. A handoff that returns success but never lands a usable node must NOT show "Connected" (that was the card-says-connected-but-every-run-fails bug); it resets so the user sees Connect/retry.
     let confirmed = false;
     if (succeeded) {
       for (let i = 0; i < 6 && !confirmed; i++) {
@@ -237,9 +233,7 @@ function runAuthCodeFlow(ctx: ConnectCtx) {
     });
   }
 
-  // If the user comes back to openswarm without finishing OAuth (closed the browser, cancelled),
-  // 3s of sustained focus + no active connection means abandoned; clear Connecting so they can retry.
-  // A blur during the wait cancels, so brief tab-backs to check progress don't false-positive.
+  // If the user comes back to openswarm without finishing OAuth (closed the browser, cancelled), 3s of sustained focus + no active connection means abandoned; clear Connecting so they can retry. A blur during the wait cancels, so brief tab-backs to check progress don't false-positive.
   const onBlur = () => {
     if (resetTimer) { clearTimeout(resetTimer); resetTimer = null; }
   };

@@ -1,8 +1,4 @@
-// Onboarding is a playground, not homework: every roadmap step is freely
-// explorable in any order. A linear FEATURE_CHAIN used to gate each step on
-// finishing the one above it (the 🔒 "Finish the step above" teasers); that read
-// as a chore, so the gating is gone and nothing is locked. The exported shapes
-// are kept so the panel/roadmap callers don't change.
+// Onboarding is a playground, not homework: every roadmap step is freely explorable in any order. A linear FEATURE_CHAIN used to gate each step on finishing the one above it (the 🔒 "Finish the step above" teasers); that read as a chore, so the gating is gone and nothing is locked. The exported shapes are kept so the panel/roadmap callers don't change.
 
 import { useMemo } from 'react';
 import type { RootState } from '@/shared/state/store';

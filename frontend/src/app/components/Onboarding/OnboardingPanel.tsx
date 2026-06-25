@@ -65,8 +65,7 @@ const OnboardingPanel: React.FC = () => {
 
   const unlockedIds = useUnlockedStepIds();
   const currentStep = useMemo(() => {
-    // Spotlight only lands on an unlocked, not-yet-done step, so we never tell
-    // the user to "Show me" something they haven't unlocked yet.
+    // Spotlight only lands on an unlocked, not-yet-done step, so we never tell the user to "Show me" something they haven't unlocked yet.
     const explicit = progress.currentStepId
       ? findStepById(progress.currentStepId)
       : null;
@@ -87,10 +86,7 @@ const OnboardingPanel: React.FC = () => {
   // Stage name labels the panel; the count + bar stay global so progress never resets between stages.
   const stageOf = currentStep?.stage ?? 'get_started';
 
-  // Count only what's UNLOCKED, not all 8. A brand-new user sees "0/2" (launch +
-  // connect), and the denominator grows as the first win unlocks the rest, so we
-  // never dump the whole feature surface on someone before their first output.
-  // Guard: never let completed exceed the shown total (data-weirdness safety).
+  // Count only what's UNLOCKED, not all 8. A brand-new user sees "0/2" (launch + connect), and the denominator grows as the first win unlocks the rest, so we never dump the whole feature surface on someone before their first output. Guard: never let completed exceed the shown total (data-weirdness safety).
   const done = progress.completedSteps.length;
   const total = Math.max(unlockedIds.size, done);
 
@@ -135,9 +131,7 @@ const OnboardingPanel: React.FC = () => {
 
   if (!currentStep && !justDoneStep) return null;
   if (progress.panelMode === 'hidden') return null;
-  // Gate it like a game: on first run the tour stays out of the way entirely. The pill only
-  // appears once the user has earned it (their first agent finishes), at which point the
-  // reveal-after-win effect flips the panel to 'expanded' with the next single nudge.
+  // Gate it like a game: on first run the tour stays out of the way entirely. The pill only appears once the user has earned it (their first agent finishes), at which point the reveal-after-win effect flips the panel to 'expanded' with the next single nudge.
   if (progress.panelMode === 'pill' && !firstAgentDone && !progress.revealedAfterWin) return null;
 
   // Slide panel off-screen while AC runs so it doesn't sit on top of top-right targets (Skills install, "+ New app", etc).

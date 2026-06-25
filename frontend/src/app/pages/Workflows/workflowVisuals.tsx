@@ -1,7 +1,4 @@
-// Shared visual helpers for the workflow card UI tier: schedule/permission
-// pill chips, status dot, run-status sparkline, step connector, step icon
-// auto-classifier. Kept as plain functions/components so individual views
-// can compose without owning the styling.
+// Shared visual helpers for the workflow card UI tier: schedule/permission pill chips, status dot, run-status sparkline, step connector, step icon auto-classifier. Kept as plain functions/components so individual views can compose without owning the styling.
 
 import React, { useState } from 'react';
 import Box from '@mui/material/Box';
@@ -33,9 +30,7 @@ import { formatTime, WEEKDAY_LABEL, isScheduleConfigured } from './scheduleUtils
 
 // ---------- Title placeholders ----------
 
-// Placeholder titles the backend uses before auto-naming kicks in. The title
-// Typewriter only animates once the title is a real (generated/user) name, so
-// the UI doesn't animate on mount or while still showing a placeholder.
+// Placeholder titles the backend uses before auto-naming kicks in. The title Typewriter only animates once the title is a real (generated/user) name, so the UI doesn't animate on mount or while still showing a placeholder.
 const PLACEHOLDER_TITLES = new Set(['', 'New workflow', 'Untitled workflow', 'Scheduled workflow']);
 export function isRealTitle(title?: string | null): boolean {
   return !!title && !PLACEHOLDER_TITLES.has(title.trim());
@@ -56,17 +51,14 @@ export function statusDotColor(status: LastRunStatus | null | undefined, c: Retu
   }
 }
 
-// Human-readable status word. We surface "ran late" instead of the
-// underscore-y "ran_late" everywhere it'd be visible to a user.
+// Human-readable status word. We surface "ran late" instead of the underscore-y "ran_late" everywhere it'd be visible to a user.
 export function statusWord(status: LastRunStatus | null | undefined): string {
   if (!status) return 'Never run';
   if (status === 'ran_late') return 'Ran late';
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-// Status pill rendered next to the title. Bigger than the previous 9px
-// dot and pairs the color with a short word so a non-dev knows what
-// they're looking at instead of squinting at a single grey pixel.
+// Status pill rendered next to the title. Bigger than the previous 9px dot and pairs the color with a short word so a non-dev knows what they're looking at instead of squinting at a single grey pixel.
 export function StatusDot({ status }: { status: LastRunStatus | null | undefined }) {
   const c = useClaudeTokens();
   const word = statusWord(status);
@@ -112,9 +104,7 @@ function scheduleShort(sched: ScheduleConfig): string {
   return `${sched.on_days.length}×/wk ${time}`;
 }
 
-// Weekday-dot strip "S M T W T F S" with active days filled. Rendered
-// inline next to the chip when the schedule is weekly so users can
-// pattern-match days without parsing prose. Active = filled accent dot.
+// Weekday-dot strip "S M T W T F S" with active days filled. Rendered inline next to the chip when the schedule is weekly so users can pattern-match days without parsing prose. Active = filled accent dot.
 export function WeekdayDots({ on_days }: { on_days: number[] }) {
   const c = useClaudeTokens();
   return (
@@ -145,8 +135,7 @@ function permIcon(kind: PermissionTier['kind'], size = 13) {
   return <NotificationsIcon sx={{ fontSize: size }} />;
 }
 
-// Compact "🔔 → 💬 → 📞" representation of the escalation chain. Hover
-// shows the literal prose (notify, text, call, with delays).
+// Compact "🔔 → 💬 → 📞" representation of the escalation chain. Hover shows the literal prose (notify, text, call, with delays).
 export function PermissionChip({ workflow }: { workflow: Workflow }) {
   const c = useClaudeTokens();
   const tiers = workflow.permissions || [];
@@ -182,8 +171,7 @@ export function ScheduleChip({ workflow }: { workflow: Workflow }) {
   const dispatch = useAppDispatch();
   const enabled = workflow.schedule.enabled && isScheduleConfigured(workflow.schedule);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  // Inline edit: time + AM/PM only. Anything richer should open the
-  // full editor. Saves on change with optimistic updated_at If-Match.
+  // Inline edit: time + AM/PM only. Anything richer should open the full editor. Saves on change with optimistic updated_at If-Match.
   const sched = workflow.schedule;
   const patchSched = (patch: Partial<typeof sched>) => {
     const next = { ...sched, ...patch };
@@ -273,13 +261,7 @@ export function ScheduleChip({ workflow }: { workflow: Workflow }) {
   );
 }
 
-// Classify a workflow's billing route based on its model id + the user's
-// global connection mode. Mirrors the per-session logic in AgentChat so
-// the workflow card tells the same story the chat header does. Returns
-// 'metered' when the user pays per call (Anthropic/OpenAI/Gemini API
-// keys, custom OpenAI-compatible) or 'subscription' when a flat-rate
-// account is doing the work (Claude Pro/Max, ChatGPT Plus/Pro, Gemini
-// Advanced, OpenSwarm Pro proxy). `subLabel` names the plan for tooltips.
+// Classify a workflow's billing route based on its model id + the user's global connection mode. Mirrors the per-session logic in AgentChat so the workflow card tells the same story the chat header does. Returns 'metered' when the user pays per call (Anthropic/OpenAI/Gemini API keys, custom OpenAI-compatible) or 'subscription' when a flat-rate account is doing the work (Claude Pro/Max, ChatGPT Plus/Pro, Gemini Advanced, OpenSwarm Pro proxy). `subLabel` names the plan for tooltips.
 export type RoutingKind = 'metered' | 'subscription';
 export interface Routing {
   kind: RoutingKind;
@@ -310,9 +292,7 @@ export function CostChip({ workflow, connectionMode }: { workflow: Workflow; con
   const est = workflow.cost_estimate;
   const route = routingFor(workflow.model, connectionMode);
 
-  // Subscription-routed workflows have no metered per-call cost. Surface
-  // a usage chip instead so the user knows runs are "free" under their
-  // existing plan but still sees the projected fire frequency.
+  // Subscription-routed workflows have no metered per-call cost. Surface a usage chip instead so the user knows runs are "free" under their existing plan but still sees the projected fire frequency.
   if (route.kind === 'subscription') {
     if (!est || est.fires_per_month === 0) {
       return (
@@ -334,8 +314,7 @@ export function CostChip({ workflow, connectionMode }: { workflow: Workflow; con
     );
   }
 
-  // Metered route: only render the cost chip once we actually have a
-  // last-run figure to project from. Avoids "$0.00/mo" gaslighting.
+  // Metered route: only render the cost chip once we actually have a last-run figure to project from. Avoids "$0.00/mo" gaslighting.
   if (!est || est.fires_per_month === 0 || est.last_run_usd <= 0) return null;
   const monthly = est.monthly_usd || 0;
   return (
@@ -386,8 +365,7 @@ function relTime(ms: number): string {
 
 // ---------- Run history sparkline ----------
 
-// 10-dot horizontal strip of last N runs colored by status. Easy "lately
-// healthy?" check without opening the History tab.
+// 10-dot horizontal strip of last N runs colored by status. Easy "lately healthy?" check without opening the History tab.
 export function RunSparkline({ runs, max = 10 }: { runs: WorkflowRun[]; max?: number }) {
   const c = useClaudeTokens();
   if (!runs || runs.length === 0) return null;
@@ -411,9 +389,7 @@ export function RunSparkline({ runs, max = 10 }: { runs: WorkflowRun[]; max?: nu
 
 // ---------- Streak badge ----------
 
-// Count consecutive successful runs at the head of the runs list.
-// `runs[0]` is the most recent run, so we walk forward until we hit a
-// non-success. Returns 0 when no streak is active.
+// Count consecutive successful runs at the head of the runs list. `runs[0]` is the most recent run, so we walk forward until we hit a non-success. Returns 0 when no streak is active.
 export function successStreak(runs: WorkflowRun[] | undefined): number {
   if (!runs || runs.length === 0) return 0;
   let n = 0;
@@ -446,10 +422,7 @@ export function StreakBadge({ runs }: { runs: WorkflowRun[] | undefined }) {
 
 // ---------- Step icon auto-classifier ----------
 
-// Pick a glyph by keyword scan of the step text. Falls back to the
-// step number when nothing matches. Same Roman-numeral simple heuristic
-// the user sees: "summarize email" -> mail icon, "make notion page" ->
-// article icon, etc.
+// Pick a glyph by keyword scan of the step text. Falls back to the step number when nothing matches. Same Roman-numeral simple heuristic the user sees: "summarize email" -> mail icon, "make notion page" -> article icon, etc.
 const ICON_RULES: Array<{ pattern: RegExp; Icon: React.ElementType }> = [
   { pattern: /\b(email|inbox|gmail|outlook|mail)\b/i, Icon: EmailIcon },
   { pattern: /\b(calendar|schedule|event|meeting)\b/i, Icon: CalendarTodayIcon },
@@ -473,10 +446,7 @@ export function stepIconFor(text: string): React.ElementType | null {
 
 // ---------- Step duration learner ----------
 
-// Estimates per-step duration by averaging recent runs. Today we only
-// have whole-run duration on each WorkflowRun (started_at -> finished_at),
-// so the heuristic spreads it evenly across the step count. When per-step
-// telemetry lands later, swap this for a per-step lookup.
+// Estimates per-step duration by averaging recent runs. Today we only have whole-run duration on each WorkflowRun (started_at -> finished_at), so the heuristic spreads it evenly across the step count. When per-step telemetry lands later, swap this for a per-step lookup.
 export function estimateStepDuration(workflow: Workflow, runs: WorkflowRun[] | undefined, stepIdx: number): string | null {
   if (!runs || runs.length === 0) return null;
   const steps = workflow.steps?.length || 1;
@@ -504,9 +474,7 @@ export function humanDuration(ms: number): string {
 
 // ---------- Run-button breath logic ----------
 
-// Returns true when the workflow hasn't been run in over 24h. Used by
-// the Run tab to add a subtle CSS breathing animation so the button
-// invites use without yelling.
+// Returns true when the workflow hasn't been run in over 24h. Used by the Run tab to add a subtle CSS breathing animation so the button invites use without yelling.
 export function isStaleSinceLastRun(workflow: Workflow): boolean {
   if (!workflow.last_run_at) return false;
   const age = Date.now() - new Date(workflow.last_run_at).getTime();

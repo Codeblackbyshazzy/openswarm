@@ -1,9 +1,7 @@
 import type { OnboardingStep } from './types';
 import { S } from '../selectors';
 
-// First-run, invisible to the roadmap: the cursor pops into existence (handled by fadeIn, with
-// the orange spark), pauses a beat, then moves to and clicks the New Agent button, which spawns
-// the welcome chat. Static, no LLM. The delays give the pop and the move room to breathe.
+// First-run, invisible to the roadmap: the cursor pops into existence (handled by fadeIn, with the orange spark), pauses a beat, then moves to and clicks the New Agent button, which spawns the welcome chat. Static, no LLM. The delays give the pop and the move room to breathe.
 export const welcomeOpenStep: OnboardingStep = {
   id: 'welcome_open',
   stage: 'get_started',

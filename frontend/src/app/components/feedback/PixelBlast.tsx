@@ -1,9 +1,4 @@
-// Brand-tinted Bayer-dither pixel-blast loading background. Same shader as before, but
-// the WebGL2 context is now a MODULE-LEVEL SINGLETON: created once, the canvas is just
-// reparented into whichever placeholder is mounted, and loseContext() is NEVER called.
-// The old per-mount create+destroy churned GL contexts faster than the GPU could recycle
-// them and killed the renderer under app-switch spam (worst with no chat anchoring the
-// GPU process); one long-lived context keeps the look with zero churn. Same props.
+// Brand-tinted Bayer-dither pixel-blast loading background. Same shader as before, but the WebGL2 context is now a MODULE-LEVEL SINGLETON: created once, the canvas is just reparented into whichever placeholder is mounted, and loseContext() is NEVER called. The old per-mount create+destroy churned GL contexts faster than the GPU could recycle them and killed the renderer under app-switch spam (worst with no chat anchoring the GPU process); one long-lived context keeps the look with zero churn. Same props.
 
 import React, { useEffect, useRef } from 'react';
 

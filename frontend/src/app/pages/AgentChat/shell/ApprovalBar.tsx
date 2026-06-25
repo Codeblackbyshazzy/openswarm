@@ -913,8 +913,7 @@ export const BatchApprovalBar: React.FC<BatchApprovalBarProps> = ({ requests, on
     for (const req of nonQuestions) onApprove(req.id);
   };
 
-  // Persist the choice (4th arg alwaysAllow=true) so these tools stop prompting,
-  // the per-action "Always approve" was buried inside the collapsed group rows.
+  // Persist the choice (4th arg alwaysAllow=true) so these tools stop prompting, the per-action "Always approve" was buried inside the collapsed group rows.
   const handleAlwaysApproveAll = () => {
     for (const req of nonQuestions) onApprove(req.id, undefined, false, true);
   };

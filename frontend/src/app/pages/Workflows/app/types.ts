@@ -1,8 +1,7 @@
 export type AppMode = 'home' | 'calendar' | 'detail' | 'new' | 'trash';
 export type CalView = 'week' | 'month';
 
-// Navigation + ephemeral UI state for the Workflows app window. Data lives in
-// Redux; this is only "where am I looking right now".
+// Navigation + ephemeral UI state for the Workflows app window. Data lives in Redux; this is only "where am I looking right now".
 export interface AppNav {
   mode: AppMode;
   selectedId: string | null;

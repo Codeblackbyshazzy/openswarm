@@ -29,12 +29,7 @@ export function useCardDrag({
 }: UseCardDragArgs) {
   const dispatch = useAppDispatch();
 
-  // Notify the currently dragging card (if any) that pan/zoom changed so
-  // it can re-pin to the cursor. useEffect rather than render-body
-  // dispatchEvent: side effects during render are a React anti-pattern
-  // and can fire twice in strict mode. Effect runs after commit, so
-  // exactly once per real pan/zoom delta. Edge-pan mutates pan via
-  // canvasActions.setState below, so the dispatch lives in the same hook.
+  // Notify the currently dragging card (if any) that pan/zoom changed so it can re-pin to the cursor. useEffect rather than render-body dispatchEvent: side effects during render are a React anti-pattern and can fire twice in strict mode. Effect runs after commit, so exactly once per real pan/zoom delta. Edge-pan mutates pan via canvasActions.setState below, so the dispatch lives in the same hook.
   useEffect(() => {
     window.dispatchEvent(new Event('openswarm:canvas-pan-changed'));
   }, [panX, panY, zoom]);
@@ -135,8 +130,7 @@ export function useCardDrag({
     setLiveDragInfo(null);
   }, [selection, dispatch, stopEdgePan]);
 
-  // dragStartPanRef is kept for parity with the pre-split inline code; it
-  // was wired up for a future edge-pan compensation that never landed.
+  // dragStartPanRef is kept for parity with the pre-split inline code; it was wired up for a future edge-pan compensation that never landed.
   void dragStartPanRef;
 
   return {

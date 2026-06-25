@@ -1,8 +1,5 @@
 const _w = window as any;
-// Prefer the preload-injected port; if it's missing (preload raced the backend
-// port being picked), re-query the live value before falling back to 8324. The
-// bare 8324 guess is wrong on any machine where the backend landed on a fallback
-// port (e.g. 8324 was held by a leftover backend); see the self-heal below.
+// Prefer the preload-injected port; if it's missing (preload raced the backend port being picked), re-query the live value before falling back to 8324. The bare 8324 guess is wrong on any machine where the backend landed on a fallback port (e.g. 8324 was held by a leftover backend); see the self-heal below.
 const port =
   _w.__OPENSWARM_PORT__ ||
   (_w.openswarm && typeof _w.openswarm.getBackendPortLive === 'function'
@@ -35,8 +32,7 @@ export async function refreshAuthToken(): Promise<string> {
     }
     return _authTokenCache;
   }
-  // Dev (split-port, no Electron preload): the backend hands us the token over
-  // localhost. The route 404s in packaged builds, so this only fires under run.sh.
+  // Dev (split-port, no Electron preload): the backend hands us the token over localhost. The route 404s in packaged builds, so this only fires under run.sh.
   try {
     const r = await fetch(`http://${host}:${port}/api/dev/token`);
     if (r.ok) {
@@ -56,10 +52,7 @@ export function ensureAuthToken(): Promise<string> {
   return _authTokenPromise;
 }
 
-// Self-heal: if our backend calls start failing with a network error (the
-// renderer is pinned to a stale/wrong port), re-query the live port and reload
-// once onto it. Guarded to one attempt per page-load and only when the live
-// port actually differs, so a genuinely-down backend can't cause a reload loop.
+// Self-heal: if our backend calls start failing with a network error (the renderer is pinned to a stale/wrong port), re-query the live port and reload once onto it. Guarded to one attempt per page-load and only when the live port actually differs, so a genuinely-down backend can't cause a reload loop.
 let _portHealTried = false;
 function _maybeHealBackendPort(): void {
   if (_portHealTried) return;
@@ -75,8 +68,7 @@ function _maybeHealBackendPort(): void {
   }
 }
 
-// Global fetch interceptor: attaches bearer for our API + dedupes/caches GETs in a 1s window.
-// Cache is keyed `METHOD URL`, GET-only (mutations pass through); non-2xx never cached.
+// Global fetch interceptor: attaches bearer for our API + dedupes/caches GETs in a 1s window. Cache is keyed `METHOD URL`, GET-only (mutations pass through); non-2xx never cached.
 const _inflightFetches = new Map<string, Promise<Response>>();
 const _cachedFetches = new Map<string, { resp: Response; expiresAt: number }>();
 const _GET_CACHE_TTL_MS = 1000;

@@ -1,7 +1,4 @@
-// The reusable top-right Share affordance. Drop it on any modality's surface.
-// 'icon' is the Anthropic-style header icon; 'menuItem' is for a sidebar "..."
-// overflow menu. Click always stops propagation so card/header parents that own
-// their own onClick don't also fire.
+// The reusable top-right Share affordance. Drop it on any modality's surface. 'icon' is the Anthropic-style header icon; 'menuItem' is for a sidebar "..." overflow menu. Click always stops propagation so card/header parents that own their own onClick don't also fire.
 import React, { useState } from 'react';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';

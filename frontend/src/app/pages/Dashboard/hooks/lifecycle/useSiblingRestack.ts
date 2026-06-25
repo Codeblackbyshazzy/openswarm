@@ -71,9 +71,7 @@ export function useSiblingRestack({
         cursor += h + GRID_GAP * 2;
       }
     }
-  // measuredHeightsTick in deps ensures we re-run once ResizeObserver reports
-  // the new height after a collapse (avoids stale-height no-ops)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // measuredHeightsTick in deps ensures we re-run once ResizeObserver reports the new height after a collapse (avoids stale-height no-ops) eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, expandedSessionIds, glowingAgentCards, cards, dispatch, measuredHeightsTick]);
 
   useEffect(() => {

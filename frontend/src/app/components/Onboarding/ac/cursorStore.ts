@@ -33,12 +33,7 @@ export const cursorStore = {
 
     // Visibility transitions bypass coalescing (mounts/unmounts must flush immediately).
     const visibilityChanged = merged.visible !== state.visible;
-    // `instant` flips the Windows CSS-transition mode (snap vs ease). Commit it
-    // immediately, like visibility, so moveTo can arm the eased transition a
-    // paint BEFORE it moves the cursor: a same-position arm write is otherwise
-    // coalesced silently here, so the move and the none->420ms transition flip
-    // land in one recalc and Chromium renders it as an instant jump. No-op on
-    // Mac (the wrapper there is Framer-driven and ignores `instant`).
+    // `instant` flips the Windows CSS-transition mode (snap vs ease). Commit it immediately, like visibility, so moveTo can arm the eased transition a paint BEFORE it moves the cursor: a same-position arm write is otherwise coalesced silently here, so the move and the none->420ms transition flip land in one recalc and Chromium renders it as an instant jump. No-op on Mac (the wrapper there is Framer-driven and ignores `instant`).
     const instantChanged = merged.instant !== state.instant;
     const dx = Math.abs(merged.x - state.x);
     const dy = Math.abs(merged.y - state.y);

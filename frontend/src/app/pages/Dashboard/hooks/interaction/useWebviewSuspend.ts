@@ -12,16 +12,13 @@ import { getActivity } from '@/shared/browserCommandHandler';
 const isElectron = typeof navigator !== 'undefined' && navigator.userAgent.includes('Electron');
 
 const SETTLE_MS = 800;
-// Hysteresis: suspend only well past the edge, resume just past it, so a card
-// sitting on the boundary never flaps between webview and snapshot.
+// Hysteresis: suspend only well past the edge, resume just past it, so a card sitting on the boundary never flaps between webview and snapshot.
 const SUSPEND_MARGIN_PX = 320;
 const RESUME_MARGIN_PX = 96;
 const SNAPSHOT_MAX_W = 1024;
-// Below this on-screen width a live page is indistinguishable from its placeholder,
-// so booted-parked cards on a zoomed-out canvas stay parked until zoomed into.
+// Below this on-screen width a live page is indistinguishable from its placeholder, so booted-parked cards on a zoomed-out canvas stay parked until zoomed into.
 const RESUME_MIN_CARD_PX = 220;
-// Hard ceiling on simultaneous live webviews; past it the farthest-from-center
-// non-agent card gets parked, so heavy pages degrade gracefully instead of OOMing.
+// Hard ceiling on simultaneous live webviews; past it the farthest-from-center non-agent card gets parked, so heavy pages degrade gracefully instead of OOMing.
 const MAX_LIVE_WEBVIEWS = 8;
 
 interface Viewport {
@@ -74,8 +71,7 @@ export function useWebviewSuspend(
   const suspended = useAppSelector((s) => s.dashboardLayout.suspendedBrowserCards);
   const vpRef = useRef<Viewport>({ panX, panY, zoom, vpW: 1200, vpH: 800 });
 
-  // Window resize changes the viewport without touching pan/zoom/cards; tick so
-  // the evaluation below reruns, or a shrunken window never suspends anything.
+  // Window resize changes the viewport without touching pan/zoom/cards; tick so the evaluation below reruns, or a shrunken window never suspends anything.
   const [resizeTick, setResizeTick] = useState(0);
   useEffect(() => {
     if (!isElectron) return;

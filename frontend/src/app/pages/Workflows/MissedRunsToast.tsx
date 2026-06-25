@@ -1,6 +1,4 @@
-// Bottom-left nudge shown on launch when scheduled runs elapsed while the app
-// was closed. It stays put until the user acts (no auto-hide): Review opens the
-// Workflows app (its Home surfaces the missed runs); the X dismisses it.
+// Bottom-left nudge shown on launch when scheduled runs elapsed while the app was closed. It stays put until the user acts (no auto-hide): Review opens the Workflows app (its Home surfaces the missed runs); the X dismisses it.
 
 import React from 'react';
 import Snackbar from '@mui/material/Snackbar';

@@ -67,10 +67,7 @@ interface Props {
   onBringToFront?: (id: string, type: 'agent' | 'view' | 'browser') => void;
 }
 
-// The app card's loading state while its runtime spins up. One soft pulse, calm
-// copy, and an honest hint only after 9s, a freshly-imported app installs its
-// deps on first open, which is the slow case worth explaining instead of leaving
-// the user staring at a dead screen.
+// The app card's loading state while its runtime spins up. One soft pulse, calm copy, and an honest hint only after 9s, a freshly-imported app installs its deps on first open, which is the slow case worth explaining instead of leaving the user staring at a dead screen.
 const BootingBody: React.FC = () => {
   const c = useClaudeTokens();
   const [slow, setSlow] = useState(false);
@@ -135,10 +132,7 @@ const DashboardViewCard: React.FC<Props> = ({
   const [inputData] = useState<Record<string, any>>(() => getDefault(output.input_schema));
   const [backendResult] = useState<Record<string, any> | null>(null);
 
-  // Reload the preview when the session finishes a turn: React holds the
-  // ErrorBoundary's snag page until a reload, so without this the user keeps
-  // seeing the old error even after the agent fixed it. The overlay lingers
-  // through the reload (finishing) so the stale page never flashes.
+  // Reload the preview when the session finishes a turn: React holds the ErrorBoundary's snag page until a reload, so without this the user keeps seeing the old error even after the agent fixed it. The overlay lingers through the reload (finishing) so the stale page never flashes.
   const linkedStatus = useAppSelector(
     (s) => (output.session_id ? s.agents.sessions[output.session_id]?.status : undefined),
   );
@@ -568,10 +562,7 @@ const DashboardViewCard: React.FC<Props> = ({
 
 export default React.memo(DashboardViewCard);
 
-// Calm overlay shown while the App Builder chat that owns this output is
-// actively editing it (and through the post-turn reload). Hides whatever
-// transient half-broken state the agent might be writing through so the
-// user sees "Building..." instead of an error iframe. Fades in/out.
+// Calm overlay shown while the App Builder chat that owns this output is actively editing it (and through the post-turn reload). Hides whatever transient half-broken state the agent might be writing through so the user sees "Building..." instead of an error iframe. Fades in/out.
 const BuildingOverlay: React.FC<{ show: boolean }> = ({ show }) => {
   const c = useClaudeTokens();
   return (
@@ -634,9 +625,7 @@ const DashboardOutputPreview: React.FC<{
     isNewMode,
   });
 
-  // Declared above every early-return below so React's hook order stays
-  // stable; moving it below would trigger "Rendered more hooks than during
-  // the previous render."
+  // Declared above every early-return below so React's hook order stays stable; moving it below would trigger "Rendered more hooks than during the previous render."
   const handleConsoleMessage = useCallback((level: string, text: string) => {
     if (!text || !workspaceId) return;
     const tok = getAuthToken();
@@ -661,8 +650,7 @@ const DashboardOutputPreview: React.FC<{
     }).catch(() => {});
   }, [workspaceId]);
 
-  // An orphaned record (files deleted on disk) used to render the raw 404 JSON
-  // inside the card, or spin on "Starting preview" forever; probe once instead.
+  // An orphaned record (files deleted on disk) used to render the raw 404 JSON inside the card, or spin on "Starting preview" forever; probe once instead.
   const [filesMissing, setFilesMissing] = useState(false);
   useEffect(() => {
     let cancelled = false;

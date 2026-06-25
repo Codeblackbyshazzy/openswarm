@@ -30,9 +30,7 @@ interface Props {
 export const ModeControl: React.FC<Props> = ({
   c, menuPaperProps, modeConf, modesArr, mode, onModeChange, iconMap, modeAnchor, setModeAnchor, setModelAnchor, allModelFlat, model,
 }) => {
-  // On the free trial the model is fixed server-side, so there's nothing to pick: hide the
-  // model control. The moment a real model is connected we show it again, even if trial state
-  // lingers (gate on !hasModelConnected, not just the trial flag).
+  // On the free trial the model is fixed server-side, so there's nothing to pick: hide the model control. The moment a real model is connected we show it again, even if trial state lingers (gate on !hasModelConnected, not just the trial flag).
   const hideModelPicker = useAppSelector((s) => hasFreeTrialActive(s) && !hasModelConnected(s));
   return (
     <>

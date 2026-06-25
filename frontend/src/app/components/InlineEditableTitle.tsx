@@ -10,19 +10,14 @@ interface Props {
   value: string;
   // Called with the trimmed new title only when it actually changed.
   onCommit: (next: string) => void;
-  // Layout + text styling shared by the read-only text and the input so the
-  // two states line up (pass flex/font/color here).
+  // Layout + text styling shared by the read-only text and the input so the two states line up (pass flex/font/color here).
   sx?: SxProps<Theme>;
   placeholder?: string;
-  // Optional custom display node (e.g. the chat card's Typewriter); falls
-  // back to a plain Typography of `value` when omitted.
+  // Optional custom display node (e.g. the chat card's Typewriter); falls back to a plain Typography of `value` when omitted.
   children?: React.ReactNode;
 }
 
-// Click-to-rename title. Reads as plain text until clicked, then becomes an
-// inline input that commits on Enter/blur and cancels on Escape. Lives on
-// pointer-drag card headers, so it stops pointer propagation (+ data-no-drag)
-// to avoid starting a card drag while editing.
+// Click-to-rename title. Reads as plain text until clicked, then becomes an inline input that commits on Enter/blur and cancels on Escape. Lives on pointer-drag card headers, so it stops pointer propagation (+ data-no-drag) to avoid starting a card drag while editing.
 export default function InlineEditableTitle({ value, onCommit, sx, placeholder, children }: Props) {
   const c = useClaudeTokens();
   const [editing, setEditing] = useState(false);
@@ -97,9 +92,7 @@ export default function InlineEditableTitle({ value, onCommit, sx, placeholder, 
   return (
     <Box
       onClick={begin}
-      // Card headers drag via onPointerDown + preventDefault, which otherwise
-      // swallows this click. Stop the pointer here so the click reaches us and
-      // enters edit mode (same trick the draft-title InputBase uses).
+      // Card headers drag via onPointerDown + preventDefault, which otherwise swallows this click. Stop the pointer here so the click reaches us and enters edit mode (same trick the draft-title InputBase uses).
       onPointerDown={(e) => e.stopPropagation()}
       title="Click to rename"
       sx={{

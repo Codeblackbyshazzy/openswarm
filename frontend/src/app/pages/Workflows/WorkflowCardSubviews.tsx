@@ -66,10 +66,7 @@ type ActionBtnTone = 'muted' | 'success' | 'danger';
 
 export function ActionBtn({ label, tone, disabled, onClick, icon }: { label: string; tone: ActionBtnTone; disabled?: boolean; onClick: () => void; icon?: 'trash' | 'check' }) {
   const c = useClaudeTokens();
-  // Tone -> color triple. Matches target #58/#63 styling:
-  //   success  = green pill (Save)
-  //   danger   = red/pink pill (Discard)
-  //   muted    = neutral pill (Undo)
+  // Tone -> color triple. Matches target #58/#63 styling: success  = green pill (Save) danger   = red/pink pill (Discard) muted    = neutral pill (Undo)
   const palette = tone === 'success'
     ? { color: c.status.success, bg: c.status.successBg, border: c.status.success + '60', hover: c.status.success + '30' }
     : tone === 'danger'
@@ -80,8 +77,7 @@ export function ActionBtn({ label, tone, disabled, onClick, icon }: { label: str
       onClick={disabled ? undefined : onClick}
       role="button"
       sx={{
-        // Compact pill matching target #58/#63. Smaller padding + smaller
-        // glyphs so the buttons stop overshadowing the step body.
+        // Compact pill matching target #58/#63. Smaller padding + smaller glyphs so the buttons stop overshadowing the step body.
         display: 'inline-flex', alignItems: 'center', gap: 0.4,
         fontSize: '0.78rem', fontWeight: 600,
         px: 1, py: 0.35,
@@ -117,25 +113,16 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
   const dispatch = useAppDispatch();
   const [busy, setBusy] = useState(false);
   const [savePromptOpen, setSavePromptOpen] = useState(false);
-  // Title + description live in the openCard draft so the parent header
-  // (which renders the inline-editable title) and PreviewView body (which
-  // renders the inline-editable description + steps) stay in sync. On
-  // Save we pull whatever's currently in the draft, falling back to the
-  // initialDraft passed at mount time.
+  // Title + description live in the openCard draft so the parent header (which renders the inline-editable title) and PreviewView body (which renders the inline-editable description + steps) stay in sync. On Save we pull whatever's currently in the draft, falling back to the initialDraft passed at mount time.
   const card = useAppSelector((s) => s.workflows.openCards[workflowId]);
   const liveDraft = (card?.draft ?? initialDraft ?? {}) as Partial<Workflow>;
   const title = (liveDraft.title as string) || 'New workflow';
   const description = (liveDraft.description as string) || '';
   const canSave = steps.some((s) => (s.text || '').trim().length > 0);
-  // The new workflow runs with the user's configured default model/mode (their
-  // subscription, etc.), falling back to whatever the source chat used. Without
-  // this the backend picks its own default, which surprised users who'd set a
-  // subscription default but saw the workflow created on an API-key model.
+  // The new workflow runs with the user's configured default model/mode (their subscription, etc.), falling back to whatever the source chat used. Without this the backend picks its own default, which surprised users who'd set a subscription default but saw the workflow created on an API-key model.
   const defaultModel = useAppSelector((s) => s.settings.data.default_model);
   const defaultMode = useAppSelector((s) => s.settings.data.default_mode);
-  // Steps render compact (label + chevron, capped + "... N more"), same as
-  // the saved card. The raw prompt drills down on click. Keeping them short
-  // is what leaves room for the schedule prompt + buttons to stay on-card.
+  // Steps render compact (label + chevron, capped + "... N more"), same as the saved card. The raw prompt drills down on click. Keeping them short is what leaves room for the schedule prompt + buttons to stay on-card.
   const expandedIds = card?.expandedStepIds || [];
   const onToggleStep = useCallback((stepId: string) => {
     dispatch(toggleExpandedStep({ workflowId, stepId }));
@@ -173,12 +160,10 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
       metadata_generated: card?.metaGenerated === true,
       source_session_id: sourceSessionId,
       use_synced_prompt: true,
-      // The user's configured default wins over whatever model the source chat
-      // happened to run on, so a converted workflow behaves like a fresh chat.
+      // The user's configured default wins over whatever model the source chat happened to run on, so a converted workflow behaves like a fresh chat.
       model: defaultModel || (liveDraft.model as string),
       mode: defaultMode || (liveDraft.mode as string),
-      // Converting a chat carries its prior approvals, so count it as already
-      // validated for these steps: scheduling won't nag to test first.
+      // Converting a chat carries its prior approvals, so count it as already validated for these steps: scheduling won't nag to test first.
       tested_signature: sourceSessionId ? stepsSignature(steps) : undefined,
     } as Partial<Workflow>));
     if (!createWorkflow.fulfilled.match(result)) return null;
@@ -310,8 +295,7 @@ export function PreviewView({ workflowId, steps, sourceSessionId, initialDraft, 
   );
 }
 
-// Render the workflow's permission tiers as a flat prose line so the
-// SavedView reads like a sentence, not a chip salad. Mirrors target #54.
+// Render the workflow's permission tiers as a flat prose line so the SavedView reads like a sentence, not a chip salad. Mirrors target #54.
 function describePermissions(workflow: Workflow): string {
   const tiers = workflow.permissions || [];
   if (tiers.length === 0) return 'Notify me in Open Swarm';
@@ -340,8 +324,7 @@ function describeSchedule(workflow: Workflow): string {
   if (s.on_days.length === 5 && [1,2,3,4,5].every((d) => s.on_days.includes(d))) return `Weekdays at ${time}`;
   if (s.on_days.length === 2 && [0,6].every((d) => s.on_days.includes(d))) return `Weekends at ${time}`;
   if (s.on_days.length === 1) {
-    // Image #50: "Mondays at 3pm" (plural day, no "Every" prefix). Reads
-    // more naturally than "Every Mon at 3pm".
+    // Image #50: "Mondays at 3pm" (plural day, no "Every" prefix). Reads more naturally than "Every Mon at 3pm".
     const plurals = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
     return `${plurals[s.on_days[0]]} at ${time}`;
   }
@@ -363,8 +346,7 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
   const openScheduling = useCallback(() => {
     dispatch(updateWorkflowCard({ workflowId: workflow.id, patch: { view: 'scheduling', showScheduleNudge: false } }));
   }, [dispatch, workflow.id]);
-  // Gate the schedule action: warn first if the current steps haven't been
-  // validated by a test run (so an unattended fire won't silently deny a tool).
+  // Gate the schedule action: warn first if the current steps haven't been validated by a test run (so an unattended fire won't silently deny a tool).
   const requestSchedule = useCallback(() => {
     if (needsScheduleTestWarning(workflow)) { setWarnOpen(true); return; }
     openScheduling();
@@ -394,9 +376,7 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
     }
   }, [deletingStepId, dispatch, workflow.id, workflow.steps, workflow.updated_at]);
 
-  // "Not now" on the post-convert nudge doesn't dump you on a near-identical
-  // saved card: the workflow is already saved (find it in the hub), so we drop
-  // its card and reopen the chat it came from, right in the same slot.
+  // "Not now" on the post-convert nudge doesn't dump you on a near-identical saved card: the workflow is already saved (find it in the hub), so we drop its card and reopen the chat it came from, right in the same slot.
   const wfCardPos = useAppSelector((s) => s.dashboardLayout.workflowCards[workflow.id]);
   const expandedSessionIds = useAppSelector((s) => s.agents.expandedSessionIds);
   const sourceId = workflow.source_session_id || null;
@@ -417,8 +397,7 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
   const scheduleConfigured = isScheduleConfigured(workflow.schedule);
   const scheduleLine = workflow.schedule.enabled && scheduleConfigured ? describeSchedule(workflow) : 'Schedule this workflow';
   const scheduleClickable = !scheduleConfigured;
-  // One-shot prompt right after a convert; hub-opened cards never set the flag,
-  // so they fall straight to the quiet schedule line below.
+  // One-shot prompt right after a convert; hub-opened cards never set the flag, so they fall straight to the quiet schedule line below.
   const showNudge = !!card?.showScheduleNudge && !scheduleConfigured;
 
   return (
@@ -524,12 +503,10 @@ export function SavedView({ workflow, steps, runs, activeRunId }: { workflow: Wo
   );
 }
 
-// kept on file for legacy uses; once the audit popover migrates, this and
-// the StreakBadge / habit-suggestion blocks above can be deleted entirely.
+// kept on file for legacy uses; once the audit popover migrates, this and the StreakBadge / habit-suggestion blocks above can be deleted entirely.
 void StreakBadgeRow;
 
-// Splits StreakBadge out so the SavedView body doesn't have to ferry
-// the runs array through both the chip row (gone) and the step list.
+// Splits StreakBadge out so the SavedView body doesn't have to ferry the runs array through both the chip row (gone) and the step list.
 function StreakBadgeRow({ runs }: { runs?: WorkflowRun[] }) {
   if (!runs || runs.length === 0) return null;
   return (
@@ -539,17 +516,13 @@ function StreakBadgeRow({ runs }: { runs?: WorkflowRun[] }) {
   );
 }
 
-// Audit-trace popover. Lazy-fetches the last N edits from /workflows/{id}/audit
-// on open, renders a compact list. The trigger sits inline with the chip
-// row so power users can spot it without cluttering the title.
+// Audit-trace popover. Lazy-fetches the last N edits from /workflows/{id}/audit on open, renders a compact list. The trigger sits inline with the chip row so power users can spot it without cluttering the title.
 function AuditTraceLink({ workflowId }: { workflowId: string }) {
   const c = useClaudeTokens();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [entries, setEntries] = useState<Array<{ ts: string; who: string; diff: Record<string, { before: unknown; after: unknown }> }> | null>(null);
   const [loading, setLoading] = useState(false);
-  // Probe the audit log once on mount so we can hide the trigger entirely
-  // when there are no edits (item #21 in target #54 diff). Fire-and-forget;
-  // a failure leaves entries=null which renders nothing.
+  // Probe the audit log once on mount so we can hide the trigger entirely when there are no edits (item #21 in target #54 diff). Fire-and-forget; a failure leaves entries=null which renders nothing.
   React.useEffect(() => {
     let alive = true;
     (async () => {
@@ -567,11 +540,7 @@ function AuditTraceLink({ workflowId }: { workflowId: string }) {
     })();
     return () => { alive = false; };
   }, [workflowId]);
-  // The popover open handler must be declared BEFORE the conditional
-  // return below; otherwise React sees a different hook-count between
-  // the "loading" render (returns early) and the "loaded with entries"
-  // render (calls useCallback), which triggers the "Rendered more hooks
-  // than during the previous render" crash.
+  // The popover open handler must be declared BEFORE the conditional return below; otherwise React sees a different hook-count between the "loading" render (returns early) and the "loaded with entries" render (calls useCallback), which triggers the "Rendered more hooks than during the previous render" crash.
   const open = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
     setAnchor(e.currentTarget);
     if (entries !== null) return;
@@ -662,8 +631,7 @@ function runDuration(r: WorkflowRun): string | null {
   } catch { return null; }
 }
 
-// Groups runs into "This week / Last week / Month YYYY" buckets so a
-// long history list reads as eras rather than 50 same-looking dates.
+// Groups runs into "This week / Last week / Month YYYY" buckets so a long history list reads as eras rather than 50 same-looking dates.
 function groupKey(iso: string): string {
   try {
     const d = new Date(iso);
@@ -681,8 +649,7 @@ function groupKey(iso: string): string {
 export function HistoryList({ runs, onOpen, showWorkflow = false, workflowTitleFor }: { runs: WorkflowRun[]; onOpen: (r: WorkflowRun) => void; showWorkflow?: boolean; workflowTitleFor?: (workflowId: string) => string }) {
   const c = useClaudeTokens();
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  // Filter chips: all / success / failures / skipped. Power-users debugging a
-  // flaky workflow shouldn't have to scroll past the runs they don't care about.
+  // Filter chips: all / success / failures / skipped. Power-users debugging a flaky workflow shouldn't have to scroll past the runs they don't care about.
   const [filter, setFilter] = useState<'all' | 'success' | 'failure' | 'skipped'>('all');
   const filtered = useMemo(() => {
     if (filter === 'all') return runs;

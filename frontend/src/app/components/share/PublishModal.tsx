@@ -1,7 +1,4 @@
-// Publish an app to {slug}.openswarm.host. Flow: scan the code (AST + an aux-LLM
-// pass, on the user's own creds) -> if findings, show them with Cancel/Fix/Publish
-// Anyway -> build + upload -> show the live link. Already-published apps open
-// straight to the manage view (visit / copy / unpublish).
+// Publish an app to {slug}.openswarm.host. Flow: scan the code (AST + an aux-LLM pass, on the user's own creds) -> if findings, show them with Cancel/Fix/Publish Anyway -> build + upload -> show the live link. Already-published apps open straight to the manage view (visit / copy / unpublish).
 import React, { useCallback, useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -34,9 +31,7 @@ interface Props {
 
 type Phase = 'scanning' | 'review' | 'publishing' | 'done' | 'error';
 
-// A build can take up to ~3 minutes on a cold node_modules. Stay silent for the
-// fast common case, then fade in an honest hint after 10s so a slow build doesn't
-// read as a hang (matches the SlowHint pattern in ChatInputOverlays).
+// A build can take up to ~3 minutes on a cold node_modules. Stay silent for the fast common case, then fade in an honest hint after 10s so a slow build doesn't read as a hang (matches the SlowHint pattern in ChatInputOverlays).
 const SlowHint: React.FC<{ active: boolean; color: string }> = ({ active, color }) => {
   const [show, setShow] = useState(false);
   useEffect(() => {

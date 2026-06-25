@@ -1,5 +1,4 @@
-// Anthropic-style Share modal. v1 ships one real action, Download .swarm; the
-// "Create share link" row is shown but disabled (that hosted-link flow is v2).
+// Anthropic-style Share modal. v1 ships one real action, Download .swarm; the "Create share link" row is shown but disabled (that hosted-link flow is v2).
 import React, { useCallback, useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';

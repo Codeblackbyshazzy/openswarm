@@ -4,23 +4,13 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { estimateRenderedTextHeight, RECHECK_VISIBILITY_EVENT } from './markdownMeasure';
 
-// Intra-message virtualization for very long assistant messages. The text is split
-// into FIXED blocks (each block always covers the same character range), so unlike
-// the old growing-tail chunking nothing shifts as you scroll, and no scroll
-// correction is needed. Only blocks within a screen of the viewport actually render
-// their markdown; the rest are height-reserved placeholders, so an extremely long
-// message never parses or mounts more than the on-screen portion plus a buffer.
+// Intra-message virtualization for very long assistant messages. The text is split into FIXED blocks (each block always covers the same character range), so unlike the old growing-tail chunking nothing shifts as you scroll, and no scroll correction is needed. Only blocks within a screen of the viewport actually render their markdown; the rest are height-reserved placeholders, so an extremely long message never parses or mounts more than the on-screen portion plus a buffer.
 
 const BLOCK_TARGET_CHARS = 4_000;
-// Remembered measured height per block (`${messageId}#${index}`). Module-scoped so
-// it survives the block unmounting/remounting as you scroll, keeping the reserved
-// placeholder heights (and thus scroll position) stable.
+// Remembered measured height per block (`${messageId}#${index}`). Module-scoped so it survives the block unmounting/remounting as you scroll, keeping the reserved placeholder heights (and thus scroll position) stable.
 const blockHeights = new Map<string, number>();
 
-// Split markdown at blank lines that sit OUTSIDE fenced code blocks, so each block
-// is a self-contained markdown fragment we can parse on its own. A fence (``` or
-// ~~~) toggles "inside code" so we never cut a code block in half. Blocks grow to
-// ~targetChars then break at the next safe boundary.
+// Split markdown at blank lines that sit OUTSIDE fenced code blocks, so each block is a self-contained markdown fragment we can parse on its own. A fence (``` or ~~~) toggles "inside code" so we never cut a code block in half. Blocks grow to ~targetChars then break at the next safe boundary.
 function splitMarkdownIntoBlocks(text: string, targetChars: number): string[] {
   if (text.length <= targetChars) return [text];
   const lines = text.split('\n');
@@ -67,8 +57,7 @@ const MarkdownBlock: React.FC<{
     const node = ref.current;
     if (!node) return;
     const bufferPx = Math.max(180, Math.round(viewportHeight || 240));
-    // Resolve visibility synchronously (on mount and on demand) so an on-screen
-    // block paints its markdown without waiting on the observer's async callback.
+    // Resolve visibility synchronously (on mount and on demand) so an on-screen block paints its markdown without waiting on the observer's async callback.
     const rootEl: Element = (scrollRoot as Element) ?? document.scrollingElement ?? document.documentElement;
     const evaluate = () => {
       const rootRect = rootEl.getBoundingClientRect();

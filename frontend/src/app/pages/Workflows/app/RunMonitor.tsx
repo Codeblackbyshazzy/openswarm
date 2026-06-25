@@ -43,9 +43,7 @@ interface Props {
   onDragEnd: (dx: number, dy: number, didDrag: boolean) => void;
 }
 
-// The live run view, a real canvas card (standard claudeTokens chrome) spawned
-// beside the Workflows window. The orange connector back to the window is drawn
-// by the shared TetherLayer, same mechanism as an agent spinning up a browser.
+// The live run view, a real canvas card (standard claudeTokens chrome) spawned beside the Workflows window. The orange connector back to the window is drawn by the shared TetherLayer, same mechanism as an agent spinning up a browser.
 const RunMonitor: React.FC<Props> = ({ workflow, cardX, cardY, cardWidth, cardHeight, cardZOrder, zoom, panX, panY, onDragStart, onDragMove, onDragEnd }) => {
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();

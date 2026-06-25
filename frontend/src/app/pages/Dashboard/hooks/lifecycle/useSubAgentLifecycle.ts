@@ -90,11 +90,7 @@ export function useSubAgentLifecycle({
         y: targetY,
         width: DEFAULT_CARD_W,
         height: DEFAULT_CARD_H,
-        // Pass the current expanded-session set so placeCard's
-        // collision check uses real visual heights (expanded cards
-        // render ~620px tall instead of their stored collapsed
-        // height). Without this, sub-agents spawn into space the
-        // parent card visually occupies.
+        // Pass the current expanded-session set so placeCard's collision check uses real visual heights (expanded cards render ~620px tall instead of their stored collapsed height). Without this, sub-agents spawn into space the parent card visually occupies.
         expandedSessionIds,
       }));
       dispatch(expandSession(sub.id));

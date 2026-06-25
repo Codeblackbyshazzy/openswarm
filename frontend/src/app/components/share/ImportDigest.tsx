@@ -1,10 +1,4 @@
-// The "digest" flash that plays where you drop a .swarm: a brand-tinted pixel
-// blast that radiates from the drop point all the way to the corners, thinning
-// out and dimming as it travels so the edges dissolve instead of ending in a
-// box. Plain Canvas2D on ONE pooled, full-viewport canvas (reusing PixelBlast's
-// shared WebGL context would fight an app's loading animation, and WebGL-context
-// churn is the exact thing that crashed the GPU process). play() refuses to
-// start while a burst is running, so drop-spam can never pile up work.
+// The "digest" flash that plays where you drop a .swarm: a brand-tinted pixel blast that radiates from the drop point all the way to the corners, thinning out and dimming as it travels so the edges dissolve instead of ending in a box. Plain Canvas2D on ONE pooled, full-viewport canvas (reusing PixelBlast's shared WebGL context would fight an app's loading animation, and WebGL-context churn is the exact thing that crashed the GPU process). play() refuses to start while a burst is running, so drop-spam can never pile up work.
 import React, { forwardRef, useImperativeHandle, useRef } from 'react';
 
 export interface DigestHandle {
@@ -90,8 +84,7 @@ const ImportDigest = forwardRef<DigestHandle, { color?: string }>(({ color = '#c
             const band = 1 - (ring - dist) / BAND; // brightest at the leading edge
             const distFrac = dist / maxDist;        // 0 at origin, 1 at far corner
             const d = dither(gx, gy);
-            // Sparser the further out: distant cells need a high dither value to
-            // appear at all, so the wave frays into scattered pixels near the edges.
+            // Sparser the further out: distant cells need a high dither value to appear at all, so the wave frays into scattered pixels near the edges.
             if (d < distFrac * 0.85) continue;
             const a = band * (1 - distFrac * 0.6) * (1 - t * 0.2) * (0.4 + 0.6 * d) * ALPHA_CAP;
             if (a <= 0.02) continue;

@@ -1,7 +1,4 @@
-// Fetch helpers for the app-publishing endpoints. The global interceptor in
-// shared/config.ts attaches the bearer, so we never set it here. The /publish
-// endpoints return a result object (ok / blocked / error) rather than HTTP errors
-// for the normal flow, so callers inspect the body.
+// Fetch helpers for the app-publishing endpoints. The global interceptor in shared/config.ts attaches the bearer, so we never set it here. The /publish endpoints return a result object (ok / blocked / error) rather than HTTP errors for the normal flow, so callers inspect the body.
 import { API_BASE } from '@/shared/config';
 
 import { ReviewSummary } from './shareTypes';

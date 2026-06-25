@@ -1,15 +1,10 @@
-// One source of truth for the agent's whimsical "busy" verbs, shared by the
-// streaming pill (AgentChat) and the per-message thinking bubble (MessageBubble).
-// `live` shows while the agent works; `past` shows once the step is done
-// ("Marinated for 3s"). Keep them fun but never self-deprecating (no
-// "hallucinating") so they read as personality, not a malfunction.
+// One source of truth for the agent's whimsical "busy" verbs, shared by the streaming pill (AgentChat) and the per-message thinking bubble (MessageBubble). `live` shows while the agent works; `past` shows once the step is done ("Marinated for 3s"). Keep them fun but never self-deprecating (no "hallucinating") so they read as personality, not a malfunction.
 export interface ThinkingLabel {
   live: string;
   past: string;
 }
 
-// Index 0 is the safe default the pill falls back to with no seed, so keep it
-// the plain one. Everything after is fair game for chaos.
+// Index 0 is the safe default the pill falls back to with no seed, so keep it the plain one. Everything after is fair game for chaos.
 export const THINKING_LABELS: ReadonlyArray<ThinkingLabel> = [
   { live: 'Thinking',       past: 'Thought' },
   { live: 'Tokenmaxing',    past: 'Tokenmaxed' },

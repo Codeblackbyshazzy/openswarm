@@ -16,7 +16,7 @@ export function useDeepLink(): void {
 
     const unsubscribe = api.onAuthUrl?.((rawUrl: string) => {
       try {
-        // openswarm://auth?token=... ; signin=true => free sign-in, else Stripe activation.
+        // openswarm://auth?token=...; signin=true => free sign-in, else Stripe activation.
         const url = new URL(rawUrl);
         if (url.host !== 'auth' && url.pathname !== '//auth' && url.pathname !== '/auth') {
           console.warn('[deep-link] Unknown openswarm:// host:', url.host);

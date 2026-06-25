@@ -28,9 +28,7 @@ interface Props {
   onInstalled: (name: string) => void;
 }
 
-// The skills.sh wild registry is unvetted community code (skills can ship
-// scripts). So this dialog never installs blind: picking a skill fetches a
-// disclosure (files + scripts) the user confirms before anything lands on disk.
+// The skills.sh wild registry is unvetted community code (skills can ship scripts). So this dialog never installs blind: picking a skill fetches a disclosure (files + scripts) the user confirms before anything lands on disk.
 const CommunitySkillsDialog: React.FC<Props> = ({ open, onClose, onInstalled }) => {
   const c = useClaudeTokens();
   const [query, setQuery] = useState('');
@@ -41,8 +39,7 @@ const CommunitySkillsDialog: React.FC<Props> = ({ open, onClose, onInstalled }) 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Monotonic request tokens: a slow response from an earlier search/preview
-  // must not overwrite the state a newer one already set (out-of-order network).
+  // Monotonic request tokens: a slow response from an earlier search/preview must not overwrite the state a newer one already set (out-of-order network).
   const searchSeq = useRef(0);
   const previewSeq = useRef(0);
 

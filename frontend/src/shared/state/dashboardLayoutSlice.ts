@@ -20,8 +20,7 @@ export const DEFAULT_BROWSER_CARD_W = 1280;
 export const DEFAULT_BROWSER_CARD_H = 800;
 export const DEFAULT_WORKFLOW_CARD_W = 480;
 export const DEFAULT_WORKFLOW_CARD_H = 520;
-// Open at the same default footprint as a browser/view card so it lands at a
-// comfortable size automatically.
+// Open at the same default footprint as a browser/view card so it lands at a comfortable size automatically.
 export const DEFAULT_WORKFLOWS_HUB_W = DEFAULT_BROWSER_CARD_W;
 export const DEFAULT_WORKFLOWS_HUB_H = DEFAULT_BROWSER_CARD_H;
 export const EXPANDED_CARD_MIN_H = 620;
@@ -200,10 +199,7 @@ function generateTabId(): string {
 
 export const fetchLayout = createAsyncThunk(
   'dashboardLayout/fetch',
-  // isReconnect distinguishes a socket-reconnect recovery refetch (merge, keep
-  // live positions) from a fresh mount/switch load (replace, snapshot is the
-  // user's saved layout). Passed explicitly, not inferred from state, so a
-  // stale in-flight fetch from a previous dashboard can't be misread as a merge.
+  // isReconnect distinguishes a socket-reconnect recovery refetch (merge, keep live positions) from a fresh mount/switch load (replace, snapshot is the user's saved layout). Passed explicitly, not inferred from state, so a stale in-flight fetch from a previous dashboard can't be misread as a merge.
   async ({ dashboardId }: { dashboardId: string; isReconnect?: boolean }) => {
     const res = await fetch(`${DASHBOARDS_API}/${dashboardId}`);
     const data = await res.json();
@@ -333,18 +329,7 @@ export function findOpenGridCell(
   }
 }
 
-// Like findOpenGridCell but biased to stay near a proposed (x,y) anchor.
-// Used when the backend hands us a card with a position that's already
-// occupied (sub-agent or sub-browser spawning on top of its parent or a
-// sibling). Spirals outward from the anchor on a grid, snapping to
-// cell-aligned positions so the result still looks intentional, not
-// dropped from orbit. Caps the spiral search at ~1000 cells to avoid
-// pathological work in adversarial layouts , falls back to
-// findOpenGridCell after that.
-//
-// Cost: O(rects × cells_scanned). Spawn events are rare (not per-frame),
-// so this only runs when a new card appears. Typical scan resolves in
-// <10 cells, well below the cap. No perf impact on steady-state UI.
+// Like findOpenGridCell but biased to stay near a proposed (x,y) anchor. Used when the backend hands us a card with a position that's already occupied (sub-agent or sub-browser spawning on top of its parent or a sibling). Spirals outward from the anchor on a grid, snapping to cell-aligned positions so the result still looks intentional, not dropped from orbit. Caps the spiral search at ~1000 cells to avoid pathological work in adversarial layouts, falls back to findOpenGridCell after that. Cost: O(rects × cells_scanned). Spawn events are rare (not per-frame), so this only runs when a new card appears. Typical scan resolves in <10 cells, well below the cap. No perf impact on steady-state UI.
 export function findOpenSpotNear(
   anchorX: number,
   anchorY: number,
@@ -391,8 +376,7 @@ export function findOpenSpotNear(
     }
   }
 
-  // Pathological , full canvas occupied near anchor. Fall back to the
-  // global first-empty scan so we never return an overlap.
+  // Pathological, full canvas occupied near anchor. Fall back to the global first-empty scan so we never return an overlap.
   return findOpenGridCell(occupiedRects, newW, newH);
 }
 
@@ -426,13 +410,7 @@ export function placeInParentColumn(
   return findOpenSpotNear(targetX, targetY, rects, newW, newH);
 }
 
-// Reconnect-refetch merge: ADD only the cards the snapshot carries that the
-// client is missing (e.g. a spawned browser whose broadcast was lost in a
-// socket gap), collision-resolving each against the live layout so a recovered
-// card can't land on a card already on canvas, and NEVER touch a card the
-// client already has (that's exactly what preserves its live, collision-placed
-// position). The shared `occupied` list carries placements forward so two
-// recovered cards in the same pass also avoid each other.
+// Reconnect-refetch merge: ADD only the cards the snapshot carries that the client is missing (e.g. a spawned browser whose broadcast was lost in a socket gap), collision-resolving each against the live layout so a recovered card can't land on a card already on canvas, and NEVER touch a card the client already has (that's exactly what preserves its live, collision-placed position). The shared `occupied` list carries placements forward so two recovered cards in the same pass also avoid each other.
 function addMissingCards<T extends { x: number; y: number; width: number; height: number }>(
   live: Record<string, T>,
   incoming: Record<string, T>,
@@ -483,14 +461,7 @@ const dashboardLayoutSlice = createSlice({
         y: number;
         width: number;
         height: number;
-        // Optional: which existing sessions are currently expanded
-        // (showing their full chat history). Without this, the collision
-        // check uses each card's STORED height , which is the collapsed
-        // value , even when the card is currently rendering at the
-        // expanded ~620px. Result: new sub-agent cards spawn into the
-        // collapsed footprint but overlap the visually expanded one.
-        // Caller (Dashboard.tsx) passes the current expanded set so
-        // the collision math matches what the user actually sees.
+        // Optional: which existing sessions are currently expanded (showing their full chat history). Without this, the collision check uses each card's STORED height, which is the collapsed value, even when the card is currently rendering at the expanded ~620px. Result: new sub-agent cards spawn into the collapsed footprint but overlap the visually expanded one. Caller (Dashboard.tsx) passes the current expanded set so the collision math matches what the user actually sees.
         expandedSessionIds?: string[];
       }>
     ) {
@@ -512,13 +483,7 @@ const dashboardLayoutSlice = createSlice({
       action: PayloadAction<{ id: string; type: CardType }>,
     ) {
       const { id, type } = action.payload;
-      // Compute the current top zOrder across ALL card types so we can
-      // short-circuit when the target is already on top. Without this
-      // guard, every click on a card (which fires onPointerDownCapture +
-      // onClick + onDoubleClick) bumps zOrder and triggers a Redux
-      // mutation. That mutation cascades into a re-render that unmounts
-      // inputs mid-keystroke, causing the workflow card's title /
-      // description / step textareas to lose focus on every click.
+      // Compute the current top zOrder across ALL card types so we can short-circuit when the target is already on top. Without this guard, every click on a card (which fires onPointerDownCapture + onClick + onDoubleClick) bumps zOrder and triggers a Redux mutation. That mutation cascades into a re-render that unmounts inputs mid-keystroke, causing the workflow card's title / description / step textareas to lose focus on every click.
       let maxZ = 0;
       let currentZ = 0;
       const tally = (z: number | undefined) => { if (typeof z === 'number' && z > maxZ) maxZ = z; };
@@ -756,13 +721,7 @@ const dashboardLayoutSlice = createSlice({
       if (state.browserCards[card.browser_id]) return;
       const w = card.width || DEFAULT_BROWSER_CARD_W;
       const h = card.height || DEFAULT_BROWSER_CARD_H;
-      // Collision-resolve the backend-proposed position. Backend agents
-      // often spawn sub-browsers at the parent's coordinates or at a
-      // default (0,0) , without this guard, the new card lands on top
-      // of an existing one and the user sees a single card with
-      // multiple titles fighting for the z-index. Bias toward the
-      // proposed position so the spawn still LOOKS related to wherever
-      // the agent intended.
+      // Collision-resolve the backend-proposed position. Backend agents often spawn sub-browsers at the parent's coordinates or at a default (0,0), without this guard, the new card lands on top of an existing one and the user sees a single card with multiple titles fighting for the z-index. Bias toward the proposed position so the spawn still LOOKS related to wherever the agent intended.
       const rects = collectOccupiedRects(state);
       const pos = findOpenSpotNear(card.x, card.y, rects, w, h);
       state.browserCards[card.browser_id] = {
@@ -850,10 +809,7 @@ const dashboardLayoutSlice = createSlice({
         state.pendingFocusWorkflowId = workflowId;
         return;
       }
-      // Fall back to persistedExpandedSessionIds when the caller didn't
-      // wire the live list through. Without it, collectOccupiedRects sees
-      // every chat at its stored (collapsed) height, and a workflow
-      // spawned from an open chat lands on top of the visibly-tall card.
+      // Fall back to persistedExpandedSessionIds when the caller didn't wire the live list through. Without it, collectOccupiedRects sees every chat at its stored (collapsed) height, and a workflow spawned from an open chat lands on top of the visibly-tall card.
       const expanded = expandedSessionIds ?? state.persistedExpandedSessionIds;
       const rects = collectOccupiedRects(state, expanded);
       let posX: number, posY: number;
@@ -949,10 +905,7 @@ const dashboardLayoutSlice = createSlice({
       state.workflowsHub = null;
     },
 
-    // The Workflows app is an on-canvas card (like chat/browser/view cards),
-    // backed by the singleton workflowsHub geometry. Opening it creates or
-    // raises that card and pans to it; an optional workflowId deep-links to
-    // that workflow's detail once the card mounts.
+    // The Workflows app is an on-canvas card (like chat/browser/view cards), backed by the singleton workflowsHub geometry. Opening it creates or raises that card and pans to it; an optional workflowId deep-links to that workflow's detail once the card mounts.
     openWorkflowsApp(state, action: PayloadAction<{ workflowId?: string; expandedSessionIds?: string[] } | undefined>) {
       state.workflowsAppTarget = action.payload?.workflowId ?? null;
       if (state.workflowsHub) {
@@ -984,9 +937,7 @@ const dashboardLayoutSlice = createSlice({
       state.workflowsAppTarget = null;
     },
 
-    // Spawn the Run Monitor as a real canvas card to the right of the window,
-    // tethered back to it. Reuses the window's geometry to place + size it.
-    // runId pins a specific (e.g. history) run; omit it to follow the latest.
+    // Spawn the Run Monitor as a real canvas card to the right of the window, tethered back to it. Reuses the window's geometry to place + size it. runId pins a specific (e.g. history) run; omit it to follow the latest.
     openWorkflowMonitor(state, action: PayloadAction<{ workflowId: string; runId?: string }>) {
       state.workflowsMonitorId = action.payload.workflowId;
       state.workflowsMonitorRunId = action.payload.runId ?? null;
@@ -1372,12 +1323,7 @@ const dashboardLayoutSlice = createSlice({
       })
       .addCase(fetchLayout.fulfilled, (state, action) => {
         state.loading = false;
-        // A fresh mount/switch load replaces (the snapshot is the user's saved
-        // layout, authoritative). A reconnect refetch (useDashboardLifecycle
-        // line ~90) recovers cards lost in a socket gap and must MERGE, blind-
-        // replacing there clobbered the live, collision-placed positions of
-        // cards already on canvas (the overlap / vanish under load while many
-        // browsers spawn). The caller says which; never inferred from state.
+        // A fresh mount/switch load replaces (the snapshot is the user's saved layout, authoritative). A reconnect refetch (useDashboardLifecycle line ~90) recovers cards lost in a socket gap and must MERGE, blind- replacing there clobbered the live, collision-placed positions of cards already on canvas (the overlap / vanish under load while many browsers spawn). The caller says which; never inferred from state.
         const isReconnectRefetch = action.meta.arg.isReconnect === true;
         state.initialized = true;
         const ownerDashboardId = action.meta.arg.dashboardId;
@@ -1391,9 +1337,7 @@ const dashboardLayoutSlice = createSlice({
           state.workflowCards = action.payload.workflowCards || {};
           state.workflowsHub = action.payload.workflowsHub || null;
           state.notes = action.payload.notes || {};
-          // Cards boot parked (no guest process, title placeholder); the suspend
-          // hook wakes viewport-sized and agent-driven ones on its first pass.
-          // Beats mounting 100 webviews just to suspend 92 of them.
+          // Cards boot parked (no guest process, title placeholder); the suspend hook wakes viewport-sized and agent-driven ones on its first pass. Beats mounting 100 webviews just to suspend 92 of them.
           state.suspendedBrowserCards = {};
           for (const id of Object.keys(action.payload.browserCards)) {
             state.suspendedBrowserCards[id] = { dataUrl: '', capturedAt: 0 };

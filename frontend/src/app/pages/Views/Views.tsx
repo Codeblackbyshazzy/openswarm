@@ -32,8 +32,7 @@ const Views: React.FC = () => {
   const [editingOutput, setEditingOutput] = useState<Output | null>(null);
   const [runOutput, setRunOutput] = useState<Output | null>(null);
   const [historyOutput, setHistoryOutput] = useState<Output | null>(null);
-  // Branch closes the history modal, which would unmount the panel before its own
-  // flash renders; surface the confirmation at the grid level so it survives.
+  // Branch closes the history modal, which would unmount the panel before its own flash renders; surface the confirmation at the grid level so it survives.
   const [branchToast, setBranchToast] = useState(false);
 
   useEffect(() => {

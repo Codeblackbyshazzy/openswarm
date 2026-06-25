@@ -1,9 +1,6 @@
 import { motion } from 'framer-motion';
 
-// True path-drawing sidebar glyphs: the SVG strokes themselves animate on hover
-// (not just a transform), then settle. Always fully visible at rest, so a hover
-// that's interrupted mid-flight never leaves a half-drawn icon. Geometry matches
-// the lucide line-icons they replace so the static look is unchanged.
+// True path-drawing sidebar glyphs: the SVG strokes themselves animate on hover (not just a transform), then settle. Always fully visible at rest, so a hover that's interrupted mid-flight never leaves a half-drawn icon. Geometry matches the lucide line-icons they replace so the static look is unchanged.
 
 const SPRING = { type: 'spring', stiffness: 380, damping: 20 } as const;
 

@@ -230,10 +230,7 @@ function mergeRunIntoState(state: State, r: WorkflowRun) {
     wf.last_run_status = r.status === 'skipped' ? wf.last_run_status : (r.status as Workflow['last_run_status']);
     wf.last_run_id = r.id;
   }
-  // Keep the live "Ongoing runs" list in sync off the WS stream: a run that's no
-  // longer running drops out of `active`, a freshly-running one joins. Without
-  // this, `active` only refreshed on the one-shot mount fetch, so finished runs
-  // lingered as "Working…" while the monitor already showed them done.
+  // Keep the live "Ongoing runs" list in sync off the WS stream: a run that's no longer running drops out of `active`, a freshly-running one joins. Without this, `active` only refreshed on the one-shot mount fetch, so finished runs lingered as "Working…" while the monitor already showed them done.
   const activeIdx = state.active.findIndex((a) => a.run_id === r.id);
   if (r.status === 'running') {
     const entry: ActiveRun = { workflow_id: r.workflow_id, run_id: r.id, title: wf?.title || '', started_at: r.started_at };
@@ -241,15 +238,9 @@ function mergeRunIntoState(state: State, r: WorkflowRun) {
   } else if (activeIdx >= 0) {
     state.active.splice(activeIdx, 1);
   }
-  // Auto-flip the card view on run state transitions so the user sees
-  // Running while it streams, Completed on success, Failed on failure.
-  // Only nudge from views that the user hasn't actively navigated away
-  // from (saved / running). Edit, history, scheduling etc. stay put.
+  // Auto-flip the card view on run state transitions so the user sees Running while it streams, Completed on success, Failed on failure. Only nudge from views that the user hasn't actively navigated away from (saved / running). Edit, history, scheduling etc. stay put.
   const card = state.openCards[r.workflow_id];
-  // A scheduled run flipping into 'running' fired unattended, so nudge the
-  // user with a clickable toast. Only on the into-running edge (not every
-  // tool-label/step bump), and only for schedule (manual runs they kicked
-  // off themselves don't need a "surprise, it's running" popup).
+  // A scheduled run flipping into 'running' fired unattended, so nudge the user with a clickable toast. Only on the into-running edge (not every tool-label/step bump), and only for schedule (manual runs they kicked off themselves don't need a "surprise, it's running" popup).
   if (r.status === 'running' && r.triggered_by === 'schedule' && (!prev || prev.status !== 'running')) {
     state.runningToast = {
       workflowId: r.workflow_id,
@@ -269,9 +260,7 @@ function mergeRunIntoState(state: State, r: WorkflowRun) {
       card.view = 'failed';
       card.runId = r.id;
     }
-    // A run that finishes while the user is watching it live becomes a
-    // "viewing" link so the sibling chat stays open with Stop Viewing,
-    // not a stale "watching" arrow pointing at a finished run.
+    // A run that finishes while the user is watching it live becomes a "viewing" link so the sibling chat stays open with Stop Viewing, not a stale "watching" arrow pointing at a finished run.
     if (card.sidecarSessionId && card.sidecarKind === 'watching' && prev && prev.status === 'running') {
       if (r.status === 'failure') card.sidecarKind = 'viewing-error';
       else if (r.status === 'success' || r.status === 'ran_late') card.sidecarKind = 'viewing-completed';
@@ -322,8 +311,7 @@ export const generateWorkflowMetadata = createAsyncThunk(
   },
 );
 
-// Merge preview-time generated metadata into a draft card, filling only the
-// fields the user hasn't typed into so a rename mid-flight survives.
+// Merge preview-time generated metadata into a draft card, filling only the fields the user hasn't typed into so a rename mid-flight survives.
 export const applyGeneratedMetadata = createAsyncThunk(
   'workflows/applyGeneratedMetadata',
   async (arg: { workflowId: string; meta: GeneratedMetadata }, { getState, dispatch }) => {
@@ -390,8 +378,7 @@ type CommitDraftArg = string | { id: string; model?: string; keep_session?: bool
 
 export const commitDraft = createAsyncThunk('workflows/commitDraft', async (arg: CommitDraftArg) => {
   const id = typeof arg === 'string' ? arg : arg.id;
-  // Save-gated: the model the user settled on in the Edit Agent picker is applied
-  // to the workflow's run model here (Discard never reaches this path).
+  // Save-gated: the model the user settled on in the Edit Agent picker is applied to the workflow's run model here (Discard never reaches this path).
   const model = typeof arg === 'string' ? undefined : arg.model;
   // keep_session: the build flow auto-commits steps but must keep the chat open.
   const keepSession = typeof arg === 'string' ? undefined : arg.keep_session;
@@ -566,10 +553,7 @@ const slice = createSlice({
       const card = state.openCards[action.payload];
       if (card) card.fixSeed = null;
     },
-    // Live workflow changes pushed over WS (e.g. the Edit Agent's
-    // add/delete/edit-step tools). Keeps an open card in sync without a
-    // full refetch; idempotent, so a window receiving the echo of its own
-    // edit just re-sets the same data.
+    // Live workflow changes pushed over WS (e.g. the Edit Agent's add/delete/edit-step tools). Keeps an open card in sync without a full refetch; idempotent, so a window receiving the echo of its own edit just re-sets the same data.
     upsertWorkflow(state, action: { payload: Workflow }) {
       state.items[action.payload.id] = action.payload;
     },
@@ -593,11 +577,7 @@ const slice = createSlice({
       })
       .addCase(fetchWorkflows.rejected, (state) => { state.loading = false; state.loaded = true; })
       .addCase(createWorkflow.fulfilled, (state, action) => { state.items[action.payload.id] = action.payload; })
-      // Optimistic: reflect the patch in the store immediately so store-driven
-      // UI (the schedule test-first banner, status, etc.) updates the instant
-      // the user edits, not after the PATCH round-trips (which awaits an aux
-      // relabel LLM call server-side). fulfilled overwrites with server truth;
-      // a 409 stale triggers a refetch in useWorkflowPatch.
+      // Optimistic: reflect the patch in the store immediately so store-driven UI (the schedule test-first banner, status, etc.) updates the instant the user edits, not after the PATCH round-trips (which awaits an aux relabel LLM call server-side). fulfilled overwrites with server truth; a 409 stale triggers a refetch in useWorkflowPatch.
       .addCase(updateWorkflow.pending, (state, action) => {
         const { id, patch } = action.meta.arg;
         const cur = state.items[id];
@@ -612,9 +592,7 @@ const slice = createSlice({
         state.allRuns = state.allRuns.filter((r) => r.workflow_id !== action.payload);
       })
       .addCase(runWorkflowNow.fulfilled, (state, action) => {
-        // Enter the running view the moment the run kicks off, off the run_id
-        // the REST call returns. Don't wait for the workflow:run WS event:
-        // if it's missed or races the view, the Stop/Pause header never shows.
+        // Enter the running view the moment the run kicks off, off the run_id the REST call returns. Don't wait for the workflow:run WS event: if it's missed or races the view, the Stop/Pause header never shows.
         const { id, run_id, status } = action.payload;
         const card = state.openCards[id];
         if (!card || !run_id || status !== 'running') return;

@@ -81,9 +81,7 @@ export const ChatInputToolbar: React.FC<Props> = (p) => {
     },
   };
 
-  // On the free trial the run is fixed (model + thinking forced server-side), so hide both
-  // the model picker and the thinking selector, there's nothing to choose. Returns the moment
-  // a real model is connected.
+  // On the free trial the run is fixed (model + thinking forced server-side), so hide both the model picker and the thinking selector, there's nothing to choose. Returns the moment a real model is connected.
   const hideForTrial = useAppSelector((s) => hasFreeTrialActive(s) && !hasModelConnected(s));
 
   return (

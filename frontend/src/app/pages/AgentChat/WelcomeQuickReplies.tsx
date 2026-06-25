@@ -6,10 +6,7 @@ import { ArrowLeft } from 'lucide-react';
 import type { ClaudeTokens } from '@/shared/styles/claudeTokens';
 import { STARTER_CATEGORIES } from '@/shared/starterCategories';
 
-// Quick-reply chips that sit UNDER the streamed greeting bubble. Two levels: category ->
-// concrete prompts. Research/Write/Learn -> onPick (real run); Build -> onPickBuilder (prefill).
-// The greeting itself is a real streamed assistant message (see useWelcomeGreeting); this is just
-// the follow-up affordance. Pure UI, no run until the parent fires.
+// Quick-reply chips that sit UNDER the streamed greeting bubble. Two levels: category -> concrete prompts. Research/Write/Learn -> onPick (real run); Build -> onPickBuilder (prefill). The greeting itself is a real streamed assistant message (see useWelcomeGreeting); this is just the follow-up affordance. Pure UI, no run until the parent fires.
 const WelcomeQuickReplies: React.FC<{
   c: ClaudeTokens;
   onPick: (prompt: string) => void;

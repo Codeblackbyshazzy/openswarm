@@ -57,8 +57,7 @@ export const CompactMcpBubble: React.FC<CompactMcpBubbleProps> = ({
   })();
   const serviceLabel = mcpInfo.isMcp ? mcpVerbLabel : shortAction;
   const inputSummary = mcpInfo.isMcp ? getMcpInputSummary(input, mcpInfo.action, mcpInfo.serverSlug) : '';
-  // A grouped settings write shows the masked change list (input-derived, so it
-  // reads even while pending) instead of the generic "Applied: theme" result line.
+  // A grouped settings write shows the masked change list (input-derived, so it reads even while pending) instead of the generic "Applied: theme" result line.
   const visibleSummary = isSettingsWriteTool(toolName)
     ? settingsWriteSummary(input)
     : (resultSummary || inputSummary);

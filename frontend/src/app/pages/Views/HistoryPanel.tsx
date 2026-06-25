@@ -76,8 +76,7 @@ const HistoryPanel: React.FC<Props> = ({ outputId, isAgentActive, saveLabel, onB
     window.setTimeout(() => { if (mountedRef.current) setStatus(null); }, 3500);
   }, []);
 
-  // alive-guarded so a slower fetch for a previous outputId (or after close) can't
-  // overwrite the list. Handlers bump reloadKey to refetch.
+  // alive-guarded so a slower fetch for a previous outputId (or after close) can't overwrite the list. Handlers bump reloadKey to refetch.
   useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -91,8 +90,7 @@ const HistoryPanel: React.FC<Props> = ({ outputId, isAgentActive, saveLabel, onB
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      // No reloadKey bump: captureOutputVersion.fulfilled bumps captureSignal,
-      // which already drives the refetch. Bumping both = a double fetch.
+      // No reloadKey bump: captureOutputVersion.fulfilled bumps captureSignal, which already drives the refetch. Bumping both = a double fetch.
       await dispatch(captureOutputVersion({ id: outputId, source: 'manual', label: saveLabel || '' })).unwrap();
       flash('ok', 'Saved this version.');
     } catch {

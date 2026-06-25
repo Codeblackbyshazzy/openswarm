@@ -22,10 +22,7 @@ const StepsCard: React.FC<{ workflow: Workflow }> = ({ workflow }) => {
   const [local, setLocal] = useState<LocalStep[]>(() => toLocal(workflow.steps));
   const [draft, setDraft] = useState('');
 
-  // Agent-proposed step changes apply silently (no Apply/Discard popup): commit
-  // any staged draft as soon as it lands so the steps just update live. Guarded
-  // on real content, the edit session snapshots an empty draft on open and
-  // committing that 400s.
+  // Agent-proposed step changes apply silently (no Apply/Discard popup): commit any staged draft as soon as it lands so the steps just update live. Guarded on real content, the edit session snapshots an empty draft on open and committing that 400s.
   useEffect(() => {
     if (workflow.has_draft && (workflow.draft_steps || []).some((s) => s.text && s.text.trim())) {
       dispatch(commitDraft({ id: workflow.id, keep_session: true }));
@@ -33,8 +30,7 @@ const StepsCard: React.FC<{ workflow: Workflow }> = ({ workflow }) => {
   }, [workflow.has_draft, workflow.draft_steps, workflow.id, dispatch]);
 
   const sig = stepsSignature(workflow.steps);
-  // Reseed when the server steps change underneath us (commit, agent edit,
-  // another surface) but not on our own in-progress keystrokes.
+  // Reseed when the server steps change underneath us (commit, agent edit, another surface) but not on our own in-progress keystrokes.
   useEffect(() => {
     setLocal((prev) => {
       const openIds = new Set(prev.filter((s) => s.open).map((s) => s.id));
@@ -43,10 +39,7 @@ const StepsCard: React.FC<{ workflow: Workflow }> = ({ workflow }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig]);
 
-  // A manual add lands with an empty label that the backend names from the step
-  // text. The label arrives without changing the steps signature (same text), so
-  // fill it in here without a full reseed and without touching a label you're
-  // mid-typing.
+  // A manual add lands with an empty label that the backend names from the step text. The label arrives without changing the steps signature (same text), so fill it in here without a full reseed and without touching a label you're mid-typing.
   useEffect(() => {
     setLocal((prev) => {
       const byId = new Map(workflow.steps.map((s) => [s.id, s]));
@@ -76,8 +69,7 @@ const StepsCard: React.FC<{ workflow: Workflow }> = ({ workflow }) => {
   const onAdd = () => {
     const t = draft.trim();
     if (!t) return;
-    // What you type is the step's prompt; the short label is generated from it
-    // server-side (empty label tells the backend to name this step).
+    // What you type is the step's prompt; the short label is generated from it server-side (empty label tells the backend to name this step).
     const next = [...local, { id: newStepId(), label: '', text: t, open: false, enabled: true }];
     setLocal(next);
     setDraft('');

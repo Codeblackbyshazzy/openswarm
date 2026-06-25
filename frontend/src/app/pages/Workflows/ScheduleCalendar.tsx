@@ -21,14 +21,10 @@ interface Props {
   refDate?: Date;
 }
 
-// Both compact (popover) and roomy (hub) show the full 24 hours scrollable;
-// the user explicitly wants midnight visible at the top, not "9am" as the
-// starting hour. The scroll container caps the visible window.
+// Both compact (popover) and roomy (hub) show the full 24 hours scrollable; the user explicitly wants midnight visible at the top, not "9am" as the starting hour. The scroll container caps the visible window.
 const HOURS_24 = Array.from({ length: 24 }, (_, i) => i);
 
-// At/above this many list rows (day headers + event rows), window the list so
-// only near-viewport rows stay mounted. Below it, render whole; spacers aren't
-// worth the churn on a short list.
+// At/above this many list rows (day headers + event rows), window the list so only near-viewport rows stay mounted. Below it, render whole; spacers aren't worth the churn on a short list.
 const LIST_WINDOW_MIN_ROWS = 60;
 
 interface CalendarEvent {
@@ -36,9 +32,7 @@ interface CalendarEvent {
   fire_at: string;
 }
 
-// One flattened list row. Windowing unmounts at this granularity, so a dense
-// single day no longer mounts all ~96 of its rows just for being near the
-// viewport: only the rows actually in view (plus buffer) stay in the DOM.
+// One flattened list row. Windowing unmounts at this granularity, so a dense single day no longer mounts all ~96 of its rows just for being near the viewport: only the rows actually in view (plus buffer) stay in the DOM.
 type ListRow =
   | { kind: 'header'; id: string; date: Date; isToday: boolean }
   | { kind: 'event'; id: string; ev: { workflow: Workflow; date: Date } }
@@ -49,15 +43,13 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
   const dispatch = useAppDispatch();
   const workflows = useAppSelector((s) => Object.values(s.workflows.items));
   const allPaused = useAppSelector((s) => s.workflows.paused);
-  // Live clock for the "now" line; a snapshot would drift and refDate may be
-  // a navigated week, so it can't double as the current moment.
+  // Live clock for the "now" line; a snapshot would drift and refDate may be a navigated week, so it can't double as the current moment.
   const [now, setNow] = useState<Date>(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(id);
   }, []);
-  // Right-click menu: pinned position + the workflow whose pill was
-  // clicked. Same anchor pattern as MUI's menu examples.
+  // Right-click menu: pinned position + the workflow whose pill was clicked. Same anchor pattern as MUI's menu examples.
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; workflow: Workflow } | null>(null);
   const closeMenu = () => setCtxMenu(null);
   const onRunNow = () => {
@@ -81,8 +73,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
   const onEdit = () => {
     if (!ctxMenu) return;
     dispatch(addWorkflowCard({ workflowId: ctxMenu.workflow.id }));
-    // Right-click "Edit" on a calendar entry opens the new Edit Agent
-    // chat view, matching the post-revamp design (Image #38).
+    // Right-click "Edit" on a calendar entry opens the new Edit Agent chat view, matching the post-revamp design (Image #38).
     dispatch(openWorkflowCard({ workflowId: ctxMenu.workflow.id, view: 'edit_agent' }));
     closeMenu();
   };
@@ -105,9 +96,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
       <MenuItem onClick={onDelete} sx={{ color: c.status.error }}>Delete</MenuItem>
     </Menu>
   );
-  // refDate is recreated on every render unless the caller memoizes it.
-  // Pin the calendar to a day-precision key so occurrence fetches only
-  // change when the visible day, view, or schedule set changes.
+  // refDate is recreated on every render unless the caller memoizes it. Pin the calendar to a day-precision key so occurrence fetches only change when the visible day, view, or schedule set changes.
   const today = refDate || new Date();
   const dayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
   const compact = density === 'compact';
@@ -120,10 +109,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
   const rangeEndExclusive = useMemo(() => addDays(rangeStart, range), [rangeStart, range]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [calendarFetchKey, setCalendarFetchKey] = useState('');
-  // Key off only the fields that change which occurrences exist. Deliberately
-  // NOT updated_at: the scheduler bumps it every tick (recomputing next_run_at)
-  // and pushes a workflow:updated over the socket, which would churn this key
-  // and blank the calendar (the eventsByDay gate) until the next fetch lands.
+  // Key off only the fields that change which occurrences exist. Deliberately NOT updated_at: the scheduler bumps it every tick (recomputing next_run_at) and pushes a workflow:updated over the socket, which would churn this key and blank the calendar (the eventsByDay gate) until the next fetch lands.
   const workflowScheduleKey = workflows
     .map((w) => `${w.id}:${w.schedule.enabled}:${w.schedule.timezone}:${w.schedule.repeat_unit}:${w.schedule.repeat_every}:${w.schedule.hour}:${w.schedule.minute}:${w.schedule.day_of_month ?? ''}:${w.schedule.on_days.join(',')}:${w.schedule.ends_at || ''}:${w.schedule.max_runs ?? ''}:${w.schedule.runs_count}`)
     .sort()
@@ -131,19 +117,11 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
   const fromIso = rangeStart.toISOString();
   const toIso = rangeEndExclusive.toISOString();
   const calendarRequestKey = `${view}:${fromIso}:${toIso}:${workflowScheduleKey}`;
-  // The visible window alone decides whether shown events are even plausible.
-  // Gating on this (not the full request key) means a schedule edit refetches
-  // without blanking the calendar first: we keep the current events until the
-  // fresh ones land. Only a view/date change, where old events are for the
-  // wrong window, clears them.
+  // The visible window alone decides whether shown events are even plausible. Gating on this (not the full request key) means a schedule edit refetches without blanking the calendar first: we keep the current events until the fresh ones land. Only a view/date change, where old events are for the wrong window, clears them.
   const calendarWindowKey = `${view}:${fromIso}:${toIso}`;
 
   useEffect(() => {
-    // No AbortController: the global fetch interceptor (shared/config) dedupes
-    // GETs by URL onto ONE underlying request, so aborting on cleanup (which
-    // fires when this effect re-runs as workflows hydrate) rejects the shared
-    // request and the re-fired fetch with it, leaving the calendar empty on
-    // first load. The `cancelled` guard already stops stale state writes.
+    // No AbortController: the global fetch interceptor (shared/config) dedupes GETs by URL onto ONE underlying request, so aborting on cleanup (which fires when this effect re-runs as workflows hydrate) rejects the shared request and the re-fired fetch with it, leaving the calendar empty on first load. The `cancelled` guard already stops stale state writes.
     let cancelled = false;
     fetch(`${API_BASE}/workflows/calendar?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`)
       .then((res) => {
@@ -186,11 +164,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
     return { map, start: rangeStart, end: rangeEndExclusive, key: calendarFetchKey };
   }, [calendarEvents, calendarFetchKey, calendarWindowKey, workflows, rangeStart, rangeEndExclusive]);
 
-  // List view can fan out to ~1300 rows for a dense schedule (every 15 min over
-  // 14 days). Flatten days into rows and window at the row level so off-screen
-  // rows unmount instead of weighing the whole app down. Computed up here (not
-  // in the List branch) so the windowing hook runs before the Week/Month early
-  // returns.
+  // List view can fan out to ~1300 rows for a dense schedule (every 15 min over 14 days). Flatten days into rows and window at the row level so off-screen rows unmount instead of weighing the whole app down. Computed up here (not in the List branch) so the windowing hook runs before the Week/Month early returns.
   const upcoming = useMemo(() => {
     const out: { date: Date; events: { workflow: Workflow; date: Date }[]; isToday: boolean }[] = [];
     for (let i = 0; i < 14; i += 1) {
@@ -242,10 +216,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
     const HOURS = HOURS_24;
     const nowColIdx = days.findIndex((d) => sameDay(d, now));
     const nowTopPx = (now.getHours() + now.getMinutes() / 60) * SLOT_H;
-    // Prefer the short zone name ("PDT", "EST", "JST") so the label
-    // reads in plain English instead of "GMT-7". formatToParts is wide-
-    // supported; if it ever fails we degrade silently rather than show
-    // a confusing fallback.
+    // Prefer the short zone name ("PDT", "EST", "JST") so the label reads in plain English instead of "GMT-7". formatToParts is wide- supported; if it ever fails we degrade silently rather than show a confusing fallback.
     const TZ_LABEL = (() => {
       try {
         const parts = new Intl.DateTimeFormat('en', { timeZoneName: 'short' }).formatToParts(new Date());
@@ -323,9 +294,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
                       if (!wid) return;
                       const wf = workflows.find((w) => w.id === wid);
                       if (!wf) return;
-                      // Build the patched schedule: new hour, and for
-                      // weekly schedules swap on_days to just the target
-                      // weekday. Daily/monthly only get the new hour.
+                      // Build the patched schedule: new hour, and for weekly schedules swap on_days to just the target weekday. Daily/monthly only get the new hour.
                       const sched = { ...wf.schedule, hour } as typeof wf.schedule;
                       if (sched.repeat_unit === 'week') sched.on_days = [targetWeekday];
                       dispatch(updateWorkflow({
@@ -425,13 +394,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
     );
   }
 
-  // Apple-Calendar-style list: each day is a stacked group with the date as a
-  // header and its events listed underneath, so a busy day stays readable top
-  // to bottom instead of crammed beside a date column. Today renders even with
-  // no events (shows a "No events today" placeholder)
-  // so the list doesn't feel empty for new users. Off-screen day groups
-  // unmount (useWindowedList) and leave a measured-height spacer behind, so a
-  // dense schedule stays light no matter how far down you scroll.
+  // Apple-Calendar-style list: each day is a stacked group with the date as a header and its events listed underneath, so a busy day stays readable top to bottom instead of crammed beside a date column. Today renders even with no events (shows a "No events today" placeholder) so the list doesn't feel empty for new users. Off-screen day groups unmount (useWindowedList) and leave a measured-height spacer behind, so a dense schedule stays light no matter how far down you scroll.
   const accent = c.accent.primary;
   const visibleRows = rows.slice(windowing.start, windowing.end);
   return (
@@ -505,8 +468,7 @@ export default function ScheduleCalendar({ view, density, onSelectWorkflow, refD
   );
 }
 
-// Apple Calendar style event stack: tiny bars in the hour cell, followed by a
-// text overflow affordance when the hour has more runs than fit.
+// Apple Calendar style event stack: tiny bars in the hour cell, followed by a text overflow affordance when the hour has more runs than fit.
 function EventStack({ events, paused, now, maxVisible, onSelectWorkflow, eventFontSize, onContextWorkflow }: {
   events: { workflow: Workflow; date: Date }[];
   paused?: boolean;
@@ -600,9 +562,7 @@ function EventStack({ events, paused, now, maxVisible, onSelectWorkflow, eventFo
   );
 }
 
-// "+N more" on a packed month cell opens a scrollable popover listing every
-// run that day, so a heavy day isn't a dead end. Past fires keep the hollow
-// ring the cell rows use, for a consistent at-a-glance "already ran" read.
+// "+N more" on a packed month cell opens a scrollable popover listing every run that day, so a heavy day isn't a dead end. Past fires keep the hollow ring the cell rows use, for a consistent at-a-glance "already ran" read.
 function MonthDayOverflow({ date, count, events, now, fontSize, onSelectWorkflow }: {
   date: Date;
   count: number;

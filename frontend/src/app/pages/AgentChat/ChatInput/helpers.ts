@@ -4,9 +4,7 @@ export function formatTokenCount(n: number): string {
   return String(n);
 }
 
-// Path basename that works on both POSIX (/Users/x/file.pdf) and Windows
-// (C:\Users\x\file.pdf). Splits on either separator; falls back to the
-// raw path so empty segments don't yield ''.
+// Path basename that works on both POSIX (/Users/x/file.pdf) and Windows (C:\Users\x\file.pdf). Splits on either separator; falls back to the raw path so empty segments don't yield ''.
 export function basename(p: string): string {
   if (!p) return '';
   const parts = p.split(/[\\/]/).filter(Boolean);

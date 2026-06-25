@@ -124,11 +124,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
     const [mode, setMode] = useState(defaultMode || 'agent');
     const [model, setModel] = useState(defaultModel || 'sonnet');
     const [thinkingLevel, setThinkingLevel] = useState<'off' | 'low' | 'medium' | 'high' | 'auto'>(defaultThinkingLevel || 'auto');
-    // Snap to the persisted Settings defaults as soon as they arrive from the
-    // backend. Without the settingsLoaded guard, the effect fires against the
-    // Redux initialState ('sonnet') before the real default has loaded, and
-    // the settingsApplied flag then locks out the real default for the rest
-    // of the session , so new chats spawn under the stale value.
+    // Snap to the persisted Settings defaults as soon as they arrive from the backend. Without the settingsLoaded guard, the effect fires against the Redux initialState ('sonnet') before the real default has loaded, and the settingsApplied flag then locks out the real default for the rest of the session, so new chats spawn under the stale value.
     const settingsApplied = useRef(false);
     useEffect(() => {
       if (settingsLoaded && !settingsApplied.current) {
@@ -148,11 +144,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
       }
       prevInputOpen.current = inputOpen;
     }, [inputOpen, settingsLoaded, defaultMode, defaultModel, defaultThinkingLevel]);
-    // Prefill-driven mode: a Build starter opens the composer in App Builder mode
-    // ('view-builder'); a non-Build starter (no prefillMode) falls back to the
-    // default. Gated on inputOpen + declared last so it wins the reset effects
-    // above regardless of settings-load timing. A later manual pick survives
-    // because none of these deps change on a pick.
+    // Prefill-driven mode: a Build starter opens the composer in App Builder mode ('view-builder'); a non-Build starter (no prefillMode) falls back to the default. Gated on inputOpen + declared last so it wins the reset effects above regardless of settings-load timing. A later manual pick survives because none of these deps change on a pick.
     useEffect(() => {
       if (!inputOpen || !settingsLoaded) return;
       setMode(prefillMode || defaultMode || 'agent');
@@ -267,9 +259,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
       setViewSearch('');
     }, [viewPickerOpen, dispatch]);
 
-    // Opens the History popover on Chat history, with a tab to the Scheduled
-    // tasks run log. The calendar is a separate destination reached via the
-    // Schedule pill, never from here.
+    // Opens the History popover on Chat history, with a tab to the Scheduled tasks run log. The calendar is a separate destination reached via the Schedule pill, never from here.
     const handleOpenHistory = useCallback(() => {
       if (historyOpen) {
         setHistoryOpen(false);
@@ -301,16 +291,13 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
     const autoSelectOnNew = useAppSelector((s) => s.settings.data.auto_select_mode_on_new_agent);
     const prevInputOpenRef = useRef(inputOpen);
     useEffect(() => {
-      // Collapsing the composer drops the selecting cursor but KEEPS the selected
-      // elements, so they persist across collapse/reopen like the draft text does.
-      // The selection is cleared on send via ChatInput's clearOwnerElements(ownerId).
+      // Collapsing the composer drops the selecting cursor but KEEPS the selected elements, so they persist across collapse/reopen like the draft text does. The selection is cleared on send via ChatInput's clearOwnerElements(ownerId).
       if (prevInputOpenRef.current && !inputOpen && elementSelection) {
         if (elementSelection.selectMode && elementSelection.activeOwnerId === TOOLBAR_OWNER_ID) {
           elementSelection.setSelectMode(false);
         }
       }
-      // Re-arm select mode on reopen without wiping any in-progress selection
-      // (mirrors the selector button, which only clears when switching owners).
+      // Re-arm select mode on reopen without wiping any in-progress selection (mirrors the selector button, which only clears when switching owners).
       if (!prevInputOpenRef.current && inputOpen && autoSelectOnNew && elementSelection) {
         elementSelection.setActiveOwnerId(TOOLBAR_OWNER_ID);
         elementSelection.setExcludeSelectId(null);
@@ -452,11 +439,7 @@ const DashboardToolbar = React.forwardRef<HTMLDivElement, Props>(
         }}
       >
         {inputOpen && !historyOpen ? (
-          // historyOpen wins over the composer: clicking Schedule closes the
-          // composer via onCancel(), but that's a parent-state update that
-          // lands a render late, so without this guard the composer kept
-          // covering the calendar (the "Schedule does nothing" bug).
-          // data-onboarding-scope="dock" makes AC's per-agent resolver prefer this dock chat input over existing agent cards.
+          // historyOpen wins over the composer: clicking Schedule closes the composer via onCancel(), but that's a parent-state update that lands a render late, so without this guard the composer kept covering the calendar (the "Schedule does nothing" bug). data-onboarding-scope="dock" makes AC's per-agent resolver prefer this dock chat input over existing agent cards.
           <div
             data-onboarding-scope="dock"
             style={{ width: '100%', minHeight: 56, paddingBottom: 0, marginBottom: -4 }}

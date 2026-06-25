@@ -9,8 +9,7 @@ import { captureDashboardThumbnail } from '../../geometry/captureDashboardThumbn
 // Settle window after a card is added/removed before snapshotting, so the new card has a beat to render.
 const DASHBOARD_CAPTURE_DELAY_MS = 1200;
 
-// Sorted set of every card id on the canvas. Changes on add/remove (not on move),
-// so we can tell whether the dashboard's contents differ from the last screenshot.
+// Sorted set of every card id on the canvas. Changes on add/remove (not on move), so we can tell whether the dashboard's contents differ from the last screenshot.
 function dashboardSignature(s: {
   cards: Record<string, unknown>;
   viewCards: Record<string, unknown>;
@@ -40,10 +39,7 @@ export function useDashboardThumbnail({
   viewportRef,
   contentRef,
 }: UseDashboardThumbnailArgs) {
-  // Screenshot the dashboard's contents for its card preview. Native Electron capturePage
-  // (no DOM mutation, no flash). We snapshot while the dashboard is visible whenever its card
-  // set changes and dispatch the update in-place, so the sidebar reorders as soon as the
-  // change settles rather than waiting for the user to navigate away.
+  // Screenshot the dashboard's contents for its card preview. Native Electron capturePage (no DOM mutation, no flash). We snapshot while the dashboard is visible whenever its card set changes and dispatch the update in-place, so the sidebar reorders as soon as the change settles rather than waiting for the user to navigate away.
   const currentSignature = useAppSelector((state) =>
     dashboardSignature(state.dashboardLayout),
   );
@@ -73,11 +69,7 @@ export function useDashboardThumbnail({
       }
       return;
     }
-    // Capturing the dashboard composites live webview pixels; doing it while a
-    // browser webview is mid-navigation OR an agent is actively driving it (its GPU
-    // surface recycling) crashes the renderer (SharedImage 'non-existent mailbox' ->
-    // V8 ToLocalChecked). Wait for it to go quiet; after a few tries, skip this round
-    // and keep the old preview rather than risk the crash.
+    // Capturing the dashboard composites live webview pixels; doing it while a browser webview is mid-navigation OR an agent is actively driving it (its GPU surface recycling) crashes the renderer (SharedImage 'non-existent mailbox' -> V8 ToLocalChecked). Wait for it to go quiet; after a few tries, skip this round and keep the old preview rather than risk the crash.
     if (anyWebviewLoading() || isAnyBrowserBusy()) {
       if (captureRetriesRef.current < 6) {
         captureRetriesRef.current += 1;
@@ -103,8 +95,7 @@ export function useDashboardThumbnail({
       .catch(() => {});
   }, [dashboardId, viewportRef, contentRef]);
 
-  // While visible, (re)snapshot a beat after the card set changes. If it already matches the
-  // saved shot (or was reverted back to it), cancel any pending capture instead of committing stale pixels.
+  // While visible, (re)snapshot a beat after the card set changes. If it already matches the saved shot (or was reverted back to it), cancel any pending capture instead of committing stale pixels.
   useEffect(() => {
     if (!isActive || !dashboardId || !layoutInitialized) return;
     if (currentSignature === lastSavedSignatureRef.current) {

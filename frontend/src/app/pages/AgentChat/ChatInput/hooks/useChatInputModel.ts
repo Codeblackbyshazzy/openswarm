@@ -51,11 +51,7 @@ export function useChatInputModel(model: string) {
     return ((m?.api as string) || 'anthropic').toLowerCase();
   }, [allModelOptions.flat, model]);
 
-  // Mirrors backend agent_manager._resolve_attachments support matrix.
-  // PDFs: Anthropic, Gemini, OpenRouter (file-parser plugin), and
-  // OpenAI direct on GPT-5.x non-Codex (anthropic_proxy bypasses
-  // 9router and POSTs to api.openai.com via anthropic_to_openai.py).
-  // Images: every provider via 9router image_url translation.
+  // Mirrors backend agent_manager._resolve_attachments support matrix. PDFs: Anthropic, Gemini, OpenRouter (file-parser plugin), and OpenAI direct on GPT-5.x non-Codex (anthropic_proxy bypasses 9router and POSTs to api.openai.com via anthropic_to_openai.py). Images: every provider via 9router image_url translation.
   const isCodexModel = typeof model === 'string' && (model.toLowerCase().includes('codex') || model.toLowerCase().startsWith('cx/'));
   const pdfSupported = (
     ['anthropic', 'gemini', 'gemini-cli', 'openrouter'].includes(currentModelApi) ||

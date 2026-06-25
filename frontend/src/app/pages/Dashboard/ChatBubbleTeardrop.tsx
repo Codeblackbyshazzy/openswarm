@@ -1,9 +1,6 @@
 import React from 'react';
 
-// Custom near-circular speech bubble with a teardrop tail at the
-// bottom-left. The bubble body is a rounded square with corner radius
-// ~half the body size, so it reads as a circle. Matches Image #57; MUI
-// rounded chat glyphs either fill the bubble or omit the tail.
+// Custom near-circular speech bubble with a teardrop tail at the bottom-left. The bubble body is a rounded square with corner radius ~half the body size, so it reads as a circle. Matches Image #57; MUI rounded chat glyphs either fill the bubble or omit the tail.
 export default function ChatBubbleTeardrop(props: { sx?: { fontSize?: number } }) {
   const size = props.sx?.fontSize ?? 18;
   return (

@@ -33,9 +33,7 @@ export const step08: OnboardingStep = {
       timeoutMs: 60000,
     },
     { kind: 'delay', ms: 350 },
-    // Guide, don't commandeer: point at the chat input and let the user describe
-    // their OWN app. We never type a canned prompt or auto-send, so the tour
-    // doesn't spend a run building something the user didn't choose.
+    // Guide, don't commandeer: point at the chat input and let the user describe their OWN app. We never type a canned prompt or auto-send, so the tour doesn't spend a run building something the user didn't choose.
     { kind: 'move_to', target: S.chatInput },
     {
       kind: 'popup',

@@ -37,8 +37,7 @@ const tabBtn = (active: boolean, WC: WCPalette): CSSProperties => ({
 const CalendarView: React.FC<{ nav: AppNav }> = ({ nav }) => {
   const WC = useWC();
   const items = useAppSelector((s) => s.workflows.items);
-  // Tick the clock so the now-line and "today" highlight stay live instead of
-  // freezing at first render.
+  // Tick the clock so the now-line and "today" highlight stay live instead of freezing at first render.
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60000);
@@ -47,9 +46,7 @@ const CalendarView: React.FC<{ nav: AppNav }> = ({ nav }) => {
   const ref = nav.refDate;
   const refKey = `${ref.getFullYear()}-${ref.getMonth()}-${ref.getDate()}`;
 
-  // Window of occurrences spanning the visible month grid (covers week too).
-  // Fired times come from the backend's recurrence engine, not a JS reimpl, so
-  // the grid matches what actually runs (timezone + last-day-of-month aware).
+  // Window of occurrences spanning the visible month grid (covers week too). Fired times come from the backend's recurrence engine, not a JS reimpl, so the grid matches what actually runs (timezone + last-day-of-month aware).
   const { fromIso, toIso } = useMemo(() => {
     const from = startOfMonthGrid(ref);
     return { fromIso: from.toISOString(), toIso: addDays(from, 42).toISOString() };
@@ -84,8 +81,7 @@ const CalendarView: React.FC<{ nav: AppNav }> = ({ nav }) => {
     else nav.setRefDate(new Date(ref.getFullYear(), ref.getMonth() + dir, 1));
   };
 
-  // Click "+N more" to peek a day's/hour's full run list. position:fixed via a
-  // body portal so it isn't reparented by the zoomed/panned canvas transform.
+  // Click "+N more" to peek a day's/hour's full run list. position:fixed via a body portal so it isn't reparented by the zoomed/panned canvas transform.
   const [dayPop, setDayPop] = useState<DayPop | null>(null);
   const openDayPop: OpenDayPop = (popTitle, runs, e) => {
     e.stopPropagation();
@@ -155,16 +151,13 @@ const moreStyle = (WC: WCPalette): CSSProperties => ({
 const MonthGrid: React.FC<GridProps> = ({ ref0, now, occByDay, dayKey, onSelect, openDayPop }) => {
   const WC = useWC();
   const start = startOfMonthGrid(ref0);
-  // Only as many weeks as the month actually spans (5 or 6), like the design,
-  // so rows aren't squashed by a dangling extra week of next-month days.
+  // Only as many weeks as the month actually spans (5 or 6), like the design, so rows aren't squashed by a dangling extra week of next-month days.
   const monthEnd = new Date(ref0.getFullYear(), ref0.getMonth() + 1, 0);
   const weeks = Math.ceil((Math.round((monthEnd.getTime() - start.getTime()) / 86400000) + 1) / 7);
   const cells = Array.from({ length: weeks * 7 }, (_, i) => addDays(start, i));
   const month = ref0.getMonth();
 
-  // Cells shrink with the window, so a fixed cap clips. Measure the real row and
-  // "+more" heights off hidden probes (font metrics vary), then fit only events
-  // that fully fit, the rest roll into "+N more". No guessed pixel constants.
+  // Cells shrink with the window, so a fixed cap clips. Measure the real row and "+more" heights off hidden probes (font metrics vary), then fit only events that fully fit, the rest roll into "+N more". No guessed pixel constants.
   const gridRef = useRef<HTMLDivElement | null>(null);
   const probeEventRef = useRef<HTMLDivElement | null>(null);
   const probeMoreRef = useRef<HTMLSpanElement | null>(null);
@@ -249,10 +242,7 @@ const WeekGrid: React.FC<GridProps> = ({ ref0, now, occByDay, dayKey, onSelect, 
   const ROW_H = 44;
 
   useEffect(() => {
-    // Scroll to ~2h before now once per mount / week change. Keying this on the
-    // fresh `now`/`start` objects re-ran it on every render, so any background
-    // re-render (a live run streaming, ongoing-runs updating) yanked the scroll
-    // back up, you could never sit at the bottom. Key off the stable week ms.
+    // Scroll to ~2h before now once per mount / week change. Keying this on the fresh `now`/`start` objects re-ran it on every render, so any background re-render (a live run streaming, ongoing-runs updating) yanked the scroll back up, you could never sit at the bottom. Key off the stable week ms.
     const el = scrollRef.current;
     if (el) el.scrollTop = Math.max(0, (new Date().getHours() - 2) * ROW_H);
     // eslint-disable-next-line react-hooks/exhaustive-deps

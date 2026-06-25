@@ -4,9 +4,7 @@ import Tooltip from '@mui/material/Tooltip';
 import { formatTokenCount } from '../helpers';
 
 export const ContextRing: React.FC<{ used: number; limit: number; accentColor: string; trackColor: string }> = ({ used, limit, accentColor, trackColor }) => {
-  // Track the previous fill so a DROP (compaction freed space) can play a brief
-  // "settle" cue: the ring eases down AND flashes once toward the track color,
-  // signaling "we just made room" without a loud banner. A rise just eases up.
+  // Track the previous fill so a DROP (compaction freed space) can play a brief "settle" cue: the ring eases down AND flashes once toward the track color, signaling "we just made room" without a loud banner. A rise just eases up.
   const prevUsed = React.useRef(used);
   const [justCompacted, setJustCompacted] = React.useState(false);
   React.useEffect(() => {
@@ -40,8 +38,7 @@ export const ContextRing: React.FC<{ used: number; limit: number; accentColor: s
             strokeLinecap="round"
             transform={`rotate(-90 ${size / 2} ${size / 2})`}
             style={{
-              // 600ms cubic-bezier ease on the fill: a rise glides up, a compaction
-              // glides down. The one-shot opacity dip is the "settle" flash on drop.
+              // 600ms cubic-bezier ease on the fill: a rise glides up, a compaction glides down. The one-shot opacity dip is the "settle" flash on drop.
               transition: 'stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease',
               opacity: justCompacted ? 0.35 : 1,
             }}

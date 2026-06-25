@@ -18,7 +18,7 @@ const TrashView: React.FC = () => {
     if (!window.confirm(`Permanently delete "${title}"? This can't be undone.`)) return;
     dispatch(purgeWorkflow(id));
   };
-//  when clicking a run and the run card pops up, make the card pop up slightly more to the right.  
+// when clicking a run and the run card pops up, make the card pop up slightly more to the right.
   return (
     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: WC.paper }}>
       <div style={{ flex: 'none', padding: '22px 30px 14px', borderBottom: `1px solid ${WC.line}` }}>

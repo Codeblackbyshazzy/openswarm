@@ -1,5 +1,4 @@
-// Subset of Electron's NativeImage we actually call. resize() returns another
-// NativeImage, hence the self-reference.
+// Subset of Electron's NativeImage we actually call. resize() returns another NativeImage, hence the self-reference.
 export interface ElectronNativeImage {
   toDataURL: () => string;
   toPNG: () => Buffer;
@@ -74,10 +73,7 @@ export function findBrowserByWebContentsId(wcId: number): string | undefined {
   return undefined;
 }
 
-// True if ANY registered webview is mid-navigation. Capturing the dashboard
-// (which composites live webview pixels) while a webview's GPU surface is being
-// recycled crashes the renderer (SharedImage 'non-existent mailbox' -> V8
-// ToLocalChecked), so the thumbnail capture must wait until they've settled.
+// True if ANY registered webview is mid-navigation. Capturing the dashboard (which composites live webview pixels) while a webview's GPU surface is being recycled crashes the renderer (SharedImage 'non-existent mailbox' -> V8 ToLocalChecked), so the thumbnail capture must wait until they've settled.
 export function anyWebviewLoading(): boolean {
   for (const wv of registry.values()) {
     try {

@@ -15,11 +15,7 @@ interface Props {
 const StreamingBubble: React.FC<Props> = ({ sessionId, activeBranchId, turnLabel, onStreamGrew }) => {
   const streamingMessage = useStreamingMessage(sessionId);
   const rawContent = streamingMessage?.content ?? '';
-  // Smooth-reveal the assistant's generated text at a steady cadence so it reads
-  // like typing instead of bursty network chunks. Provider-agnostic by design:
-  // every model (Anthropic/OpenAI/Gemini/OpenRouter/custom) funnels through this
-  // same streaming slice, so smoothing here covers all of them at once. Tool-call
-  // input is left raw (it's args, not prose). Zero added TTFT (see useSmoothText).
+  // Smooth-reveal the assistant's generated text at a steady cadence so it reads like typing instead of bursty network chunks. Provider-agnostic by design: every model (Anthropic/OpenAI/Gemini/OpenRouter/custom) funnels through this same streaming slice, so smoothing here covers all of them at once. Tool-call input is left raw (it's args, not prose). Zero added TTFT (see useSmoothText).
   const isTextRole = streamingMessage?.role !== 'tool_call';
   const { text: smoothContent, revealRef } = useSmoothText(rawContent, isTextRole);
   const typedContent = isTextRole ? smoothContent : rawContent;

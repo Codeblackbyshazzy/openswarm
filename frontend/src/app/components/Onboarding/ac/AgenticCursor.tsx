@@ -56,14 +56,10 @@ const SPRING = { type: 'spring' as const, stiffness: 260, damping: 26 };
 // On Windows the motionWin shim strips Framer Motion's animate prop, so controls.set({x,y}) never moves the wrapper. We bypass by reading the same store the popups read and applying style.transform directly; Mac is unaffected since Framer's own transform writes win the cascade.
 const IS_WIN = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
 
-// Windows fallback-ease duration. Mirrors the CSS `transform 420ms` transition
-// on the cursor wrapper below; on Windows the Director holds for this (plus a
-// small settle margin) after a moveTo/fadeOut so the CSS ease actually plays
-// before the next step's instant write lands.
+// Windows fallback-ease duration. Mirrors the CSS `transform 420ms` transition on the cursor wrapper below; on Windows the Director holds for this (plus a small settle margin) after a moveTo/fadeOut so the CSS ease actually plays before the next step's instant write lands.
 const WIN_EASE_MS = 420;
 
-// A little spark when the cursor pops into existence: short orange lines shoot out from the
-// tip and fade. Re-keyed on each pop so it replays. One-shot per mount (no infinite loop).
+// A little spark when the cursor pops into existence: short orange lines shoot out from the tip and fade. Re-keyed on each pop so it replays. One-shot per mount (no infinite loop).
 const BURST_SPOKES = 6;
 const CursorBurst: React.FC<{ color: string }> = ({ color }) => (
   <>
@@ -134,14 +130,7 @@ const AgenticCursor = forwardRef<AgenticCursorHandle>((_props, ref) => {
       // Stop prior tracker so it doesn't snap the cursor back to its old anchor mid-animation.
       stopTrackingInternal();
       if (IS_WIN) {
-        // Windows has no Framer runtime (controls.start is a no-op); the visual
-        // hop is the CSS transition on the wrapper, driven by cursorStore.
-        // TWO-STEP so Chromium actually animates: (1) commit the eased
-        // transition at the CURRENT position (cursorStore now flushes an
-        // instant-change), let it paint, then (2) move. Changing transform in
-        // the same recalc that flips transition none->420ms makes Chromium
-        // apply the move instantly (teleport). Then HOLD for the ease so the
-        // Director doesn't begin the next step mid-glide.
+        // Windows has no Framer runtime (controls.start is a no-op); the visual hop is the CSS transition on the wrapper, driven by cursorStore. TWO-STEP so Chromium actually animates: (1) commit the eased transition at the CURRENT position (cursorStore now flushes an instant-change), let it paint, then (2) move. Changing transform in the same recalc that flips transition none->420ms makes Chromium apply the move instantly (teleport). Then HOLD for the ease so the Director doesn't begin the next step mid-glide.
         writePos(posRef.current.x, posRef.current.y, true, false);
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         writePos(x, y, true, false);
@@ -159,9 +148,7 @@ const AgenticCursor = forwardRef<AgenticCursorHandle>((_props, ref) => {
     async fadeOut(to) {
       stopTrackingInternal();
       if (IS_WIN) {
-        // Glide to the exit point via the same two-step arm as moveTo so the
-        // CSS ease actually runs, then hide. The opacity fade has no Framer
-        // runtime on Windows, so the cursor just disappears once it eases to `to`.
+        // Glide to the exit point via the same two-step arm as moveTo so the CSS ease actually runs, then hide. The opacity fade has no Framer runtime on Windows, so the cursor just disappears once it eases to `to`.
         writePos(posRef.current.x, posRef.current.y, true, false);
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         writePos(to.x, to.y, true, false);

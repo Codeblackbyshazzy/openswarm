@@ -17,9 +17,7 @@ interface Args {
   spawnOriginsRef: RefObject<Record<string, SpawnOrigin>>;
 }
 
-// First-run welcome chat. NOT auto-created: the onboarding cursor clicks the New Agent button,
-// which calls handleNewAgent -> createWelcomeDraft, so the chat is clicked into existence. The
-// user clicking New Agent by hand spawns the same thing (fail-safe). Returns the gate + creator.
+// First-run welcome chat. NOT auto-created: the onboarding cursor clicks the New Agent button, which calls handleNewAgent -> createWelcomeDraft, so the chat is clicked into existence. The user clicking New Agent by hand spawns the same thing (fail-safe). Returns the gate + creator.
 export function useWelcomeDraft({
   dashboardId, canvasEmpty, expandedSessionIds, viewportRef, canvasStateRef, spawnOriginsRef,
 }: Args): { welcomeEligible: boolean; createWelcomeDraft: () => void } {
@@ -36,8 +34,7 @@ export function useWelcomeDraft({
 
   const createWelcomeDraft = useCallback(() => {
     try {
-      // No seeded message: the greeting + chips render (and animate) inside the welcome chat,
-      // so nothing here can ever reach the backend.
+      // No seeded message: the greeting + chips render (and animate) inside the welcome chat, so nothing here can ever reach the backend.
       const action = dispatch(
         createDraftSession({ welcome: true, model, mode: 'agent', dashboardId, setActive: true }),
       );
@@ -59,8 +56,7 @@ export function useWelcomeDraft({
           height: EXPANDED_CARD_MIN_H,
           expandedSessionIds,
         }));
-        // placeCard grid-snaps + dodges collisions; the welcome chat is the only thing on a
-        // fresh dashboard, so pin it to the EXACT viewport center instead of a grid cell.
+        // placeCard grid-snaps + dodges collisions; the welcome chat is the only thing on a fresh dashboard, so pin it to the EXACT viewport center instead of a grid cell.
         dispatch(setCardPosition({ sessionId: draftId, x, y }));
       }
       dispatch(expandSession(draftId));

@@ -1,7 +1,4 @@
-// Run-state views for the workflow card. The card's `view` field flips to
-// 'running' / 'completed' / 'failed' off of the workflow:run ws stream
-// (see upsertRun reducer). Each view here renders the same step list
-// with a different status overlay + a different footer.
+// Run-state views for the workflow card. The card's `view` field flips to 'running' / 'completed' / 'failed' off of the workflow:run ws stream (see upsertRun reducer). Each view here renders the same step list with a different status overlay + a different footer.
 
 import React, { useCallback, useMemo } from 'react';
 import Box from '@mui/material/Box';
@@ -30,9 +27,7 @@ import { fetchSession, closeSession, collapseSession } from '@/shared/state/agen
 import type { AppDispatch } from '@/shared/state/store';
 import StepList, { type StepStatus } from './StepList';
 
-// Unlink the sidecar AND close the chat card it opened. closeSession is
-// what makes removal stick: a bare removeCard gets re-added by
-// reconcileSessions since the run session shares the dashboard.
+// Unlink the sidecar AND close the chat card it opened. closeSession is what makes removal stick: a bare removeCard gets re-added by reconcileSessions since the run session shares the dashboard.
 function stopViewingSidecar(dispatch: AppDispatch, workflowId: string, sessionId: string | null | undefined) {
   dispatch(setCardSidecar({ workflowId, sessionId: null, kind: null }));
   if (!sessionId) return;
@@ -41,9 +36,7 @@ function stopViewingSidecar(dispatch: AppDispatch, workflowId: string, sessionId
   void dispatch(closeSession({ sessionId }));
 }
 
-// Helper: open a session next to the workflow card AND mark the card as
-// sidecar-linked so the footer flips to Stop Watching/Viewing and the
-// dashboard draws an arrow chip between the two cards.
+// Helper: open a session next to the workflow card AND mark the card as sidecar-linked so the footer flips to Stop Watching/Viewing and the dashboard draws an arrow chip between the two cards.
 export function useOpenSidecar(workflowId: string) {
   const dispatch = useAppDispatch();
   return React.useCallback(async (sessionId: string, kind: 'watching' | 'viewing-completed' | 'viewing-error' | 'testing') => {
@@ -152,9 +145,7 @@ export function RunningView({ workflow, steps, runs, mode = 'card' }: {
   const runId = card?.runId || null;
   const run = useMemo(() => (runs || []).find((r) => r.id === runId) || null, [runs, runId]);
 
-  // Prefer the backend's real active_step_idx (broadcast on each step
-  // bump in executor.execute). Fall back to elapsed/expected heuristic
-  // when the field is missing (older runs or first-frame race).
+  // Prefer the backend's real active_step_idx (broadcast on each step bump in executor.execute). Fall back to elapsed/expected heuristic when the field is missing (older runs or first-frame race).
   const heuristicIdx = useActiveStepIdx(steps.length, runs, runId);
   const activeIdx = typeof run?.active_step_idx === 'number' ? run.active_step_idx : heuristicIdx;
   const statuses: StepStatus[] = steps.map((_, i) =>
@@ -163,9 +154,7 @@ export function RunningView({ workflow, steps, runs, mode = 'card' }: {
   const completeCount = statuses.filter((s) => s === 'done').length;
   const total = steps.length;
 
-  // Tool-call subtitle for the active step. Backend polls the session's
-  // messages at 1.5s cadence and broadcasts on workflow:run as the agent
-  // makes new tool calls. See executor.py _watch_tool_calls.
+  // Tool-call subtitle for the active step. Backend polls the session's messages at 1.5s cadence and broadcasts on workflow:run as the agent makes new tool calls. See executor.py _watch_tool_calls.
   const activeSubtitle = run?.last_tool_label || null;
   const activeDuration = formatLiveDuration(run);
 
@@ -265,10 +254,7 @@ export function CompletedView({ workflow, steps, runs, mode = 'card' }: {
   const runId = card?.runId || null;
   const run = useMemo(() => (runs || []).find((r) => r.id === runId) || null, [runs, runId]);
   const statuses: StepStatus[] = steps.map(() => 'done');
-  // A run that was being watched live stays tethered to the same chat when it
-  // finishes, so the still-'watching' kind counts as linked too (the slice's
-  // watching->viewing-completed flip can miss on fast runs). Without this the
-  // card offers "View Agent", which spawns a duplicate chat.
+  // A run that was being watched live stays tethered to the same chat when it finishes, so the still-'watching' kind counts as linked too (the slice's watching->viewing-completed flip can miss on fast runs). Without this the card offers "View Agent", which spawns a duplicate chat.
   const isLinked = mode === 'sidecar-linked' && (card?.sidecarKind === 'viewing-completed' || card?.sidecarKind === 'watching');
 
   const onDone = useCallback(() => {
@@ -372,9 +358,7 @@ export function FailedView({ workflow, steps, runs, mode = 'card' }: {
   const statuses: StepStatus[] = steps.map((_, i) =>
     i < failedIdx ? 'done' : i === failedIdx ? 'failed' : 'pending',
   );
-  // Same as CompletedView: a watched run that fails stays tethered, so treat the
-  // still-'watching' kind as linked and show Stop Viewing instead of View Error
-  // (which would open a second chat).
+  // Same as CompletedView: a watched run that fails stays tethered, so treat the still-'watching' kind as linked and show Stop Viewing instead of View Error (which would open a second chat).
   const isLinked = mode === 'sidecar-linked' && (card?.sidecarKind === 'viewing-error' || card?.sidecarKind === 'watching');
 
   const onIgnore = useCallback(() => {
@@ -464,9 +448,7 @@ export function FailedView({ workflow, steps, runs, mode = 'card' }: {
 
 function guessFailedIdx(run: WorkflowRun | null, total: number): number {
   if (!run) return Math.max(0, total - 1);
-  // Backend pins active_step_idx at the failed step before flipping
-  // status to 'failure'. Prefer that; fall back to parsing "Step N"
-  // out of the error string for legacy runs.
+  // Backend pins active_step_idx at the failed step before flipping status to 'failure'. Prefer that; fall back to parsing "Step N" out of the error string for legacy runs.
   if (typeof run.active_step_idx === 'number') {
     return Math.max(0, Math.min(total - 1, run.active_step_idx));
   }
@@ -480,12 +462,7 @@ function guessFailedIdx(run: WorkflowRun | null, total: number): number {
   return Math.max(0, Math.min(total - 1, 1));
 }
 
-// ---------- Header overrides ----------
-// The card header normally renders {History | Run}. Running shows
-// {Stop | Pause}, Completed/Failed keep {History | Run}, Edit/Fix shows
-// {Discard | Save}, Scheduling shows {Cancel task scheduling}. The
-// WorkflowCard hands off via this helper so each view can declare its
-// own header without the parent fanning out a switch.
+// ---------- Header overrides ---------- The card header normally renders {History | Run}. Running shows {Stop | Pause}, Completed/Failed keep {History | Run}, Edit/Fix shows {Discard | Save}, Scheduling shows {Cancel task scheduling}. The WorkflowCard hands off via this helper so each view can declare its own header without the parent fanning out a switch.
 
 export interface HeaderActions {
   left?: React.ReactNode;

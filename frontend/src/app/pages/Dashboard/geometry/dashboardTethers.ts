@@ -58,9 +58,7 @@ export function elbowPath(x1: number, y1: number, x2: number, y2: number): strin
 type Anchor = { x: number; y: number; side: 'left' | 'right' | 'top' | 'bottom' };
 type CanvasRect = { x: number; y: number; width: number; height: number };
 
-// Where the ray from a rect's center toward (tx,ty) crosses the rect border.
-// Pins a tether endpoint to the card edge facing the other card, so it can
-// never float in empty space the way nearest-corner anchoring could.
+// Where the ray from a rect's center toward (tx,ty) crosses the rect border. Pins a tether endpoint to the card edge facing the other card, so it can never float in empty space the way nearest-corner anchoring could.
 function borderPoint(x: number, y: number, w: number, h: number, tx: number, ty: number): { x: number; y: number } {
   const cx = x + w / 2;
   const cy = y + h / 2;
@@ -156,9 +154,7 @@ export function useTethers({
       };
     }).filter(Boolean) as Tether[];
 
-    // One tether builder for both browser and view cards: the anchor-pairing
-    // and elbow/vertical path are identical; only the destination card map and
-    // the key prefix differ, so the resolved dst card is passed in.
+    // One tether builder for both browser and view cards: the anchor-pairing and elbow/vertical path are identical; only the destination card map and the key prefix differ, so the resolved dst card is passed in.
     function cardTether(
       dst: { x: number; y: number; width: number; height: number } | undefined,
       dstId: string,
@@ -411,14 +407,12 @@ export function useTethers({
       });
     }
 
-    // Run Monitor tether: the Workflows window to its spawned live-run card.
-    // Same border-anchor + elbow math as the sidecar "Watching" arrow.
+    // Run Monitor tether: the Workflows window to its spawned live-run card. Same border-anchor + elbow math as the sidecar "Watching" arrow.
     const monitorTethers: Tether[] = [];
     if (workflowsHub && workflowsMonitorCard) {
       let hubX = workflowsHub.x, hubY = workflowsHub.y;
       let monX = workflowsMonitorCard.x, monY = workflowsMonitorCard.y;
-      // Track live drag so the line follows the card in real time instead of
-      // snapping into place on drop (same mechanism as the agent->browser tether).
+      // Track live drag so the line follows the card in real time instead of snapping into place on drop (same mechanism as the agent->browser tether).
       if (liveDragInfo) {
         if (liveDragInfo.cardId === 'workflows-hub') { hubX += liveDragInfo.dx; hubY += liveDragInfo.dy; }
         if (liveDragInfo.cardId === 'workflows-monitor') { monX += liveDragInfo.dx; monY += liveDragInfo.dy; }
@@ -431,8 +425,7 @@ export function useTethers({
       const b = borderPoint(monRect.x, monRect.y, monRect.width, monRect.height, hubC.x, hubC.y);
       const midX = a.x + (b.x - a.x) / 2;
       const midY = a.y + (b.y - a.y) / 2;
-      // The label box is left-anchored at labelX (rect starts there and grows
-      // right), so shift left by half the text width to truly center it on the line.
+      // The label box is left-anchored at labelX (rect starts there and grows right), so shift left by half the text width to truly center it on the line.
       monitorTethers.push({
         key: 'workflows-monitor',
         path: elbowPath(a.x, a.y, b.x, b.y),
@@ -443,8 +436,7 @@ export function useTethers({
       });
     }
 
-    // Index outputs by their owning session so the per-session lookup below
-    // doesn't scan the whole outputs map for every view-builder chat.
+    // Index outputs by their owning session so the per-session lookup below doesn't scan the whole outputs map for every view-builder chat.
     const outputsBySession = new Map<string, string[]>();
     for (const o of Object.values(outputs)) {
       if (!o.session_id) continue;
@@ -473,8 +465,6 @@ export function useTethers({
     }
 
     return [...agentTethers, ...browserTethers, ...workflowTethers, ...viewTethers, ...monitorTethers];
-  // measuredHeightsTick re-runs the memo once ResizeObserver reports a new
-  // height after a collapse (the ref read is invisible to the dep checker).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // measuredHeightsTick re-runs the memo once ResizeObserver reports a new height after a collapse (the ref read is invisible to the dep checker). eslint-disable-next-line react-hooks/exhaustive-deps
   }, [glowingAgentCards, glowingBrowserCards, cards, browserCards, workflowCards, workflowItems, workflowOpenCards, viewCards, outputs, expandedSessionIds, liveDragInfo, measuredHeightsTick, sessionList, workflowsHub, workflowsMonitorCard, workflowsMonitorLabel]);
 }

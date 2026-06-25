@@ -1,28 +1,18 @@
-// Pure ranking + capping for the interactive-element list the browser agent
-// sees from the accessibility tree. No DOM/CDP deps so it stays unit-testable.
-//
-// Why: BrowserListInteractives used to dump EVERY interactive node with no cap.
-// On heavy pages that is 200+ rows, which dilutes the model's attention and
-// burns tokens. We dedupe twins, rank the things a human acts on first, and
-// cap, so the model gets a short, high-signal menu.
+// Pure ranking + capping for the interactive-element list the browser agent sees from the accessibility tree. No DOM/CDP deps so it stays unit-testable. Why: BrowserListInteractives used to dump EVERY interactive node with no cap. On heavy pages that is 200+ rows, which dilutes the model's attention and burns tokens. We dedupe twins, rank the things a human acts on first, and cap, so the model gets a short, high-signal menu.
 
 export interface RankItem {
   role: string;
   name: string;
   backendNodeId: number;
-  // Present when the element lives in a cross-origin (OOPIF) child frame; the
-  // CDP session to address it through. Ranking ignores it, just carries it.
+  // Present when the element lives in a cross-origin (OOPIF) child frame; the CDP session to address it through. Ranking ignores it, just carries it.
   sessionId?: string;
-  // Nearby text that disambiguates same-named twins (the card/section this
-  // element sits in, e.g. which "Message" button belongs to which person).
+  // Nearby text that disambiguates same-named twins (the card/section this element sits in, e.g. which "Message" button belongs to which person).
   context?: string;
-  // Current text of a textbox/searchbox/combobox. Without it a filled compose
-  // box still renders by its placeholder name and reads as "typing failed".
+  // Current text of a textbox/searchbox/combobox. Without it a filled compose box still renders by its placeholder name and reads as "typing failed".
   value?: string;
 }
 
-// Lower number = higher priority. Inputs the user types into first, then
-// navigation/buttons, then toggles, then the long tail of list/option roles.
+// Lower number = higher priority. Inputs the user types into first, then navigation/buttons, then toggles, then the long tail of list/option roles.
 const ROLE_PRIORITY: Record<string, number> = {
   textbox: 0, searchbox: 0, combobox: 0,
   button: 1, link: 1, menuitem: 1, tab: 1,
@@ -37,14 +27,7 @@ function rolePriority(role: string): number {
   return role in ROLE_PRIORITY ? ROLE_PRIORITY[role] : DEFAULT_PRIORITY;
 }
 
-// Drop back-to-back duplicates with the same role+name. The AX tree often
-// emits an icon node and its label as twins, and sticky headers repeat the
-// same control. Consecutive-only so a genuine list (5 distinct "Add to cart"
-// buttons interleaved with product text) is never collapsed. The sessionId is
-// part of the key so a same-named element in a cross-origin child frame is
-// never mistaken for a twin of the root frame's last element at the seam.
-// Context too: five "Message" buttons in five people-cards are NOT twins,
-// only same-card icon+label pairs (identical context) collapse.
+// Drop back-to-back duplicates with the same role+name. The AX tree often emits an icon node and its label as twins, and sticky headers repeat the same control. Consecutive-only so a genuine list (5 distinct "Add to cart" buttons interleaved with product text) is never collapsed. The sessionId is part of the key so a same-named element in a cross-origin child frame is never mistaken for a twin of the root frame's last element at the seam. Context too: five "Message" buttons in five people-cards are NOT twins, only same-card icon+label pairs (identical context) collapse.
 function dedupeConsecutive(items: RankItem[]): RankItem[] {
   const out: RankItem[] = [];
   for (const it of items) {
@@ -63,13 +46,11 @@ export interface RankResult {
 
 export interface RankOptions {
   cap?: number;
-  // The agent's current goal; elements whose name matches it float to the top
-  // so the thing the model is actually looking for survives the cap.
+  // The agent's current goal; elements whose name matches it float to the top so the thing the model is actually looking for survives the cap.
   goal?: string;
 }
 
-// Words too generic to be useful signal, including the browser-action verbs
-// and UI nouns that would otherwise match half the page ("click the button").
+// Words too generic to be useful signal, including the browser-action verbs and UI nouns that would otherwise match half the page ("click the button").
 const STOPWORDS = new Set([
   'the', 'and', 'for', 'with', 'click', 'type', 'into', 'button', 'link',
   'press', 'select', 'open', 'goto', 'navigate', 'find', 'tap', 'this',
@@ -96,8 +77,7 @@ export function rankAndCapInteractives(
   const cap = opts.cap ?? DEFAULT_INTERACTIVE_CAP;
   const keywords = opts.goal ? goalKeywords(opts.goal) : [];
   const deduped = dedupeConsecutive(items);
-  // Sort: goal-matched first, then role priority, tiebroken on original
-  // document order so the result is deterministic regardless of engine sort.
+  // Sort: goal-matched first, then role priority, tiebroken on original document order so the result is deterministic regardless of engine sort.
   const ranked = deduped
     .map((it, i) => ({ it, i, m: matchesGoal(it.name, keywords) ? 0 : 1 }))
     .sort((a, b) => {

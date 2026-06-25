@@ -8,8 +8,7 @@ function authHeaders(): Record<string, string> {
 
 const base = `${API_BASE}/workflows`;
 
-// Sticky single edit-agent session for a workflow. The backend snapshots steps
-// into draft_steps when it first hands one out; reattaches on later calls.
+// Sticky single edit-agent session for a workflow. The backend snapshots steps into draft_steps when it first hands one out; reattaches on later calls.
 export async function ensureEditAgentSession(workflowId: string): Promise<string | null> {
   try {
     const res = await fetch(`${base}/${encodeURIComponent(workflowId)}/edit-agent-session`, {
@@ -24,9 +23,7 @@ export async function ensureEditAgentSession(workflowId: string): Promise<string
   }
 }
 
-// Send a chat question with a run's transcript riding along as hidden context
-// for that single turn, so the answer is grounded in the run without an extra
-// "I've reviewed it" round-trip. The user's bubble shows just their question.
+// Send a chat question with a run's transcript riding along as hidden context for that single turn, so the answer is grounded in the run without an extra "I've reviewed it" round-trip. The user's bubble shows just their question.
 export async function askRun(
   workflowId: string,
   body: { runId: string; prompt: string; mode?: string; model?: string },

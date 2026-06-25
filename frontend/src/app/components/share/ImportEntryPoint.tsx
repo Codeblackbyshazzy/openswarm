@@ -1,7 +1,4 @@
-// The one global import affordance. Drop a .swarm anywhere (or pick it): a
-// GPU-safe pixel "digest" flash plays where you dropped it WHILE the preflight
-// runs underneath, then it resolves straight into the import for safe bundles or
-// a short confirm for ones that carry code/actions. Mount once near the app root.
+// The one global import affordance. Drop a .swarm anywhere (or pick it): a GPU-safe pixel "digest" flash plays where you dropped it WHILE the preflight runs underneath, then it resolves straight into the import for safe bundles or a short confirm for ones that carry code/actions. Mount once near the app root.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
 import Fade from '@mui/material/Fade';
@@ -32,8 +29,7 @@ function looksImportable(name: string): boolean {
   return n.endsWith('.swarm') || n.endsWith('.md') || n.endsWith('.zip');
 }
 
-// A bundle needs a confirm only if it can run code (an app) or wants actions
-// connected; everything else is inert data and imports straight away.
+// A bundle needs a confirm only if it can run code (an app) or wants actions connected; everything else is inert data and imports straight away.
 function needsConfirm(pf: ImportPreflight): boolean {
   const s = pf.summary;
   const hasApp = s.root.type === 'app' || s.includes.some((i) => i.type === 'app');

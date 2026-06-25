@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useWC, WORKFLOW_PALETTE } from './uiKit';
 
-// Small swatch button that opens a palette popover. Self-rendered (no portal)
-// so it survives the canvas compositor, same reasoning as RepeatField.
+// Small swatch button that opens a palette popover. Self-rendered (no portal) so it survives the canvas compositor, same reasoning as RepeatField.
 const ColorSwatch: React.FC<{ value: string; onChange: (hex: string) => void; size?: number }> = ({ value, onChange, size = 14 }) => {
   const WC = useWC();
   const [open, setOpen] = useState(false);

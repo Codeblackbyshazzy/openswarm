@@ -3,8 +3,7 @@ import { useAppDispatch } from '@/shared/hooks';
 import { streamStart, streamDelta } from '@/shared/state/streamingSlice';
 import { addMessage, type AgentSession } from '@/shared/state/agentsSlice';
 
-// The first thing a new user reads. Written as a normal assistant turn (prose, no headings) so it
-// streams in exactly like a real reply. No em-dashes.
+// The first thing a new user reads. Written as a normal assistant turn (prose, no headings) so it streams in exactly like a real reply. No em-dashes.
 export const WELCOME_GREETING =
   "Hi, I'm OpenSwarm, your personal AI team. I can do just about anything right on your laptop, " +
   "so bring me anything: a tough problem, a half-formed idea, something you need to write. " +
@@ -12,10 +11,7 @@ export const WELCOME_GREETING =
 
 const GREETING_MSG_ID = 'welcome-greeting';
 
-// Streams the first-run greeting in as a genuine assistant bubble: it rides the same streaming
-// slice + smooth-reveal every real reply uses, then settles into a real message so the chips can
-// follow. Pure UI, no LLM, no run: launchAndSendFirstMessage POSTs only the prompt, so this
-// seeded message is dropped on the server swap and never reaches the backend.
+// Streams the first-run greeting in as a genuine assistant bubble: it rides the same streaming slice + smooth-reveal every real reply uses, then settles into a real message so the chips can follow. Pure UI, no LLM, no run: launchAndSendFirstMessage POSTs only the prompt, so this seeded message is dropped on the server swap and never reaches the backend.
 export function useWelcomeGreeting(
   session: AgentSession | undefined,
   isDraft: boolean,

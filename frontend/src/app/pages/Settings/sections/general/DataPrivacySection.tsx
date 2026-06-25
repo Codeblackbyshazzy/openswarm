@@ -10,10 +10,7 @@ import type { SettingsStyles } from '../settingsStyles';
 
 const ERASE_WORD = 'ERASE';
 
-// The iOS Reset menu, two actions only: "Reset All Settings" (preferences back to
-// defaults, your stuff + sign-in stay) and "Erase All Content and Settings" (factory
-// wipe + relaunch). Flat rows, not a boxed "danger zone": red lives only on the
-// destructive label, and the real friction is the typed-confirm in the dialog.
+// The iOS Reset menu, two actions only: "Reset All Settings" (preferences back to defaults, your stuff + sign-in stay) and "Erase All Content and Settings" (factory wipe + relaunch). Flat rows, not a boxed "danger zone": red lives only on the destructive label, and the real friction is the typed-confirm in the dialog.
 const DataPrivacySection: React.FC<{ styles: SettingsStyles }> = ({ styles }) => {
   const c = useClaudeTokens();
   const { sectionSx, labelSx, descSx } = styles;
@@ -38,8 +35,7 @@ const DataPrivacySection: React.FC<{ styles: SettingsStyles }> = ({ styles }) =>
     try {
       const res = await fetch(`${API_BASE}/settings/reset-to-defaults`, { method: 'POST' });
       if (!res.ok) throw new Error(String(res.status));
-      // Reload so every slice + local component state re-syncs from the now-default
-      // backend; no stale flag can survive a full renderer reload.
+      // Reload so every slice + local component state re-syncs from the now-default backend; no stale flag can survive a full renderer reload.
       window.location.reload();
     } catch {
       setBusy(false);

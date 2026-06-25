@@ -98,13 +98,7 @@ class OnboardingDirector {
         controller.abort();
       }
     };
-    // Yield to the user: the runtime fires this when, during a wait for a
-    // SPECIFIC click target, the user instead clicks somewhere off-script. Back
-    // off silently (reason 'user-cancel' suppresses acRuntime's recovery popup)
-    // rather than nagging or auto-performing the action. It is scoped to
-    // click-target waits in the runtime, so it can't cancel free-interaction
-    // waits (e.g. connecting a model in Settings, where the user must click
-    // non-tour controls).
+    // Yield to the user: the runtime fires this when, during a wait for a SPECIFIC click target, the user instead clicks somewhere off-script. Back off silently (reason 'user-cancel' suppresses acRuntime's recovery popup) rather than nagging or auto-performing the action. It is scoped to click-target waits in the runtime, so it can't cancel free-interaction waits (e.g. connecting a model in Settings, where the user must click non-tour controls).
     const onUserOffscript = () => {
       report('step_aborted_user_offscript', { step_id: stepId });
       controller.abort('user-cancel');

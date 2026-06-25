@@ -126,12 +126,7 @@ const skillRegistrySlice = createSlice({
 export const { clearSkillDetail } = skillRegistrySlice.actions;
 export default skillRegistrySlice.reducer;
 
-// ---------------------------------------------------------------------------
-// Community source (skills.sh wild registry). Kept as plain async helpers, not
-// slice thunks: the CommunitySkillsDialog owns its own local state, so there's
-// nothing to put in the store. Auth headers are injected by the global fetch
-// interceptor (see shared/config.ts).
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------- Community source (skills.sh wild registry). Kept as plain async helpers, not slice thunks: the CommunitySkillsDialog owns its own local state, so there's nothing to put in the store. Auth headers are injected by the global fetch interceptor (see shared/config.ts). ---------------------------------------------------------------------------
 
 export interface CommunitySkill {
   name: string;

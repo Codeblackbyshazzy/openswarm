@@ -51,8 +51,7 @@ const subscriptionsSlice = createSlice({
     setSubscriptionStatus(state, action: PayloadAction<SubscriptionStatus | null>) {
       state.status = action.payload;
     },
-    // Optimistic: 9Router /providers lags /exchange, so refetching right after would
-    // clobber the just-connected state with stale data. The 30s poller reconciles.
+    // Optimistic: 9Router /providers lags /exchange, so refetching right after would clobber the just-connected state with stale data. The 30s poller reconciles.
     markSubscriptionConnected(state, action: PayloadAction<{ provider: string }>) {
       if (!state.status) return;
       const { provider } = action.payload;

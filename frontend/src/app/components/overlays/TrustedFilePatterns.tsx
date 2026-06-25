@@ -8,11 +8,7 @@ import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 
 const TRUSTED_API = `${API_BASE}/tools/trusted-sensitive-paths`;
 
-// Mirrors the backend _SENSITIVE_PATH_INFO mapping. Kept here intentionally
-// (rather than fetched) because the user-facing label is the only part the
-// settings page renders, and a static dictionary keeps the page snappy and
-// works offline. If a pattern is unknown (older backend), fall back to the
-// raw pattern string.
+// Mirrors the backend _SENSITIVE_PATH_INFO mapping. Kept here intentionally (rather than fetched) because the user-facing label is the only part the settings page renders, and a static dictionary keeps the page snappy and works offline. If a pattern is unknown (older backend), fall back to the raw pattern string.
 const PATTERN_LABELS: Record<string, string> = {
   '*/.ssh': 'SSH folder (~/.ssh)',
   '*/.ssh/*': 'SSH folder (~/.ssh)',
@@ -75,9 +71,7 @@ export const TrustedFilePatterns: React.FC = () => {
     }
   }, [patterns, load]);
 
-  // Hide the whole section until the user actually has trusted patterns;
-  // an empty "no patterns yet" card was just visual bloat for the 99% case.
-  // The approval-time checkbox is what teaches the user this feature exists.
+  // Hide the whole section until the user actually has trusted patterns; an empty "no patterns yet" card was just visual bloat for the 99% case. The approval-time checkbox is what teaches the user this feature exists.
   if (!patterns || patterns.length === 0) return null;
 
   return (

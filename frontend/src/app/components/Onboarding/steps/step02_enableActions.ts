@@ -13,8 +13,7 @@ export const step02: OnboardingStep = {
   videoDurationLabel: '0:24',
   // Narrowed to YouTube so users with other tools still get walked.
   skipIf: isYoutubeEnabled,
-  // Two beats only (open Actions, flip YouTube on); the chevron-peek and permission
-  // fine-tune popups were trimmed to give the step room to breathe.
+  // Two beats only (open Actions, flip YouTube on); the chevron-peek and permission fine-tune popups were trimmed to give the step room to breathe.
   ops: [
     { kind: 'move_to', target: S.sidebarActions },
     { kind: 'popup', text: 'Open Actions.' },

@@ -76,26 +76,7 @@ const HANDLE_DEFS: { dir: ResizeDir; sx: Record<string, any> }[] = [
   { dir: 'se', sx: { bottom: -EDGE_THICKNESS / 2, right: -EDGE_THICKNESS / 2, width: CORNER_SIZE, height: CORNER_SIZE } },
 ];
 
-// Windows gets the real, agent-controllable <webview> + CDP, same as Mac.
-//
-// History: the <webview> tag mount used to segfault the renderer during Chromium's
-// commit phase on the old CastLabs Electron 40 build (0xC0000005, since 1.1.55, same
-// crash family as the ablated <input type=file> and Framer-Motion subtrees), so
-// Windows fell back to a non-scriptable iframe (no CDP, and most sites send
-// X-Frame-Options) which the agent can't drive. The Electron 42 bump (v42.0.0+wvcus)
-// fixed the segfault: faithful in-process probes on the real 42 binary mount the
-// webview - including two at once inside a transformed/contained canvas, with real
-// HTTPS navigation and reload churn - with zero host-renderer crash.
-//
-// Crash-safe by construction (electron/CLAUDE.md: mitigations must fail quiet in BOTH
-// directions, and crash guards never boot-loop). If some Windows config still
-// segfaults on mount, a pending marker - armed synchronously during the first
-// browser-card render, i.e. before the <webview> commits, see armWindowsWebviewPending
-// - survives the crash. A leftover marker at the next launch means that mount never
-// reached dom-ready, so we count it and stand down to the safe iframe this launch;
-// after WIN_WV_MAX such crashes we stay on the iframe for good. A clean dom-ready
-// clears the marker and the counter. Escape hatch: openswarm_win_webview_off='1'
-// forces the iframe; clear openswarm_win_webview_crashes to retry after a lockout.
+// Windows gets the real, agent-controllable <webview> + CDP, same as Mac. History: the <webview> tag mount used to segfault the renderer during Chromium's commit phase on the old CastLabs Electron 40 build (0xC0000005, since 1.1.55, same crash family as the ablated <input type=file> and Framer-Motion subtrees), so Windows fell back to a non-scriptable iframe (no CDP, and most sites send X-Frame-Options) which the agent can't drive. The Electron 42 bump (v42.0.0+wvcus) fixed the segfault: faithful in-process probes on the real 42 binary mount the webview - including two at once inside a transformed/contained canvas, with real HTTPS navigation and reload churn - with zero host-renderer crash. Crash-safe by construction (electron/CLAUDE.md: mitigations must fail quiet in BOTH directions, and crash guards never boot-loop). If some Windows config still segfaults on mount, a pending marker - armed synchronously during the first browser-card render, i.e. before the <webview> commits, see armWindowsWebviewPending - survives the crash. A leftover marker at the next launch means that mount never reached dom-ready, so we count it and stand down to the safe iframe this launch; after WIN_WV_MAX such crashes we stay on the iframe for good. A clean dom-ready clears the marker and the counter. Escape hatch: openswarm_win_webview_off='1' forces the iframe; clear openswarm_win_webview_crashes to retry after a lockout.
 const WIN_WV_OFF = 'openswarm_win_webview_off';
 const WIN_WV_PENDING = 'openswarm_win_webview_pending';
 const WIN_WV_CRASHES = 'openswarm_win_webview_crashes';
@@ -107,8 +88,7 @@ function windowsWebviewEnabled(): boolean {
     const crashes = parseInt(localStorage.getItem(WIN_WV_CRASHES) || '0', 10) || 0;
     if (crashes >= WIN_WV_MAX) return false;
     if (localStorage.getItem(WIN_WV_PENDING)) {
-      // A webview mounted last launch but never reached dom-ready: it crashed on
-      // commit. Count it and use the safe iframe this launch (retry next launch).
+      // A webview mounted last launch but never reached dom-ready: it crashed on commit. Count it and use the safe iframe this launch (retry next launch).
       localStorage.removeItem(WIN_WV_PENDING);
       localStorage.setItem(WIN_WV_CRASHES, String(crashes + 1));
       console.warn(`[win-webview] mount crashed last launch (${crashes + 1}/${WIN_WV_MAX}); using the safe iframe this launch.`);
@@ -120,9 +100,7 @@ function windowsWebviewEnabled(): boolean {
   }
 }
 
-// Armed once, synchronously, during the first browser-card render so it persists
-// even if the <webview> commit segfaults (a ref/effect would run too late, after the
-// crash). Cleared on dom-ready by markWindowsWebviewSurvived. No-op on Mac / iframe.
+// Armed once, synchronously, during the first browser-card render so it persists even if the <webview> commit segfaults (a ref/effect would run too late, after the crash). Cleared on dom-ready by markWindowsWebviewSurvived. No-op on Mac / iframe.
 let _winWvPendingArmed = false;
 function armWindowsWebviewPending(): void {
   if (_winWvPendingArmed) return;
@@ -130,8 +108,7 @@ function armWindowsWebviewPending(): void {
   try { localStorage.setItem(WIN_WV_PENDING, String(Date.now())); } catch {}
 }
 
-// Clears the pending marker + crash counter once a webview survives to dom-ready;
-// no-op on Mac (never set).
+// Clears the pending marker + crash counter once a webview survives to dom-ready; no-op on Mac (never set).
 function markWindowsWebviewSurvived(): void {
   try {
     localStorage.removeItem(WIN_WV_PENDING);
@@ -193,8 +170,7 @@ const BrowserCard: React.FC<Props> = ({
 }) => {
   const c = useClaudeTokens();
   const dispatch = useAppDispatch();
-  // Read via ref inside the webview-attach effect so a new onDoubleClick identity
-  // doesn't re-run that effect (which would re-register the webview).
+  // Read via ref inside the webview-attach effect so a new onDoubleClick identity doesn't re-run that effect (which would re-register the webview).
   const onDoubleClickRef = useRef(onDoubleClick);
   onDoubleClickRef.current = onDoubleClick;
   const scrollOverlayRef = useOverlayScrollPassthrough(isSelected);
@@ -202,8 +178,7 @@ const BrowserCard: React.FC<Props> = ({
   const elementSelectionCtx = useElementSelection();
   const isElementSelectMode = elementSelectionCtx?.selectMode ?? false;
 
-  // Memoized so the all-sessions scan reruns only when sessions actually change,
-  // not on every layout/drag dispatch at 60Hz.
+  // Memoized so the all-sessions scan reruns only when sessions actually change, not on every layout/drag dispatch at 60Hz.
   const selectBrowserAgentSession = React.useMemo(
     () => createSelector(
       [(state: { agents: { sessions: Record<string, any> } }) => state.agents.sessions],
@@ -222,11 +197,7 @@ const BrowserCard: React.FC<Props> = ({
   const suspendedSnap = useAppSelector((state) => state.dashboardLayout.suspendedBrowserCards[browserId]);
   const endingState = useAppSelector((state) => state.dashboardLayout.endingBrowserCards[browserId]);
 
-  // Arm the Windows webview crash-safety marker synchronously, before React commits
-  // the <webview> below. Cleared on dom-ready; a leftover marker next launch tells
-  // windowsWebviewEnabled() the mount crashed, so it falls back to the iframe.
-  // MUST skip parked cards: they render no webview, so dom-ready never fires and a
-  // stale marker reads as a phantom crash that locks Windows out of webviews.
+  // Arm the Windows webview crash-safety marker synchronously, before React commits the <webview> below. Cleared on dom-ready; a leftover marker next launch tells windowsWebviewEnabled() the mount crashed, so it falls back to the iframe. MUST skip parked cards: they render no webview, so dom-ready never fires and a stale marker reads as a phantom crash that locks Windows out of webviews.
   if (isElectron && isWindows && !suspendedSnap) armWindowsWebviewPending();
 
   const activity = useBrowserActivity(browserId);
@@ -272,9 +243,7 @@ const BrowserCard: React.FC<Props> = ({
     if (suspendedSnap) initializedTabs.current.clear();
   }, [suspendedSnap]);
 
-  // Spawned cards get marked "ending" by WebSocketManager when the parent agent
-  // finishes; show the fade pill for ~3s, then dispatch the real remove. Keep
-  // clears the flag and the cleanup below cancels the pending remove.
+  // Spawned cards get marked "ending" by WebSocketManager when the parent agent finishes; show the fade pill for ~3s, then dispatch the real remove. Keep clears the flag and the cleanup below cancels the pending remove.
   useEffect(() => {
     if (!endingState) return;
     const timer = setTimeout(() => {
@@ -299,8 +268,7 @@ const BrowserCard: React.FC<Props> = ({
         initializedTabs.current.add(tabId);
         const targetUrl = tab.url;
         const doLoad = () => {
-          // Reaching dom-ready proves the webview survived Chromium's commit phase
-          // (the historical Windows mount segfault). Clear the crash-safety marker.
+          // Reaching dom-ready proves the webview survived Chromium's commit phase (the historical Windows mount segfault). Clear the crash-safety marker.
           if (isWindows) markWindowsWebviewSurvived();
           wv.loadURL(targetUrl).catch(() => {});
           try {
@@ -343,8 +311,7 @@ const BrowserCard: React.FC<Props> = ({
             }),
           );
         } else if (e?.channel === 'canvas-wheel-pan') {
-          // Plain wheel inside an unselected webview never bubbles out; the
-          // preload forwards it here so the dashboard canvas can pan.
+          // Plain wheel inside an unselected webview never bubbles out; the preload forwards it here so the dashboard canvas can pan.
           const payload = e.args?.[0] || {};
           window.dispatchEvent(
             new CustomEvent('openswarm:canvas-wheel-pan', {
@@ -766,8 +733,7 @@ const BrowserCard: React.FC<Props> = ({
         position: 'absolute',
         // contain: webview repaints don't shake neighbor cards.
         contain: 'layout style',
-        // Own compositor layer so hover/paint invalidations stay
-        // contained to this card. See AgentCard for full rationale.
+        // Own compositor layer so hover/paint invalidations stay contained to this card. See AgentCard for full rationale.
         willChange: 'transform',
         left: displayX,
         top: displayY,
@@ -1184,9 +1150,7 @@ const BrowserCard: React.FC<Props> = ({
                   border: 'none',
                   visibility: tab.id === activeTabId ? 'visible' : 'hidden',
                   zIndex: tab.id === activeTabId ? 1 : 0,
-                  // Only during select mode does the page go click-through, so the element
-                  // picker can grab the whole card from anywhere instead of just the header
-                  // (a live webview swallows host clicks). Off select mode = live for browsing.
+                  // Only during select mode does the page go click-through, so the element picker can grab the whole card from anywhere instead of just the header (a live webview swallows host clicks). Off select mode = live for browsing.
                   pointerEvents: isElementSelectMode ? 'none' : 'auto',
                 }}
               />

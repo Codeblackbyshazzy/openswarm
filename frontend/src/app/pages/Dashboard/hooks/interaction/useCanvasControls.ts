@@ -212,9 +212,7 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
     };
 
     const scheduleWheelFlush = () => {
-      // Mark the canvas as actively-interacting and (re)arm the idle
-      // timer. Any ResizeObserver / streaming reconciler that checks the
-      // flag will bail until the user's gesture goes quiet for ~140ms.
+      // Mark the canvas as actively-interacting and (re)arm the idle timer. Any ResizeObserver / streaming reconciler that checks the flag will bail until the user's gesture goes quiet for ~140ms.
       setCanvasInteractionActive(true);
       if (wheelIdleTimer != null) clearTimeout(wheelIdleTimer);
       wheelIdleTimer = setTimeout(() => {
@@ -225,16 +223,14 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
       wheelRafId = requestAnimationFrame(flushWheel);
     };
 
-    // Cache "is this element a scrollable child" decision per node. The
-    // Cache getComputedStyle ancestor walks; uncached was the dominant cost of trackpad two-finger nav. ResizeObserver below invalidates on scroll-capacity change.
+    // Cache "is this element a scrollable child" decision per node. The Cache getComputedStyle ancestor walks; uncached was the dominant cost of trackpad two-finger nav. ResizeObserver below invalidates on scroll-capacity change.
     const scrollableCache: WeakMap<HTMLElement, 'scrollable' | 'not'> = new WeakMap();
 
     const onWheel = (e: WheelEvent) => {
       // Pinch-to-zoom on trackpads sets ctrlKey; plain scroll does not
       const isPinchZoom = e.ctrlKey || e.metaKey;
 
-      // Let scrollable children handle the event when appropriate,
-      // but fall through to canvas pan if the child is at its scroll boundary.
+      // Let scrollable children handle the event when appropriate, but fall through to canvas pan if the child is at its scroll boundary.
       const dy = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;
       const dx = e.deltaMode === 1 ? e.deltaX * 40 : e.deltaX;
       let target = e.target as HTMLElement | null;
@@ -262,9 +258,7 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
           const canScrollY = target.scrollHeight > target.clientHeight;
           const canScrollX = target.scrollWidth > target.clientWidth;
 
-          // Horizontal-dominant gestures over a container that only scrolls
-          // vertically (e.g., chat) should pan the canvas instead of being
-          // silently absorbed by the child's no-op horizontal handling.
+          // Horizontal-dominant gestures over a container that only scrolls vertically (e.g., chat) should pan the canvas instead of being silently absorbed by the child's no-op horizontal handling.
           if (Math.abs(dx) > Math.abs(dy) && !canScrollX) {
             target = target.parentElement;
             continue;
@@ -293,10 +287,7 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
       }
 
       if (isPinchZoom) {
-        // Pinch gesture → accumulate zoom deltas + last cursor position.
-        // factor = 2^(-Σdy·s) which equals the product of per-event
-        // factors, so accumulating dy is mathematically identical to
-        // applying each event one at a time.
+        // Pinch gesture → accumulate zoom deltas + last cursor position. factor = 2^(-Σdy·s) which equals the product of per-event factors, so accumulating dy is mathematically identical to applying each event one at a time.
         const rect = el.getBoundingClientRect();
         pendingZoomDy += dy;
         pendingZoomCenter = { cx: e.clientX - rect.left, cy: e.clientY - rect.top };
@@ -328,9 +319,7 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
     };
     window.addEventListener('openswarm:canvas-wheel-zoom', onForwardedZoom);
 
-    // Plain wheel inside a webview can't bubble out either; the preload
-    // forwards horizontal-dominant scrolls as a pan when the guest page
-    // has nothing to scroll horizontally, plus middle-mouse drag deltas.
+    // Plain wheel inside a webview can't bubble out either; the preload forwards horizontal-dominant scrolls as a pan when the guest page has nothing to scroll horizontally, plus middle-mouse drag deltas.
     const onForwardedPan = (e: Event) => {
       const detail = (e as CustomEvent).detail || {};
       const dy = detail.deltaMode === 1 ? (detail.deltaY ?? 0) * 40 : (detail.deltaY ?? 0);
@@ -392,8 +381,7 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
     const dx = e.clientX - start.x;
     const dy = e.clientY - start.y;
 
-    // Velocity history is per-event so inertia stays accurate on
-    // mouseup. Cheap; just pushes to a length-5 ring buffer.
+    // Velocity history is per-event so inertia stays accurate on mouseup. Cheap; just pushes to a length-5 ring buffer.
     const now = performance.now();
     const history = velocityHistoryRef.current;
     history.push({ x: e.clientX, y: e.clientY, t: now });
@@ -406,8 +394,7 @@ export function useCanvasControls(zoomSensitivity: number = 50, contentBounds?: 
   }, [flushDrag]);
 
   const handleMouseUp = useCallback(() => {
-    // Apply any pending drag delta synchronously so the final position
-    // matches where the cursor was released, then drop the scheduled RAF.
+    // Apply any pending drag delta synchronously so the final position matches where the cursor was released, then drop the scheduled RAF.
     if (dragRafRef.current != null) {
       cancelAnimationFrame(dragRafRef.current);
       dragRafRef.current = null;

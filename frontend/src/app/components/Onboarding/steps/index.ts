@@ -9,9 +9,7 @@ import { step07 } from './step07_installSkill';
 import { step08 } from './step08_makeApp';
 import { welcomeOpenStep } from './step00_welcomeNudge';
 
-// Value-first order: launch an agent (step03) FIRST so a brand-new user sees
-// the product work on the free trial, then connect-your-own-model (step01).
-// Everything else is "learn the features", revealed after the first win.
+// Value-first order: launch an agent (step03) FIRST so a brand-new user sees the product work on the free trial, then connect-your-own-model (step01). Everything else is "learn the features", revealed after the first win.
 export const STEPS: OnboardingStep[] = [
   step03,
   step01,
@@ -23,8 +21,7 @@ export const STEPS: OnboardingStep[] = [
   step08,
 ];
 
-// Resolvable by the Director but kept OUT of STEPS, so they never appear in the roadmap,
-// the panel count, or the unlock chain. The first-run welcome nudge lives here.
+// Resolvable by the Director but kept OUT of STEPS, so they never appear in the roadmap, the panel count, or the unlock chain. The first-run welcome nudge lives here.
 const HIDDEN_STEPS: OnboardingStep[] = [welcomeOpenStep];
 
 export function findStepById(id: string): OnboardingStep | undefined {

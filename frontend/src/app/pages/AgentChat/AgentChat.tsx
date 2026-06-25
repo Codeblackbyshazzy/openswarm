@@ -79,42 +79,24 @@ const CONTEXT_WINDOWS: Record<string, number> = {
   haiku: 200_000,
 };
 
-// Only a fallback for never-rendered items; real heights are measured once on
-// screen.
+// Only a fallback for never-rendered items; real heights are measured once on screen.
 const RENDER_ITEM_ESTIMATED_HEIGHT = 140;
-// Conservative estimate for an unmeasured tool row: tool groups/pairs render
-// collapsed (~40-50px) far more often than expanded. Leaning low keeps scrollHeight
-// (and the scrollbar thumb) from jumping when a tool row measures shorter.
+// Conservative estimate for an unmeasured tool row: tool groups/pairs render collapsed (~40-50px) far more often than expanded. Leaning low keeps scrollHeight (and the scrollbar thumb) from jumping when a tool row measures shorter.
 const COLLAPSED_TOOL_ROW_HEIGHT = 44;
-// How many screens of real content to keep mounted on EACH side of the viewport.
-// Beyond it, items unmount and are replaced by a measured-height spacer, so
-// render/memory stays bounded no matter how long the transcript is.
+// How many screens of real content to keep mounted on EACH side of the viewport. Beyond it, items unmount and are replaced by a measured-height spacer, so render/memory stays bounded no matter how long the transcript is.
 const WINDOW_BUFFER_SCREENS_PER_SIDE = 3;
-// Below this item count the transcript renders WHOLE, no spacers, no windowing.
-// Virtualization only earns its keep on huge chats; on a normal chat the
-// spacer-height recompute just fights the scroll position (the "jumps up and
-// down" glitch), so we skip it entirely until a chat is genuinely long.
+// Below this item count the transcript renders WHOLE, no spacers, no windowing. Virtualization only earns its keep on huge chats; on a normal chat the spacer-height recompute just fights the scroll position (the "jumps up and down" glitch), so we skip it entirely until a chat is genuinely long.
 const WINDOW_MIN_ITEMS = 60;
-// Floor on the mounted item count so a single very tall item can't strand us with
-// an effectively empty window.
+// Floor on the mounted item count so a single very tall item can't strand us with an effectively empty window.
 const MIN_WINDOW_BUFFER_ITEMS = 6;
 
-// Bootstrap count for the initial bottom-anchored slice (on open and on
-// scroll-to-bottom): enough rows to cover the viewport + buffer using the same
-// row-height estimate the solver uses, floored. It's only a seed — the pixel
-// solver (computeDesiredWindow) refines the window to exact from measured heights
-// on the next frame, so this never needs to be precise.
+// Bootstrap count for the initial bottom-anchored slice (on open and on scroll-to-bottom): enough rows to cover the viewport + buffer using the same row-height estimate the solver uses, floored. It's only a seed — the pixel solver (computeDesiredWindow) refines the window to exact from measured heights on the next frame, so this never needs to be precise.
 function initialSeedItems(viewportHeight: number): number {
   const fillPx = (1 + WINDOW_BUFFER_SCREENS_PER_SIDE) * Math.max(1, viewportHeight);
   return Math.max(MIN_WINDOW_BUFFER_ITEMS, Math.ceil(fillPx / RENDER_ITEM_ESTIMATED_HEIGHT));
 }
 
-// Pure window solver: given the current scroll position and a per-index height
-// accessor (measured where known, estimated otherwise), return the [start, end)
-// slice of render items that should be mounted. The buffer is measured in PIXELS
-// (N screens of real content on each side of the viewport), not item count, so a
-// few very tall messages can't blow the mounted set up to the whole transcript.
-// A huge viewport naturally yields start=0/end=total (mount all).
+// Pure window solver: given the current scroll position and a per-index height accessor (measured where known, estimated otherwise), return the [start, end) slice of render items that should be mounted. The buffer is measured in PIXELS (N screens of real content on each side of the viewport), not item count, so a few very tall messages can't blow the mounted set up to the whole transcript. A huge viewport naturally yields start=0/end=total (mount all).
 function computeDesiredWindow(
   scrollTop: number,
   clientHeight: number,
@@ -143,8 +125,7 @@ function computeDesiredWindow(
   }
   if (start === -1) start = Math.max(0, total - 1);
   end = Math.min(total, Math.max(end, start + 1));
-  // Always keep at least a small floor of items mounted around the viewport so a
-  // single under-measured item can't strand us with an empty window.
+  // Always keep at least a small floor of items mounted around the viewport so a single under-measured item can't strand us with an empty window.
   if (end - start < MIN_WINDOW_BUFFER_ITEMS) {
     start = Math.max(0, Math.min(start, end - MIN_WINDOW_BUFFER_ITEMS));
   }
@@ -157,11 +138,7 @@ function stringifyContent(content: any): string {
   return JSON.stringify(content);
 }
 
-// Content-aware height estimate for a render item that has never been measured.
-// Tool rows and tiny system/thinking rows keep the flat fallback; message bubbles
-// scale with their FULL text length (messages render in full once on-screen, so
-// the estimate matches both the rendered bubble and MessageBubble's placeholder
-// fallback).
+// Content-aware height estimate for a render item that has never been measured. Tool rows and tiny system/thinking rows keep the flat fallback; message bubbles scale with their FULL text length (messages render in full once on-screen, so the estimate matches both the rendered bubble and MessageBubble's placeholder fallback).
 function estimateItemHeight(item: RenderItem, viewportWidth: number): number {
   if (isToolGroup(item) || isToolPair(item)) return COLLAPSED_TOOL_ROW_HEIGHT;
   const msg = item as AgentMessage;
@@ -176,8 +153,7 @@ const thinkingShimmerKeyframes = `
 }
 `;
 
-// Pick a label deterministically per session-turn so the pill has variety
-// without flickering between renders. Shared list with MessageBubble.
+// Pick a label deterministically per session-turn so the pill has variety without flickering between renders. Shared list with MessageBubble.
 function streamingLabelFor(seedKey: string | undefined): string {
   if (!seedKey) return THINKING_LABELS[0].live;
   let h = 0;
@@ -191,8 +167,7 @@ const ThinkingBubble: React.FC<{ label?: string | null; seedKey?: string }> = ({
   const c = useClaudeTokens();
   const shimmerBase = c.text.tertiary;
   const shimmerHighlight = c.text.primary;
-  // Aux-LLM label wins; otherwise pick a quirky verb keyed off seedKey
-  // so different sessions / turns show different verbs without flicker.
+  // Aux-LLM label wins; otherwise pick a quirky verb keyed off seedKey so different sessions / turns show different verbs without flicker.
   const display = label ? `${label}…` : `${streamingLabelFor(seedKey)}…`;
   return (
     <Box sx={{ display: 'flex', justifyContent: 'flex-start', my: 0.75 }}>
@@ -253,17 +228,13 @@ interface AgentChatProps {
   onDismissGlow?: () => void;
   initialContextPaths?: ContextPath[];
   onBranch?: (newSessionId: string) => void;
-  // Set when this chat is the workflow build/edit agent: the out-of-tokens card
-  // then warns that switching models here also changes the workflow's run model.
+  // Set when this chat is the workflow build/edit agent: the out-of-tokens card then warns that switching models here also changes the workflow's run model.
   workflowEditId?: string;
-  // View-only transcript (e.g. the Run Monitor): renders messages + tool calls
-  // but no composer, so the session can't be typed into.
+  // View-only transcript (e.g. the Run Monitor): renders messages + tool calls but no composer, so the session can't be typed into.
   readOnly?: boolean;
   // One-shot text to drop into the composer (e.g. a run attached as context).
   prefillPrompt?: string;
-  // A workflow run attached as a removable context chip above the composer; while
-  // present, each send routes through onSendRunQuestion so the run's transcript
-  // rides along as hidden context for that turn.
+  // A workflow run attached as a removable context chip above the composer; while present, each send routes through onSendRunQuestion so the run's transcript rides along as hidden context for that turn.
   runContext?: WorkflowsRunContext;
   onClearRunContext?: () => void;
   onSendRunQuestion?: (prompt: string, runId: string) => Promise<void>;
@@ -280,10 +251,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   };
   const { id: routeId } = useParams<{ id: string }>();
   const id = sessionIdProp || routeId;
-  // A card linked as a workflow sidecar (Test Agent, or a watched run) swaps
-  // its composer for a Force Stop button: continuing the chat is meaningless,
-  // but killing the run is the common need. Once a Test Agent finishes, the
-  // button flips to a green "close" (see workflow_test_state + ForceStopAgentBar).
+  // A card linked as a workflow sidecar (Test Agent, or a watched run) swaps its composer for a Force Stop button: continuing the chat is meaningless, but killing the run is the common need. Once a Test Agent finishes, the button flips to a green "close" (see workflow_test_state + ForceStopAgentBar).
   const linkedSidecar = useAppSelector((s) => {
     const found = Object.values(s.workflows.openCards).find(
       (cd) => cd.sidecarSessionId === id && (cd.sidecarKind === 'testing' || cd.sidecarKind === 'watching'),
@@ -294,11 +262,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   }, shallowEqual);
   const linkedWorkflowId = linkedSidecar?.workflowId ?? null;
   const isStoppableSidecar = !!linkedWorkflowId;
-  // A live workflow run being watched owns pause/resume from its workflow
-  // card, so the chat's own "Resume Agent Response" bubble is redundant and
-  // would go stale against the card's Resume. Suppress it for any workflow-run
-  // sidecar, not just the fragile exact "watching" value. Test-run sidecars
-  // keep their chat-level resume behavior.
+  // A live workflow run being watched owns pause/resume from its workflow card, so the chat's own "Resume Agent Response" bubble is redundant and would go stale against the card's Resume. Suppress it for any workflow-run sidecar, not just the fragile exact "watching" value. Test-run sidecars keep their chat-level resume behavior.
   const isWorkflowRunSidecar = useAppSelector((s) => {
     if (!id) return false;
     for (const cd of Object.values(s.workflows.openCards)) {
@@ -334,9 +298,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     if (s.includes('/')) s = s.split('/').pop() || s;
     return s;
   }, [modelsByProvider]);
-  // Used by the "too many connected apps for Haiku" warning rendered above
-  // ChatInput. Each connected MCP adds a meaningful chunk of tool-schema
-  // tokens to every request; Haiku 4.5's 200K window can't hold 5+ of them.
+  // Used by the "too many connected apps for Haiku" warning rendered above ChatInput. Each connected MCP adds a meaningful chunk of tool-schema tokens to every request; Haiku 4.5's 200K window can't hold 5+ of them.
   const toolItems = useAppSelector((state) => state.tools.items);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lastVisibleItemRef = useRef<HTMLDivElement>(null);
@@ -367,18 +329,15 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   const [preSendActivityLabel, setPreSendActivityLabel] = useState<string | null>(null);
   const [activatingMcp, setActivatingMcp] = useState<string | null>(null);
   const [activateError, setActivateError] = useState<string | null>(null);
-  // Holds the last non-empty suggestions so the docked banner's exit fade renders
-  // them instead of going blank the instant the array is cleared.
+  // Holds the last non-empty suggestions so the docked banner's exit fade renders them instead of going blank the instant the array is cleared.
   const mcpSnapshotRef = useRef<Array<{ id: string; title: string; description: string; reason?: string }>>([]);
   const [mode, setMode] = useState('agent');
   const [model, setModel] = useState('sonnet');
-  // Workflow build chat only: brief "this model now runs the workflow" notice
-  // when the user switches models, so the run-model change isn't silent.
+  // Workflow build chat only: brief "this model now runs the workflow" notice when the user switches models, so the run-model change isn't silent.
   const [workflowModelNotice, setWorkflowModelNotice] = useState<string | null>(null);
   const workflowModelNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Read live in the stable handleSend/dispatchMessage closures without busting
-  // their memo (ChatInput leans on handleSend identity holding across renders).
+  // Read live in the stable handleSend/dispatchMessage closures without busting their memo (ChatInput leans on handleSend identity holding across renders).
   const runContextRef = useRef(runContext);
   runContextRef.current = runContext;
   const onSendRunQuestionRef = useRef(onSendRunQuestion);
@@ -403,21 +362,9 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     if (!id || isDraft) return;
     let cancelled = false;
     let ws: ReturnType<typeof createSessionWs> | null = null;
-    // Order matters: hydrate the persisted message list from REST FIRST,
-    // THEN connect the WS. The WS resume protocol replays buffered
-    // events starting at last_seq=0, which includes every stream_*
-    // event for messages that finished before the disconnect. The
-    // replay-skip guard in WebSocketManager._messageAlreadyComplete
-    // checks `session.messages` to decide whether to drop deltas , so
-    // if we connect first, the slice is empty when the replay arrives,
-    // the guard returns false, and the user sees the chat type itself
-    // out again. Awaiting fetchSession before connect makes the slice
-    // authoritative before any replay event lands.
+    // Order matters: hydrate the persisted message list from REST FIRST, THEN connect the WS. The WS resume protocol replays buffered events starting at last_seq=0, which includes every stream_* event for messages that finished before the disconnect. The replay-skip guard in WebSocketManager._messageAlreadyComplete checks `session.messages` to decide whether to drop deltas, so if we connect first, the slice is empty when the replay arrives, the guard returns false, and the user sees the chat type itself out again. Awaiting fetchSession before connect makes the slice authoritative before any replay event lands.
     (async () => {
-      // The await exists so the slice isn't EMPTY at replay time. A warm store
-      // (remount after a hop) already satisfies that, so connect immediately and
-      // let the fetch reconcile in the background; awaiting serialized a slow
-      // round trip in front of the live stream on every reopen.
+      // The await exists so the slice isn't EMPTY at replay time. A warm store (remount after a hop) already satisfies that, so connect immediately and let the fetch reconcile in the background; awaiting serialized a slow round trip in front of the live stream on every reopen.
       const warm = !!store.getState().agents.sessions[id]?.messages?.length;
       if (warm) {
         dispatch(fetchSession(id));
@@ -425,14 +372,11 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
         try {
           await dispatch(fetchSession(id));
         } catch {
-          // Even if the REST hydrate fails, still connect , the WS resume
-          // protocol can hydrate from buffered events as a fallback.
+          // Even if the REST hydrate fails, still connect, the WS resume protocol can hydrate from buffered events as a fallback.
         }
       }
       if (cancelled) return;
-      // acquireSessionWs reuses a still-open socket kept alive from the last hop,
-      // so an active agent's stream resumes with no reconnect handshake. connect()
-      // is a no-op when the reused socket is already open.
+      // acquireSessionWs reuses a still-open socket kept alive from the last hop, so an active agent's stream resumes with no reconnect handshake. connect() is a no-op when the reused socket is already open.
       ws = acquireSessionWs(id);
       ws.connect();
       wsRef.current = ws;
@@ -477,12 +421,9 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
       const config: Record<string, any> = { model, mode };
       if (session?.system_prompt) config.system_prompt = session.system_prompt;
       if (session?.target_directory) config.target_directory = session.target_directory;
-      // Carry the draft's dashboard so the launched session stays ON this dashboard; without it the
-      // session lands dashboard_id=null, drops out of the reconcile filter, and its card vanishes
-      // the instant you send (looked like "the chat quit when I clicked an option").
+      // Carry the draft's dashboard so the launched session stays ON this dashboard; without it the session lands dashboard_id=null, drops out of the reconcile filter, and its card vanishes the instant you send (looked like "the chat quit when I clicked an option").
       if (session?.dashboard_id) config.dashboard_id = session.dashboard_id;
-      // Editing an existing app: bind the launch to it so the backend edits in
-      // place instead of seeding a duplicate empty app (App Builder mode only).
+      // Editing an existing app: bind the launch to it so the backend edits in place instead of seeding a duplicate empty app (App Builder mode only).
       if (msg.selectedAppIds?.length) config.selected_app_output_ids = msg.selectedAppIds;
       dispatch(
         launchAndSendFirstMessage({ draftId: id, config, prompt: msg.prompt, mode, model, images: msg.images, contextPaths: msg.contextPaths, forcedTools: msg.forcedTools, attachedSkills: msg.attachedSkills, selectedBrowserIds: msg.selectedBrowserIds, selectedAppIds: msg.selectedAppIds, selectedSettingIds: msg.selectedSettingIds })
@@ -496,8 +437,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
         }
       });
     } else if (msg.attachedRunId && onSendRunQuestionRef.current) {
-      // Run-context question: the backend folds the run transcript into this one
-      // turn and echoes the user bubble + answer over WS, so no optimistic thunk.
+      // Run-context question: the backend folds the run transcript into this one turn and echoes the user bubble + answer over WS, so no optimistic thunk.
       onSendRunQuestionRef.current(msg.prompt, msg.attachedRunId).catch(() => setAwaitingResponse(false));
     } else {
       if (msg.selectedBrowserIds?.length) {
@@ -559,9 +499,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     }
   }, [session?.status, mode, modesMap, id, isDraft, dispatch, dispatchMessage, isWorkflowRunSidecar]);
 
-  // A reload remounts past the live running->stopped transition that first shows
-  // the resume button, so re-derive it once from the persisted 'stopped' status
-  // (transcript-gated so a cleared chat can't resurrect it).
+  // A reload remounts past the live running->stopped transition that first shows the resume button, so re-derive it once from the persisted 'stopped' status (transcript-gated so a cleared chat can't resurrect it).
   const resumeHydratedRef = useRef(false);
   useEffect(() => {
     if (resumeHydratedRef.current) return;
@@ -571,19 +509,10 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     }
   }, [session?.status, session?.messages?.length]);
 
-  // Idle reconcile: if the session has been 'running' for 5s with no
-  // WebSocket activity (no new messages, no streaming updates), do a
-  // single GET to fetch the real status from the backend. Catches the
-  // case where the completion WebSocket event was dropped (network blip,
-  // sleep/wake, SDK subprocess dying). Resets on every activity signal
-  // so it never fires during normal streaming.
+  // Idle reconcile: if the session has been 'running' for 5s with no WebSocket activity (no new messages, no streaming updates), do a single GET to fetch the real status from the backend. Catches the case where the completion WebSocket event was dropped (network blip, sleep/wake, SDK subprocess dying). Resets on every activity signal so it never fires during normal streaming.
   const reconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messageCount = session?.messages?.length ?? 0;
-  // Subscribe only to the streaming MESSAGE ID (stable across the 30Hz
-  // delta updates), never to the content. The actual streaming text
-  // renders inside the leaf <StreamingBubble> below, which subscribes to
-  // the content itself. This keeps AgentChat's render and useEffects
-  // dormant during streaming; only the bubble updates per delta.
+  // Subscribe only to the streaming MESSAGE ID (stable across the 30Hz delta updates), never to the content. The actual streaming text renders inside the leaf <StreamingBubble> below, which subscribes to the content itself. This keeps AgentChat's render and useEffects dormant during streaming; only the bubble updates per delta.
   const streamingMessageId = useAppSelector((s) => id ? s.streaming.bySession[id]?.id ?? null : null);
   const hasStreaming = !!streamingMessageId;
 
@@ -622,10 +551,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
 
   const SCROLL_THRESHOLD = 50;
 
-  // Reserved pixel height for a render item: the measured height once we have one,
-  // otherwise a content-aware estimate (cached per id). The spacer math and the
-  // window solver both go through this so unmounted spacers, freshly-mounted
-  // placeholders, and the real rendered bubble all reserve the same space.
+  // Reserved pixel height for a render item: the measured height once we have one, otherwise a content-aware estimate (cached per id). The spacer math and the window solver both go through this so unmounted spacers, freshly-mounted placeholders, and the real rendered bubble all reserve the same space.
   const reservedHeightForItem = useCallback((item: RenderItem | undefined): number => {
     if (!item) return RENDER_ITEM_ESTIMATED_HEIGHT;
     const measured = itemHeightsRef.current.get(item.id);
@@ -637,31 +563,22 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     return est;
   }, []);
 
-  // Measured-or-estimated pixel height of render item at `index`, for the window
-  // solver (reads the renderItems ref so it is valid inside rAF callbacks).
+  // Measured-or-estimated pixel height of render item at `index`, for the window solver (reads the renderItems ref so it is valid inside rAF callbacks).
   const heightOf = useCallback((index: number): number => {
     return reservedHeightForItem(renderItemsRef.current[index]);
   }, [reservedHeightForItem]);
 
-  // Solve the mounted window from the live scroll position and push it to state
-  // when it changes. Scroll position itself is preserved by the container's
-  // overflow-anchor plus the measured-height spacers, so we never touch
-  // scrollTop here. Following (pinned to bottom) always keeps the newest item.
+  // Solve the mounted window from the live scroll position and push it to state when it changes. Scroll position itself is preserved by the container's overflow-anchor plus the measured-height spacers, so we never touch scrollTop here. Following (pinned to bottom) always keeps the newest item.
   const applyWindowFromScroll = useCallback(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
     if (!initialBottomScrollSettledRef.current) return;
     const total = renderItemsLengthRef.current;
-    // Below the windowing threshold the whole transcript is mounted; recomputing
-    // a window here would only churn the spacers and shift scroll. Leave it alone.
+    // Below the windowing threshold the whole transcript is mounted; recomputing a window here would only churn the spacers and shift scroll. Leave it alone.
     if (total < WINDOW_MIN_ITEMS) return;
     const clientHeight = Math.max(1, el.clientHeight);
     const tightPx = WINDOW_BUFFER_SCREENS_PER_SIDE * clientHeight;
-    // Mount with the tight buffer, but keep already-mounted items until
-    // they drift a full extra screen past it. Without this, an item sitting
-    // right on the buffer edge flip-flops mounted/unmounted forever: mounting it
-    // shifts content above the viewport, overflow-anchor nudges scrollTop a few px,
-    // that re-runs the solver, which now excludes it, and round it goes.
+    // Mount with the tight buffer, but keep already-mounted items until they drift a full extra screen past it. Without this, an item sitting right on the buffer edge flip-flops mounted/unmounted forever: mounting it shifts content above the viewport, overflow-anchor nudges scrollTop a few px, that re-runs the solver, which now excludes it, and round it goes.
     const loosePx = tightPx + clientHeight;
     const tight = computeDesiredWindow(el.scrollTop, clientHeight, total, heightOf, tightPx);
     const loose = computeDesiredWindow(el.scrollTop, clientHeight, total, heightOf, loosePx);
@@ -695,12 +612,9 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     const updateViewport = () => {
       setViewportHeight(el.clientHeight);
       setViewportWidth(el.clientWidth);
-      // Width drives the char-per-line estimate; drop cached estimates so they
-      // recompute at the new width (measured heights are unaffected and kept).
+      // Width drives the char-per-line estimate; drop cached estimates so they recompute at the new width (measured heights are unaffected and kept).
       estimateCacheRef.current.clear();
-      // Resize changes the budgets and how many items fit; re-solve the window
-      // off the current scroll position WITHOUT resetting it (only session /
-      // branch changes reset). overflow-anchor holds the visible content.
+      // Resize changes the budgets and how many items fit; re-solve the window off the current scroll position WITHOUT resetting it (only session / branch changes reset). overflow-anchor holds the visible content.
       scheduleWindowRecompute();
     };
 
@@ -745,8 +659,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < SCROLL_THRESHOLD;
     isAtBottomRef.current = atBottom;
     setShowScrollButton(!atBottom);
-    // Slide the mounted window to follow the viewport (loads newer/older items
-    // and unloads ones that drifted past the buffer on either side).
+    // Slide the mounted window to follow the viewport (loads newer/older items and unloads ones that drifted past the buffer on either side).
     scheduleWindowRecompute();
   }, [scheduleWindowRecompute]);
 
@@ -755,13 +668,9 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     const el = scrollContainerRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      // Pinch-to-zoom (ctrl/meta + wheel) must reach the canvas viewport so
-      // the dashboard zooms when the cursor is over an agent's chat panel.
-      // Without this early-out the unconditional stopPropagation below kills
-      // ctrl+wheel and the canvas listener never fires.
+      // Pinch-to-zoom (ctrl/meta + wheel) must reach the canvas viewport so the dashboard zooms when the cursor is over an agent's chat panel. Without this early-out the unconditional stopPropagation below kills ctrl+wheel and the canvas listener never fires.
       if (e.ctrlKey || e.metaKey) return;
-      // Horizontal-dominant gestures must also reach the canvas so a sideways
-      // swipe pans the dashboard (chat has no horizontal scroll to absorb).
+      // Horizontal-dominant gestures must also reach the canvas so a sideways swipe pans the dashboard (chat has no horizontal scroll to absorb).
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       const atTop = el.scrollTop <= 0;
       const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
@@ -782,11 +691,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     if (!el) return;
     isAtBottomRef.current = true;
     setShowScrollButton(false);
-    // When scrolled far up the newest items are unmounted behind the bottom
-    // spacer (estimated height). Jump the window to the bottom slice so they
-    // actually mount, then pin across several frames: a single scrollTop=scrollHeight
-    // lands short because the spacer collapses and the freshly-mounted items
-    // replace their estimates with real measured heights, changing scrollHeight.
+    // When scrolled far up the newest items are unmounted behind the bottom spacer (estimated height). Jump the window to the bottom slice so they actually mount, then pin across several frames: a single scrollTop=scrollHeight lands short because the spacer collapses and the freshly-mounted items replace their estimates with real measured heights, changing scrollHeight.
     const total = renderItemsLengthRef.current;
     const start = Math.max(0, total - initialSeedItems(el.clientHeight));
     windowStartRef.current = start;
@@ -806,8 +711,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
         scrollToBottomRafRef.current = requestAnimationFrame(pin);
       } else {
         scrollToBottomRafRef.current = null;
-        // Jump has settled: re-evaluate oversized message / block visibility
-        // synchronously so nothing now in view is stuck as a placeholder.
+        // Jump has settled: re-evaluate oversized message / block visibility synchronously so nothing now in view is stuck as a placeholder.
         c.dispatchEvent(new CustomEvent(RECHECK_VISIBILITY_EVENT));
       }
     };
@@ -818,10 +722,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   const pinRafRef = useRef<number | null>(null);
   const initialPinRafRef = useRef<number | null>(null);
   const lastScrollHeightRef = useRef<number>(0);
-  // Shared scroll-stick routine. Used both by the structural-events
-  // useEffect below (new message lands / stream starts/ends) and by
-  // StreamingBubble's onStreamGrew callback (per-delta growth). RAF +
-  // height-grew gate ensures we only set scrollTop when needed.
+  // Shared scroll-stick routine. Used both by the structural-events useEffect below (new message lands / stream starts/ends) and by StreamingBubble's onStreamGrew callback (per-delta growth). RAF + height-grew gate ensures we only set scrollTop when needed.
   const stickToBottomIfNeeded = useCallback(() => {
     if (!isAtBottomRef.current) return;
     if (scrollRafRef.current != null) return;
@@ -838,28 +739,14 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   }, []);
   useEffect(() => {
     stickToBottomIfNeeded();
-    // Structural triggers only: a new message lands or a stream
-    // starts/ends. Streaming content updates trigger this via
-    // <StreamingBubble onStreamGrew={stickToBottomIfNeeded} /> instead
-    // so AgentChat stays dormant during the 30Hz delta storm.
+    // Structural triggers only: a new message lands or a stream starts/ends. Streaming content updates trigger this via <StreamingBubble onStreamGrew={stickToBottomIfNeeded} /> instead so AgentChat stays dormant during the 30Hz delta storm.
   }, [session?.messages.length, streamingMessageId, stickToBottomIfNeeded]);
 
-  // Stream-end re-stick. When a stream finishes, the live bubble (smooth-revealed
-  // text) is replaced by the committed bubble rendering FULL markdown with
-  // contentVisibility placeholders; as those resolve, Chromium's overflow-anchor
-  // re-anchors to an EARLIER element (the user message), yanking the view up to
-  // "the top of the user input". A single deferred scroll loses the race because
-  // that anchor shift fires an onScroll that flips isAtBottomRef false before we
-  // run. Fix: snapshot the "was following" intent the moment streaming stops
-  // (captured continuously during the stream, before any completion re-render),
-  // then pin to bottom across a short multi-frame window that OVERRIDES the
-  // layout-induced flip. A genuine user scroll-away (wheel/touch) during that
-  // window aborts the pin, honoring "unless the user scrolls up".
+  // Stream-end re-stick. When a stream finishes, the live bubble (smooth-revealed text) is replaced by the committed bubble rendering FULL markdown with contentVisibility placeholders; as those resolve, Chromium's overflow-anchor re-anchors to an EARLIER element (the user message), yanking the view up to "the top of the user input". A single deferred scroll loses the race because that anchor shift fires an onScroll that flips isAtBottomRef false before we run. Fix: snapshot the "was following" intent the moment streaming stops (captured continuously during the stream, before any completion re-render), then pin to bottom across a short multi-frame window that OVERRIDES the layout-induced flip. A genuine user scroll-away (wheel/touch) during that window aborts the pin, honoring "unless the user scrolls up".
   const prevStreamingIdRef = useRef<string | null>(null);
   const wasFollowingRef = useRef(true);
   const pinAbortRef = useRef(false);
-  // Keep the follow-intent fresh while streaming so it's accurate at the instant
-  // the stream ends (handleScroll updates isAtBottomRef on every real scroll).
+  // Keep the follow-intent fresh while streaming so it's accurate at the instant the stream ends (handleScroll updates isAtBottomRef on every real scroll).
   if (streamingMessageId) wasFollowingRef.current = isAtBottomRef.current;
   useEffect(() => {
     const prev = prevStreamingIdRef.current;
@@ -869,8 +756,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     pinAbortRef.current = false;
     const el = scrollContainerRef.current;
     if (!el) return;
-    // Abort the pin only on a deliberate scroll-away gesture, not the
-    // layout-induced onScroll the commit itself triggers.
+    // Abort the pin only on a deliberate scroll-away gesture, not the layout-induced onScroll the commit itself triggers.
     const onUserScrollAway = (e: Event) => {
       if ((e as WheelEvent).deltaY != null && (e as WheelEvent).deltaY < 0) pinAbortRef.current = true; // wheel up
       else if (e.type === 'touchmove') pinAbortRef.current = true;
@@ -895,11 +781,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     return cleanup;
   }, [streamingMessageId]);
 
-  // A tool's live pill is already on screen when it commits, so re-running the
-  // mount reveal on the committed bubble flashes the exact same row. Remember the
-  // id that just stopped streaming for a beat and let that one bubble skip its
-  // entrance, so the hand-off is seamless. 500ms is slack for the commit render
-  // to land after the stream clears (they don't always arrive on the same frame).
+  // A tool's live pill is already on screen when it commits, so re-running the mount reveal on the committed bubble flashes the exact same row. Remember the id that just stopped streaming for a beat and let that one bubble skip its entrance, so the hand-off is seamless. 500ms is slack for the commit render to land after the stream clears (they don't always arrive on the same frame).
   const [justStreamedId, setJustStreamedId] = useState<string | null>(null);
   const justStreamPrevRef = useRef<string | null>(null);
   useEffect(() => {
@@ -931,10 +813,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     }
   }, []);
 
-  // useCallback so ChatInput's memo equality holds across AgentChat
-  // re-renders driven by unrelated session state. Captures agentBusy
-  // through the dependency so a stale "busy" closure doesn't ever route
-  // a message past the queue.
+  // useCallback so ChatInput's memo equality holds across AgentChat re-renders driven by unrelated session state. Captures agentBusy through the dependency so a stale "busy" closure doesn't ever route a message past the queue.
   const handleSend = useCallback(
     (
       prompt: string,
@@ -992,8 +871,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
 
   const handleStop = useCallback(() => {
     if (!id) return;
-    // A watched live workflow run mirrors the workflow card's Stop: fully stop the
-    // run, not just pause the agent. Test Agent + plain chats stop the session.
+    // A watched live workflow run mirrors the workflow card's Stop: fully stop the run, not just pause the agent. Test Agent + plain chats stop the session.
     if (linkedSidecar?.kind === 'watching' && linkedSidecar.runId) {
       dispatch(controlWorkflowRun({ runId: linkedSidecar.runId, action: 'stop' }));
       return;
@@ -1001,9 +879,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     dispatch(stopAgent({ sessionId: id }));
   }, [id, dispatch, linkedSidecar]);
 
-  // Finished Test Agent card: drop the tether + remove this card, and either
-  // commit the workflow draft (Save, same as the edit card's "save now") or
-  // leave the draft untouched so the user keeps editing.
+  // Finished Test Agent card: drop the tether + remove this card, and either commit the workflow draft (Save, same as the edit card's "save now") or leave the draft untouched so the user keeps editing.
   const onTestContinueEditing = useCallback(() => {
     if (linkedWorkflowId) dispatch(setCardSidecar({ workflowId: linkedWorkflowId, sessionId: null, kind: null }));
     if (id) dispatch(removeCard(id));
@@ -1127,12 +1003,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   }, [id, dispatch, onBranch, session?.dashboard_id]);
 
   const contextEstimate = useMemo(() => {
-    // Prefer the live API-reported input token count once we have one
-    // (session.tokens.input includes the full request: messages + system +
-    // tool defs + cached prefix). That number is authoritative because
-    // Anthropic counts it against the context window. Before the first
-    // turn completes, fall back to a char/4 estimate of visible message
-    // content as a rough pre-send hint.
+    // Prefer the live API-reported input token count once we have one (session.tokens.input includes the full request: messages + system + tool defs + cached prefix). That number is authoritative because Anthropic counts it against the context window. Before the first turn completes, fall back to a char/4 estimate of visible message content as a rough pre-send hint.
     let limit = 0;
     for (const ms of Object.values(modelsByProvider)) {
       const hit = ms.find((m) => m.value === model);
@@ -1150,11 +1021,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     }
     const used = Math.round(totalChars / 4);
     return { used, limit };
-    // Streaming content's contribution to the context estimate is no
-    // longer included here: we'd have to subscribe to the streaming
-    // text and re-run this sum on every painted character, defeating
-    // the whole point of isolating AgentChat from delta updates. The
-    // header gauge will catch up when stream_end commits the message.
+    // Streaming content's contribution to the context estimate is no longer included here: we'd have to subscribe to the streaming text and re-run this sum on every painted character, defeating the whole point of isolating AgentChat from delta updates. The header gauge will catch up when stream_end commits the message.
   }, [activeBranchMessages, session?.system_prompt, session?.tokens?.input, session?.context_window, streamingMessageId, model, modelsByProvider]);
 
   const sessionRunning = session?.status === 'running' || session?.status === 'waiting_approval';
@@ -1242,9 +1109,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     let start = windowStartRef.current;
     let end = windowEndRef.current;
     if (isAtBottomRef.current || end === 0) {
-      // Following the live tail: keep the newest item mounted and unload the
-      // oldest beyond a bounded recent slice so memory stays flat as the
-      // transcript grows. The pixel solver refines this seed on the next scroll.
+      // Following the live tail: keep the newest item mounted and unload the oldest beyond a bounded recent slice so memory stays flat as the transcript grows. The pixel solver refines this seed on the next scroll.
       end = total;
       start = Math.max(0, end - seed);
     } else {
@@ -1257,8 +1122,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   }, [id, renderItems, viewportHeight]);
 
   const total = renderItems.length;
-  // Small chats render whole (no windowing): forces the full slice so both spacer
-  // loops sum to 0, which removes the recompute-driven scroll jump entirely.
+  // Small chats render whole (no windowing): forces the full slice so both spacer loops sum to 0, which removes the recompute-driven scroll jump entirely.
   const windowingActive = total >= WINDOW_MIN_ITEMS;
   const safeWindowEnd = !windowingActive ? total : (windowEnd > 0 ? Math.min(windowEnd, total) : total);
   const safeWindowStart = !windowingActive ? 0 : Math.min(Math.max(0, windowStart), Math.max(0, safeWindowEnd - 1));
@@ -1274,8 +1138,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   // Keep the ref the height estimator reads in sync with the live viewport width.
   viewportWidthRef.current = viewportWidth;
 
-  // Measure mounted item heights so the spacers that stand in for unmounted
-  // items keep the scrollbar geometry stable (no jump when unloading above).
+  // Measure mounted item heights so the spacers that stand in for unmounted items keep the scrollbar geometry stable (no jump when unloading above).
   React.useLayoutEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
@@ -1295,10 +1158,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
     if (changed) setHeightVersion((v) => v + 1);
   });
 
-  // Spacers reserve the cumulative height of the unmounted items above/below the
-  // window. heightVersion gates recompute off the ref-held measurements; we index
-  // the render-scope renderItems directly so id->height stays correct on the
-  // frame the transcript changes.
+  // Spacers reserve the cumulative height of the unmounted items above/below the window. heightVersion gates recompute off the ref-held measurements; we index the render-scope renderItems directly so id->height stays correct on the frame the transcript changes.
   const topSpacerHeight = useMemo(() => {
     let h = 0;
     for (let i = 0; i < safeWindowStart; i++) h += reservedHeightForItem(renderItems[i]);
@@ -1331,12 +1191,9 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
         } else {
           initialPinRafRef.current = null;
           initialBottomScrollSettledRef.current = true;
-          // The open slice is sized by item COUNT; now that we're settled and
-          // measured, trim it down to the pixel-based band so tall messages high
-          // in the slice unload instead of sitting fully rendered off-screen.
+          // The open slice is sized by item COUNT; now that we're settled and measured, trim it down to the pixel-based band so tall messages high in the slice unload instead of sitting fully rendered off-screen.
           scheduleWindowRecompute();
-          // Re-evaluate visibility now the open jump has settled, so an oversized
-          // newest message isn't left stuck as a placeholder.
+          // Re-evaluate visibility now the open jump has settled, so an oversized newest message isn't left stuck as a placeholder.
           c.dispatchEvent(new CustomEvent(RECHECK_VISIBILITY_EVENT));
         }
       };
@@ -1472,9 +1329,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
               gap: 1.5,
               px: 2,
               py: 1.5,
-              // No seam: the header is just a band of typography inside the chat
-              // panel; transparent bg + air carry it, no hairline. (An earlier
-              // bg.surface here read lighter than the body and pulled focus.)
+              // No seam: the header is just a band of typography inside the chat panel; transparent bg + air carry it, no hairline. (An earlier bg.surface here read lighter than the body and pulled focus.)
               bgcolor: 'transparent',
             }}
           >
@@ -1508,21 +1363,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                   )}
                   {(() => {
                     if (!(session.cost_usd > 0)) return null;
-                    // The SDK reports a per-call $ figure regardless of how
-                    // the request was routed. For requests that went through
-                    // a subscription path, that figure is misleading , the
-                    // user pays flat-rate. Show "subscription" instead in
-                    // those cases. Show $ only when the call was actually
-                    // metered (Anthropic API key, OpenAI API key, etc.).
-                    //
-                    // Model-id signals (these are short_name values from the
-                    // BUILTIN_MODELS registry):
-                    //   - `*-api` → pinned Anthropic API key (METERED)
-                    //   - `*-cc` → pinned Claude Pro/Max via 9Router (sub)
-                    //   - plain sonnet/opus/haiku + openswarm-pro mode → Pro proxy (sub)
-                    //   - plain sonnet/opus/haiku + own_key mode → API key (METERED)
-                    //   - gpt-5.4* / gpt-5.3* → ChatGPT Plus/Pro via 9Router (sub)
-                    //   - gemini-*  → Gemini Advanced via 9Router (sub)
+                    // The SDK reports a per-call $ figure regardless of how the request was routed. For requests that went through a subscription path, that figure is misleading, the user pays flat-rate. Show "subscription" instead in those cases. Show $ only when the call was actually metered (Anthropic API key, OpenAI API key, etc.). Model-id signals (these are short_name values from the BUILTIN_MODELS registry): - `*-api` → pinned Anthropic API key (METERED) - `*-cc` → pinned Claude Pro/Max via 9Router (sub) - plain sonnet/opus/haiku + openswarm-pro mode → Pro proxy (sub) - plain sonnet/opus/haiku + own_key mode → API key (METERED) - gpt-5.4* / gpt-5.3* → ChatGPT Plus/Pro via 9Router (sub) - gemini-*  → Gemini Advanced via 9Router (sub)
                     const m = (session.model || '').toLowerCase();
                     const isApiRoute = m.endsWith('-api');
                     if (isApiRoute) {
@@ -1620,30 +1461,14 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
               height: '100%',
               overflow: 'auto',
               scrollbarGutter: 'stable',
-              // Top-aligned natural flow: messages start at the top and grow down
-              // (standard chat). The earlier flex-column + mt:auto bottom-anchor
-              // clustered short chats at the bottom under a big void, reading broken.
+              // Top-aligned natural flow: messages start at the top and grow down (standard chat). The earlier flex-column + mt:auto bottom-anchor clustered short chats at the bottom under a big void, reading broken.
               px: 2,
               py: 1,
-              // Smoothness bundle (perf-only , no behavior change):
-              //   1. overflow-anchor: auto , Chromium's native scroll
-              //      anchoring keeps the viewport pinned to the user's
-              //      visible content as siblings above/below resize.
-              //      Eliminates the "transcript snaps back" feel during
-              //      streaming and parallel tool fan-outs. Runs on the
-              //      compositor thread, free.
-              //   2. contain: layout , tells the browser layout shifts
-              //      inside this scroll container don't affect siblings
-              //      outside it. Prevents reflow from cascading up to
-              //      the dashboard layout when bubbles grow.
-              //   3. overscroll-behavior: contain , keeps over-scroll
-              //      gestures from leaking up to the dashboard pan/zoom
-              //      when the user hits the chat top/bottom.
+              // Smoothness bundle (perf-only, no behavior change): 1. overflow-anchor: auto, Chromium's native scroll anchoring keeps the viewport pinned to the user's visible content as siblings above/below resize. Eliminates the "transcript snaps back" feel during streaming and parallel tool fan-outs. Runs on the compositor thread, free. 2. contain: layout, tells the browser layout shifts inside this scroll container don't affect siblings outside it. Prevents reflow from cascading up to the dashboard layout when bubbles grow. 3. overscroll-behavior: contain, keeps over-scroll gestures from leaking up to the dashboard pan/zoom when the user hits the chat top/bottom.
               overflowAnchor: 'auto',
               contain: 'layout',
               overscrollBehavior: 'contain',
-              // Hidden until the user is in the chat: the thumb is transparent at
-              // rest and fades in on hover, so a resizing thumb never draws the eye.
+              // Hidden until the user is in the chat: the thumb is transparent at rest and fades in on hover, so a resizing thumb never draws the eye.
               '&::-webkit-scrollbar': { width: 6 },
               '&::-webkit-scrollbar-track': { background: 'transparent' },
               '&::-webkit-scrollbar-thumb': {
@@ -1666,8 +1491,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
               const isOutOfTokens = reason === 'out_of_tokens';
               const title = isOutOfTokens ? 'Out of tokens' : isAuth ? 'Sign-in required' : 'Context full';
               const primaryLabel = isOutOfTokens ? 'Got it' : isAuth ? 'Open Settings' : 'Start a fresh chat';
-              // In the workflow build chat, switching models here also sets the
-              // workflow's scheduled run model, so spell that consequence out.
+              // In the workflow build chat, switching models here also sets the workflow's scheduled run model, so spell that consequence out.
               const message = isOutOfTokens && workflowEditId
                 ? `${session.context_overflow.message} Whichever model you switch to here becomes the model this workflow runs on.`
                 : session.context_overflow.message;
@@ -1768,14 +1592,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                   <Box
                   sx={{
                     '&:hover .msg-actions': { opacity: 1 },
-                    // Cheap virtualization: tells the browser to skip
-                    // paint + layout for bubbles outside the scroll
-                    // viewport. `contain-intrinsic-size: auto N` reserves
-                    // a placeholder height so the scrollbar doesn't jump,
-                    // and `auto` lets the browser remember the actual
-                    // height after first render. Works alongside the
-                    // container's overflow-anchor. Chrome 85+ (Electron
-                    // covers this).
+                    // Cheap virtualization: tells the browser to skip paint + layout for bubbles outside the scroll viewport. `contain-intrinsic-size: auto N` reserves a placeholder height so the scrollbar doesn't jump, and `auto` lets the browser remember the actual height after first render. Works alongside the container's overflow-anchor. Chrome 85+ (Electron covers this).
                     contentVisibility: 'auto',
                     containIntrinsicSize: 'auto 120px',
                   }}
@@ -2234,12 +2051,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                 </Box>
               )}
               {(() => {
-                // Proactive Haiku-overflow warning. Each connected MCP adds
-                // a sizeable tools-schema chunk to every Claude request;
-                // Haiku 4.5's window is 5x smaller than Sonnet/Opus, so 5+
-                // simultaneously-enabled MCPs reliably push a one-line
-                // message past the limit. We surface this BEFORE the user
-                // sends so they don't waste a turn on "Prompt is too long".
+                // Proactive Haiku-overflow warning. Each connected MCP adds a sizeable tools-schema chunk to every Claude request; Haiku 4.5's window is 5x smaller than Sonnet/Opus, so 5+ simultaneously-enabled MCPs reliably push a one-line message past the limit. We surface this BEFORE the user sends so they don't waste a turn on "Prompt is too long".
                 const isHaiku = (model || '').toLowerCase().startsWith('haiku');
                 const enabledMcpCount = Object.values(toolItems).filter(
                   (t) => t.enabled && t.mcp_config && Object.keys(t.mcp_config).length > 0,
@@ -2363,13 +2175,10 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
                                   if (!r.ok) {
                                     setActivateError(`Activation failed (${r.status})`);
                                   } else if (body?.status === 'unknown_server') {
-                                    // Not yet connected; jump straight to Actions
-                                    // so the user can finish OAuth. Nothing here
-                                    // can do it on their behalf.
+                                    // Not yet connected; jump straight to Actions so the user can finish OAuth. Nothing here can do it on their behalf.
                                     navigate('/actions');
                                   } else if (id) {
-                                    // Activation succeeded; clear the banner so the user
-                                    // gets visual confirmation the click did something.
+                                    // Activation succeeded; clear the banner so the user gets visual confirmation the click did something.
                                     dispatch(clearMcpSuggestions({ sessionId: id }));
                                   }
                                 } catch (e: any) {
@@ -2442,9 +2251,7 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
   );
 };
 
-// Brief toast above the build chat's composer confirming a model switch also
-// changes the model the scheduled workflow will run on. Holds the last label in
-// a ref so the exit fade renders content instead of blanking mid-animation.
+// Brief toast above the build chat's composer confirming a model switch also changes the model the scheduled workflow will run on. Holds the last label in a ref so the exit fade renders content instead of blanking mid-animation.
 function WorkflowModelNotice({ c, label }: { c: ReturnType<typeof useClaudeTokens>; label: string | null }) {
   const last = React.useRef<string | null>(null);
   if (label) last.current = label;

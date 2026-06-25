@@ -95,8 +95,7 @@ const initialState: OnboardingProgressState = {
   startedAt: 0,
   completedSteps: [],
   currentStepId: null,
-  // Quiet on launch: a small pill, not the full roadmap, so the starter chips are
-  // the focus for the first win. It gently auto-opens once after that win.
+  // Quiet on launch: a small pill, not the full roadmap, so the starter chips are the focus for the first win. It gently auto-opens once after that win.
   panelMode: 'pill',
   dismissedAt: null,
   perStepState: {},
@@ -125,8 +124,7 @@ const slice = createSlice({
       state.startedAt = Date.now();
       state.completedSteps = action.payload.preCompleted;
       state.currentStepId = action.payload.currentStepId;
-      // Quiet pill on first init (the chips carry the first win); returning users
-      // skip this branch (initialized) so their saved choice holds.
+      // Quiet pill on first init (the chips carry the first win); returning users skip this branch (initialized) so their saved choice holds.
       state.panelMode = 'pill';
       state.dismissedAt = null;
       state.perStepState = {};

@@ -4,8 +4,7 @@ import { normalizeSessionName } from './sessionDisplay';
 
 const AGENTS_API = `${API_BASE}/agents`;
 
-// Appended (server-side) to the base agent prompt for the very first run, so the welcome
-// agent opens like a sharp teammate: narrow down an open-ended ask before diving in.
+// Appended (server-side) to the base agent prompt for the very first run, so the welcome agent opens like a sharp teammate: narrow down an open-ended ask before diving in.
 const WELCOME_EXPLORATORY_PROMPT =
   "This is the user's very first task with you. Be a warm, sharp teammate: if their request " +
   "is open-ended or vague, ask 1-2 short clarifying questions to pin down exactly what they " +
@@ -246,9 +245,7 @@ export const sendMessage = createAsyncThunk(
   }
 );
 
-// Carry-the-task: after the free trial runs dry and the user connects their own model, resend the
-// last thing they asked so it picks up on the new model instead of being lost. Explicit (a tap),
-// never auto-fired on a settings change, and it reuses the session's now-current model server-side.
+// Carry-the-task: after the free trial runs dry and the user connects their own model, resend the last thing they asked so it picks up on the new model instead of being lost. Explicit (a tap), never auto-fired on a settings change, and it reuses the session's now-current model server-side.
 export const retryLastUserMessage = createAsyncThunk(
   'agents/retryLastUserMessage',
   async ({ sessionId }: { sessionId: string }, { getState, dispatch }) => {
@@ -321,10 +318,7 @@ export interface LaunchAndSendPayload {
 export const fetchSession = createAsyncThunk(
   'agents/fetchSession',
   async (sessionId: string, { rejectWithValue, getState }) => {
-    // Snapshot whether a stream is live for this session BEFORE the await, so the
-    // merge reducer can treat a streaming session as "live" and keep the just-sent
-    // user bubble (streaming lives in streamingSlice and never flips session.status
-    // to running, so the status-only liveness check missed mid-stream reopens).
+    // Snapshot whether a stream is live for this session BEFORE the await, so the merge reducer can treat a streaming session as "live" and keep the just-sent user bubble (streaming lives in streamingSlice and never flips session.status to running, so the status-only liveness check missed mid-stream reopens).
     const streamingActive = !!(getState() as { streaming?: { bySession?: Record<string, unknown> } }).streaming?.bySession?.[sessionId];
     const res = await fetch(`${AGENTS_API}/sessions/${sessionId}`);
     if (!res.ok) {
@@ -415,8 +409,7 @@ export const updateSystemPrompt = createAsyncThunk(
 export const renameSession = createAsyncThunk(
   'agents/rename',
   async ({ sessionId, name }: { sessionId: string; name: string }, { dispatch }) => {
-    // Optimistic local update; the backend echoes the new name back over
-    // the agent:status broadcast, which keeps every open card in sync.
+    // Optimistic local update; the backend echoes the new name back over the agent:status broadcast, which keeps every open card in sync.
     dispatch(updateSessionName({ sessionId, name }));
     await fetch(`${AGENTS_API}/sessions/${sessionId}`, {
       method: 'PATCH',
@@ -581,8 +574,7 @@ const agentsSlice = createSlice({
           created_at: new Date().toISOString(),
           cost_usd: 0,
           tokens: { input: 0, output: 0 },
-          // A seeded greeting is purely cosmetic: launchAndSendFirstMessage.fulfilled deletes this
-          // draft and swaps in the raw server session, so seeded messages never reach the backend.
+          // A seeded greeting is purely cosmetic: launchAndSendFirstMessage.fulfilled deletes this draft and swaps in the raw server session, so seeded messages never reach the backend.
           messages: seededMessages ?? [],
           pending_approvals: [],
           branches: { main: { id: 'main', parent_branch_id: null, fork_point_message_id: null, created_at: new Date().toISOString() } },
@@ -827,11 +819,7 @@ const agentsSlice = createSlice({
       const session = state.sessions[action.payload.sessionId];
       if (!session) return;
       session.compacted_through_msg_id = action.payload.throughMsgId;
-      // After compaction the OLD context numbers are wrong (they count messages we
-      // just dropped). Reset EVERY context-derived field so all surfaces that show
-      // it — the toolbar ContextRing, the /context drawer %, the pre-send guard —
-      // reflect the post-compaction state, not just the token count. The real values
-      // refill on the next turn's round-trip; until then zero is closer than stale.
+      // After compaction the OLD context numbers are wrong (they count messages we just dropped). Reset EVERY context-derived field so all surfaces that show it — the toolbar ContextRing, the /context drawer %, the pre-send guard — reflect the post-compaction state, not just the token count. The real values refill on the next turn's round-trip; until then zero is closer than stale.
       if (action.payload.throughMsgId) {
         session.tokens = { input: 0, output: session.tokens?.output ?? 0 };
         session.ctx_used_pct = 0;
@@ -1049,9 +1037,7 @@ const agentsSlice = createSlice({
       state.history[entry.id] = entry;
 
       const session = state.sessions[entry.id];
-      // keepSession: the user is watching this run live, so a workflow finishing
-      // shouldn't yank the chat out from under them. Keep it as a normal
-      // completed chat (continue / exit) instead of deleting the card.
+      // keepSession: the user is watching this run live, so a workflow finishing shouldn't yank the chat out from under them. Keep it as a normal completed chat (continue / exit) instead of deleting the card.
       if (keepSession && session) {
         session.status = (entry.status as AgentSession['status']) || 'completed';
         return;
@@ -1122,9 +1108,7 @@ const agentsSlice = createSlice({
         const fetchedIds = new Set(action.payload.map((s) => s.id));
         const activeStatuses = new Set(['running', 'waiting_approval']);
 
-        // Strip sessions the server no longer has, but a dashboard's list is only
-        // authoritative for ITS OWN sessions: hopping dashboards must not eat the
-        // finished chat you were just reading (it looked like wiped history).
+        // Strip sessions the server no longer has, but a dashboard's list is only authoritative for ITS OWN sessions: hopping dashboards must not eat the finished chat you were just reading (it looked like wiped history).
         const fetchedDashboardId = action.meta.arg?.dashboardId;
         for (const [id, existing] of Object.entries(state.sessions)) {
           if (fetchedIds.has(id)) continue;
@@ -1141,12 +1125,7 @@ const agentsSlice = createSlice({
           state.sessions[s.id] = {
             ...s,
             name: normalizeSessionName(s.name),
-            // This is a METADATA poll (status/name); the chat owns its messages
-            // via fetchSession + the WS stream. A poll response computed before a
-            // just-sent user turn must NOT clobber the live array, that intermittently
-            // wiped the user's own bubble (while the assistant stream, a separate
-            // slice, kept rendering). Keep the hydrated messages; only adopt the
-            // poll's copy for a session we haven't loaded into the chat yet.
+            // This is a METADATA poll (status/name); the chat owns its messages via fetchSession + the WS stream. A poll response computed before a just-sent user turn must NOT clobber the live array, that intermittently wiped the user's own bubble (while the assistant stream, a separate slice, kept rendering). Keep the hydrated messages; only adopt the poll's copy for a session we haven't loaded into the chat yet.
             messages: existing?.messages?.length ? existing.messages : s.messages ?? [],
             pending_approvals: existing?.pending_approvals?.length
               ? existing.pending_approvals
@@ -1223,10 +1202,7 @@ const agentsSlice = createSlice({
           session.status = 'running';
         }
       })
-      // The optimistic .pending above set status='running'; on a failed send/edit nothing
-      // ever cleared it, so the input stayed locked forever. Release it. Guard on 'running'
-      // so a status the WS already advanced isn't clobbered, and use 'completed' (not a
-      // blocked terminal) so a later WS 'running' can still take if the agent did start.
+      // The optimistic .pending above set status='running'; on a failed send/edit nothing ever cleared it, so the input stayed locked forever. Release it. Guard on 'running' so a status the WS already advanced isn't clobbered, and use 'completed' (not a blocked terminal) so a later WS 'running' can still take if the agent did start.
       .addCase(sendMessage.rejected, (state, action) => {
         const session = state.sessions[action.meta.arg.sessionId];
         if (session && session.status === 'running') {
@@ -1347,46 +1323,25 @@ const agentsSlice = createSlice({
       .addCase(fetchSession.fulfilled, (state, action) => {
         const session = action.payload;
         const existing = state.sessions[session.id];
-        // Preserve local messages the server snapshot doesn't carry yet. On
-        // remount mid-stream (leave the chat + come back) this fetch's snapshot
-        // predates the just-sent user turn, so a blind replace wiped the user's
-        // own bubble while the assistant stream (separate slice) kept going.
-        // The WS echo clears optimistic_status the instant it arrives, so the
-        // message is usually "confirmed but not yet server-persisted" rather than
-        // still 'pending' (that's why a pending-only filter missed it). Gate on
-        // the session being LIVE: on a running/streaming session, carry forward
-        // any local message the snapshot lacks; on a settled session the snapshot
-        // is authoritative (so a server-side delete isn't resurrected).
+        // Preserve local messages the server snapshot doesn't carry yet. On remount mid-stream (leave the chat + come back) this fetch's snapshot predates the just-sent user turn, so a blind replace wiped the user's own bubble while the assistant stream (separate slice) kept going. The WS echo clears optimistic_status the instant it arrives, so the message is usually "confirmed but not yet server-persisted" rather than still 'pending' (that's why a pending-only filter missed it). Gate on the session being LIVE: on a running/streaming session, carry forward any local message the snapshot lacks; on a settled session the snapshot is authoritative (so a server-side delete isn't resurrected).
         const incomingMsgs = session.messages ?? [];
-        // Live by EITHER side's account: a send on a completed chat flips local
-        // status to running while the racing snapshot still says completed and
-        // lacks the new turn; trusting only the snapshot wiped the user bubble
-        // until the run finished.
+        // Live by EITHER side's account: a send on a completed chat flips local status to running while the racing snapshot still says completed and lacks the new turn; trusting only the snapshot wiped the user bubble until the run finished.
         const isLive = (s?: string) => s === 'running' || s === 'waiting_approval';
-        // A streaming session counts as live even if neither status says 'running'
-        // (streaming lives in streamingSlice). Without this, a mid-stream reopen
-        // dropped the just-sent user bubble until the turn finished.
+        // A streaming session counts as live even if neither status says 'running' (streaming lives in streamingSlice). Without this, a mid-stream reopen dropped the just-sent user bubble until the turn finished.
         const streamingActive = !!(session as AgentSession & { _streamingActive?: boolean })._streamingActive;
         const liveStatus = streamingActive || isLive(session.status) || isLive(existing?.status);
         const incomingClientIds = new Set(
           incomingMsgs.map((m) => m.client_message_id).filter(Boolean),
         );
         const incomingIds = new Set(incomingMsgs.map((m) => m.id));
-        // An optimistic message (no WS echo yet) is preserved even when both sides
-        // read settled: right after a send on a completed chat, NEITHER status has
-        // flipped to running, and the racing snapshot wiped the just-typed bubble
-        // for seconds. It can't be a deleted-message resurrection; the server has
-        // never confirmed it existed.
+        // An optimistic message (no WS echo yet) is preserved even when both sides read settled: right after a send on a completed chat, NEITHER status has flipped to running, and the racing snapshot wiped the just-typed bubble for seconds. It can't be a deleted-message resurrection; the server has never confirmed it existed.
         const surviving = (existing?.messages ?? []).filter(
           (m) =>
             (liveStatus || m.optimistic_status) &&
             !incomingIds.has(m.id) &&
             !(m.client_message_id && incomingClientIds.has(m.client_message_id)),
         );
-        // Place survivors by timestamp, not blindly at the end: when the snapshot
-        // already carries the agent's reply, appending the just-sent user bubble
-        // rendered the OUTPUT above the INPUT. Insert before the first incoming
-        // message that is newer.
+        // Place survivors by timestamp, not blindly at the end: when the snapshot already carries the agent's reply, appending the just-sent user bubble rendered the OUTPUT above the INPUT. Insert before the first incoming message that is newer.
         const mergedMessages = surviving.length ? [...incomingMsgs] : incomingMsgs;
         for (const m of surviving) {
           const at = mergedMessages.findIndex((x) => (x.timestamp || '') > (m.timestamp || ''));
@@ -1400,10 +1355,7 @@ const agentsSlice = createSlice({
           messages: mergedMessages,
           pending_approvals: session.pending_approvals ?? existing?.pending_approvals ?? [],
           tool_group_meta: session.tool_group_meta ?? existing?.tool_group_meta ?? {},
-          // mcp_suggestions live in client state only (the backend never
-          // returns them in the session payload). Preserve them across
-          // refresh so the suggestion banner stays put until the user
-          // dismisses it or activates one.
+          // mcp_suggestions live in client state only (the backend never returns them in the session payload). Preserve them across refresh so the suggestion banner stays put until the user dismisses it or activates one.
           mcp_suggestions: existing?.mcp_suggestions ?? [],
           mcp_suggestions_is_vague: existing?.mcp_suggestions_is_vague ?? false,
         };

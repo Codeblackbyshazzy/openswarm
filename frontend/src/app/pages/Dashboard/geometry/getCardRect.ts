@@ -1,9 +1,7 @@
 import { store } from '@/shared/state/store';
 import type { CardType } from '../hooks/state/useDashboardSelection';
 
-// Reads a card's rect straight from the live Redux store (collapsed height,
-// which is what the zoom math wants). Module-level + store.getState() so the
-// callback can stay stable across renders.
+// Reads a card's rect straight from the live Redux store (collapsed height, which is what the zoom math wants). Module-level + store.getState() so the callback can stay stable across renders.
 export function getCardRect(id: string, type: CardType):
   { x: number; y: number; width: number; height: number } | undefined {
   const layoutState = store.getState().dashboardLayout;

@@ -1,13 +1,4 @@
-// Vertical step list, the one shared building block across every
-// workflow card subview. Supports three orthogonal modes that compose:
-//
-//   editable    onChangeStep is set -> each row is a TextareaAutosize
-//                                       (PreviewView only).
-//   expandable  expandable=true     -> chevron next to each title;
-//                                       click reveals the raw prompt body.
-//   live        stepStatuses is set -> per-step circle becomes done/active/
-//                                       failed; Running view also surfaces
-//                                       activeStepSubtitle + duration.
+// Vertical step list, the one shared building block across every workflow card subview. Supports three orthogonal modes that compose: editable    onChangeStep is set -> each row is a TextareaAutosize (PreviewView only). expandable  expandable=true     -> chevron next to each title; click reveals the raw prompt body. live        stepStatuses is set -> per-step circle becomes done/active/ failed; Running view also surfaces activeStepSubtitle + duration.
 
 import React from 'react';
 import Box from '@mui/material/Box';
@@ -72,8 +63,7 @@ export default function StepList(props: Props) {
             left: CONNECTOR_X - 0.5,
             top: CIRCLE_SIZE * 0.5,
             bottom: CIRCLE_SIZE * 0.5,
-            // '1px' not 1: MUI sx treats width:1 as 100%, which rendered the
-            // connector as a full-width grey band behind the steps.
+            // '1px' not 1: MUI sx treats width:1 as 100%, which rendered the connector as a full-width grey band behind the steps.
             width: '1px',
             bgcolor: c.border.medium,
             opacity: 0.65,

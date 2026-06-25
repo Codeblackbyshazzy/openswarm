@@ -11,9 +11,7 @@ import {
 } from '@/app/components/Onboarding/steps/skipPredicates';
 import { STARTER_CATEGORIES } from '@/shared/starterCategories';
 
-// Returning-user empty state (the first-run greeting now lives in the auto-popped welcome
-// chat). Quiet: a one-line prompt + the shared starter chips for users who can run, or a
-// connect-a-model hint for users who can't. Two-level: category -> concrete prompts.
+// Returning-user empty state (the first-run greeting now lives in the auto-popped welcome chat). Quiet: a one-line prompt + the shared starter chips for users who can run, or a connect-a-model hint for users who can't. Two-level: category -> concrete prompts.
 const DashboardEmptyState: React.FC<{
   c: ClaudeTokens;
   onLaunch?: (prompt: string, mode: string, model: string) => void;

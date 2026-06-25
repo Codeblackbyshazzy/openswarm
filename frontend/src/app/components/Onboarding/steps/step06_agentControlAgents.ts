@@ -44,8 +44,7 @@ export const step06: OnboardingStep = {
       condition: { kind: 'event_bus', event: 'agent:attached_to_browser' },
       timeoutMs: 90000,
     },
-    // Guide, don't commandeer: let the user tell the boss chat what to do with
-    // the helper, in their own words, instead of auto-typing + sending for them.
+    // Guide, don't commandeer: let the user tell the boss chat what to do with the helper, in their own words, instead of auto-typing + sending for them.
     { kind: 'move_to', target: S.chatInput },
     {
       kind: 'popup',

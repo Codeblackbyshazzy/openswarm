@@ -13,8 +13,7 @@ import Button from '@mui/material/Button';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import InputBase from '@mui/material/InputBase';
-// One outlined icon language for the sidebar: thin monoline glyphs (not the
-// filled Material clip-art) so the rail reads as designed, not assembled.
+// One outlined icon language for the sidebar: thin monoline glyphs (not the filled Material clip-art) so the rail reads as designed, not assembled.
 import { LayoutDashboard } from 'lucide-react';
 import PsychologyIcon from '@mui/icons-material/PsychologyOutlined';
 import BuildIcon from '@mui/icons-material/BuildOutlined';
@@ -78,17 +77,12 @@ const AppShell: React.FC = () => {
     };
     return fn as typeof navigateRaw;
   }, [navigateRaw]);
-  // Navigate to an app instantly on click. The old debounce here swallowed clicks the
-  // user could see (felt broken) and never actually fixed the crash, since letting each
-  // app load defeats the debounce anyway. The real GPU-churn source (the WebGL loading
-  // placeholder) is now CSS, and the 250ms preview gate still skips webviews for apps
-  // switched-past too fast, so instant navigation is safe.
+  // Navigate to an app instantly on click. The old debounce here swallowed clicks the user could see (felt broken) and never actually fixed the crash, since letting each app load defeats the debounce anyway. The real GPU-churn source (the WebGL loading placeholder) is now CSS, and the 250ms preview gate still skips webviews for apps switched-past too fast, so instant navigation is safe.
   const navigateToApp = useCallback((id: string) => {
     navigate(`/apps/${id}`);
   }, [navigate]);
   const location = useLocation();
-  // React Router (HashRouter) stores a monotonic index in history state. location
-  // re-renders on every nav, by which point window.history.state.idx is updated.
+  // React Router (HashRouter) stores a monotonic index in history state. location re-renders on every nav, by which point window.history.state.idx is updated.
   const historyIdx = (window.history.state?.idx as number | undefined) ?? 0;
   const maxHistoryIdx = useRef(0);
   maxHistoryIdx.current = Math.max(maxHistoryIdx.current, historyIdx);
@@ -143,22 +137,17 @@ const AppShell: React.FC = () => {
   const modelsByProvider = useAppSelector((s) => s.models.byProvider);
   const modelsLoaded = useAppSelector((s) => s.models.loaded);
   const hasModelConnected = Object.keys(modelsByProvider).length > 0;
-  // During an active free trial the user CAN run things, so a red "no model connected"
-  // warning is misleading and discouraging (it sits right above the working starter chips).
-  // The trial flips connection_mode back to own_key the moment it's spent, so this banner
-  // returns then, landing the connect-a-model nudge after the win, not before it.
+  // During an active free trial the user CAN run things, so a red "no model connected" warning is misleading and discouraging (it sits right above the working starter chips). The trial flips connection_mode back to own_key the moment it's spent, so this banner returns then, landing the connect-a-model nudge after the win, not before it.
   const freeTrialActive = useAppSelector((s) => {
     const d = s.settings.data as any;
     return !!(d && d.connection_mode === 'free-trial' && d.free_trial_token);
   });
-  // Trial just ran dry (had an allotment, now 0, off the free lane): a quiet connect nudge, not the
-  // red error wall. Runs refill, so it's "for now".
+  // Trial just ran dry (had an allotment, now 0, off the free lane): a quiet connect nudge, not the red error wall. Runs refill, so it's "for now".
   const freeTrialSpent = useAppSelector((s) => {
     const d = s.settings.data as any;
     return !!(d && (d.free_trial_runs_limit ?? 0) > 0 && d.free_trial_remaining === 0 && d.connection_mode !== 'free-trial');
   });
-  // Post-wow: on the free lane and already got value (spent >= 1 run); offer the unlimited path they
-  // likely already own while they're happy, not when they're blocked.
+  // Post-wow: on the free lane and already got value (spent >= 1 run); offer the unlimited path they likely already own while they're happy, not when they're blocked.
   const freeTrialUsed = useAppSelector((s) => {
     const d = s.settings.data as any;
     if (!d || d.connection_mode !== 'free-trial' || !d.free_trial_token) return false;
@@ -167,8 +156,7 @@ const AppShell: React.FC = () => {
     return limit > 0 && (limit - remaining) >= 1;
   });
   const freeTrialResetsAt = useAppSelector((s) => (s.settings.data as any)?.free_trial_resets_at ?? null);
-  // Coarse "~3h" / "~20m" label for when the rolling window refills; null when unknown or basically now.
-  // Static (not a ticking countdown) on purpose: a per-second timer is needless churn for a 5h window.
+  // Coarse "~3h" / "~20m" label for when the rolling window refills; null when unknown or basically now. Static (not a ticking countdown) on purpose: a per-second timer is needless churn for a 5h window.
   const refillLabel = React.useMemo(() => {
     if (!freeTrialResetsAt) return null;
     const secs = freeTrialResetsAt - Date.now() / 1000;
@@ -178,10 +166,7 @@ const AppShell: React.FC = () => {
     return `~${Math.max(1, Math.round(secs / 60))}m`;
   }, [freeTrialResetsAt]);
 
-  // Paid (openswarm-pro) usage meter: same calm "you're near/at the cap, here's when it's back"
-  // pattern as the free-trial nudge, but the bar IS the message. Only fires in pro mode on real
-  // server-owned usage (requests_in_window/plan_limit), and only once near the cap, so it never
-  // clutters the normal flow. window_ends_at is unix MS (the trial's resets_at is seconds).
+  // Paid (openswarm-pro) usage meter: same calm "you're near/at the cap, here's when it's back" pattern as the free-trial nudge, but the bar IS the message. Only fires in pro mode on real server-owned usage (requests_in_window/plan_limit), and only once near the cap, so it never clutters the normal flow. window_ends_at is unix MS (the trial's resets_at is seconds).
   const proUsage = useAppSelector((s) => {
     const d = s.settings.data as any;
     if (!d || d.connection_mode !== 'openswarm-pro') return null;
@@ -199,16 +184,14 @@ const AppShell: React.FC = () => {
     const h = Math.floor(secs / 3600);
     return h >= 1 ? `~${h}h` : `~${Math.max(1, Math.round(secs / 60))}m`;
   }, [proUsage]);
-  // Hold the banner until the boot free-trial mint settles, else a brand-new user sees it
-  // flash red for the ~1-3s the trial takes to arm. (Offline shows immediately, it's its own signal.)
+  // Hold the banner until the boot free-trial mint settles, else a brand-new user sees it flash red for the ~1-3s the trial takes to arm. (Offline shows immediately, it's its own signal.)
   const freeTrialArmSettled = useAppSelector((s) => s.settings.freeTrialArmSettled);
   // The red wall is for genuine "no way to run" only; the free-trial states get the quiet nudge below.
   const showWarningBanner = !isOnline || (modelsLoaded && freeTrialArmSettled && !hasModelConnected && !freeTrialActive && !freeTrialSpent);
   const [ftNudgeDismissed, setFtNudgeDismissed] = useState<boolean>(() => {
     try { return localStorage.getItem('os_ft_nudge_dismissed') === '1'; } catch { return false; }
   });
-  // Spent nudge hides the moment they connect a real model; the post-wow nudge only shows on the
-  // trial lane (so it already implies no own model) and is dismissible.
+  // Spent nudge hides the moment they connect a real model; the post-wow nudge only shows on the trial lane (so it already implies no own model) and is dismissible.
   const showFreeTrialNudge = isOnline && ((freeTrialSpent && !hasModelConnected) || (freeTrialUsed && !ftNudgeDismissed));
 
   const bannerDismissedForVersion = availableVersion != null && dismissedVersion === availableVersion;
@@ -768,13 +751,11 @@ const AppShell: React.FC = () => {
           overflow: 'auto',
           pt: 0.5,
           '&::-webkit-scrollbar': { width: 0 },
-          // Tactile hover: the leading section icon springs once on row-hover, then settles.
-          // Interaction-only, never ambient. Scoped to ListItemIcon so the +/chevron stay put.
+          // Tactile hover: the leading section icon springs once on row-hover, then settles. Interaction-only, never ambient. Scoped to ListItemIcon so the +/chevron stay put.
           '& .MuiListItemIcon-root svg': {
             transition: 'transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1)',
           },
-          // Per-glyph hover choreography: each section icon reacts in its own way,
-          // springy then settles. Interaction-only, never ambient.
+          // Per-glyph hover choreography: each section icon reacts in its own way, springy then settles. Interaction-only, never ambient.
           '& [data-onboarding="sidebar-dashboards"]:hover .MuiListItemIcon-root svg': {
             transform: 'scale(1.14)',
           },
@@ -1249,8 +1230,7 @@ const AppShell: React.FC = () => {
         overflow: 'hidden',
         bgcolor: c.bg.page,
         position: 'relative',
-        // Float the content as a rounded inset panel ("column pill"): the chrome
-        // (bg.secondary) frames it, so there are no divider lines, just air + radius.
+        // Float the content as a rounded inset panel ("column pill"): the chrome (bg.secondary) frames it, so there are no divider lines, just air + radius.
         mt: '6px',
         mr: '6px',
         mb: '6px',

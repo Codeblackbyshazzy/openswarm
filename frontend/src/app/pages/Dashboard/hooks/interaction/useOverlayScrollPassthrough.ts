@@ -54,9 +54,7 @@ export function useOverlayScrollPassthrough(active: boolean) {
           node.scrollWidth > node.clientWidth &&
           (cs.overflowX === 'auto' || cs.overflowX === 'scroll');
 
-        // Horizontal-dominant gesture over a vertically-only scrollable
-        // container: don't absorb it (scrollBy with dx would be a no-op).
-        // Let it bubble to the canvas wheel handler so the canvas pans.
+        // Horizontal-dominant gesture over a vertically-only scrollable container: don't absorb it (scrollBy with dx would be a no-op). Let it bubble to the canvas wheel handler so the canvas pans.
         if (horizontalDominant && !canScrollX) {
           node = node.parentElement;
           continue;

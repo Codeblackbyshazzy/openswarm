@@ -68,10 +68,7 @@ const StreamingCursor: React.FC = () => {
 
 const ELEMENT_SEPARATOR = '\n\n---\nSelected UI Elements:\n';
 
-// Remembered full-render content height per oversized message id. Module-scoped so
-// it survives the transcript window unmounting/remounting the bubble: when a big
-// message goes off-screen we reserve the exact height it had when rendered, so its
-// box doesn't collapse and the scrollbar doesn't jump as it crosses the viewport.
+// Remembered full-render content height per oversized message id. Module-scoped so it survives the transcript window unmounting/remounting the bubble: when a big message goes off-screen we reserve the exact height it had when rendered, so its box doesn't collapse and the scrollbar doesn't jump as it crosses the viewport.
 const oversizedContentHeights = new Map<string, number>();
 
 interface OpenSwarmErrorInfo {
@@ -124,8 +121,7 @@ function parseOpenSwarmError(text: string, ctx?: OverflowContext): OpenSwarmErro
         : 'Wait for the reset window shown by your provider, or switch to another model.',
     };
   }
-  // Transient throttle: Anthropic's upstream overload or our own pool-shed. Not the user's
-  // fault and not a plan cap, so don't say "upgrade", just tell them it's busy. claude.ai-style.
+  // Transient throttle: Anthropic's upstream overload or our own pool-shed. Not the user's fault and not a plan cap, so don't say "upgrade", just tell them it's busy. claude.ai-style.
   if (/rate_limit_error|free_pool_busy|overloaded_error|too many requests/i.test(text)) {
     return {
       kind: 'network',
@@ -134,8 +130,7 @@ function parseOpenSwarmError(text: string, ctx?: OverflowContext): OpenSwarmErro
     };
   }
   if (/free_trial_exhausted|used your free|free OpenSwarm runs/i.test(text)) {
-    // Once a real model is connected, the prompt isn't lost: offer a one-tap pick-up-where-you-left-off
-    // that resends the last ask on the new model. Before connecting, the CTA still routes to Settings.
+    // Once a real model is connected, the prompt isn't lost: offer a one-tap pick-up-where-you-left-off that resends the last ask on the new model. Before connecting, the CTA still routes to Settings.
     if (ctx?.hasModel) {
       return {
         kind: 'cap',
@@ -192,9 +187,7 @@ function parseOpenSwarmError(text: string, ctx?: OverflowContext): OpenSwarmErro
     }
     let lead: string;
     if (win && input) {
-      // input is the API-reported total which includes our preset, tool
-      // defs, MCP descriptions etc. Subtract those for the user-facing
-      // "your content" number so we don't blame the user for our overhead.
+      // input is the API-reported total which includes our preset, tool defs, MCP descriptions etc. Subtract those for the user-facing "your content" number so we don't blame the user for our overhead.
       const userContent = Math.max(0, input - fw);
       lead = `The request totalled ~${formatTokens(input)} of ${formatTokens(win)} tokens this model can hold (your messages + files: ~${formatTokens(userContent)}).`;
     } else if (win) {
@@ -235,8 +228,7 @@ function parseOpenSwarmError(text: string, ctx?: OverflowContext): OpenSwarmErro
       detail: "We couldn't reach the service. Once your connection is back, send a new message to continue.",
     };
   }
-  // Last resort: a raw API error or SDK traceback we don't have specific copy for. Never let JSON
-  // or a stack trace land in the card; give a calm retry instead (the raw text is in the console).
+  // Last resort: a raw API error or SDK traceback we don't have specific copy for. Never let JSON or a stack trace land in the card; give a calm retry instead (the raw text is in the console).
   if (/API Error:|invalid_request_error|"type"\s*:\s*"error"|Command failed with exit code/i.test(text)) {
     return {
       kind: 'network',
@@ -905,9 +897,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
     const rawSysText = typeof content === 'string' ? content : JSON.stringify(content);
     const { body: sysBody, note: sysNote } = extractPlatformNote(rawSysText);
     const sysText = sysNote || sysBody;
-    // A raw subprocess/API failure ("Command failed with exit code 1", API Error JSON) is dev
-    // jargon, and the same failure is already shown as a friendly card on the assistant side.
-    // Swallow just that stderr dump so the user sees one calm card, not jargon beneath it.
+    // A raw subprocess/API failure ("Command failed with exit code 1", API Error JSON) is dev jargon, and the same failure is already shown as a friendly card on the assistant side. Swallow just that stderr dump so the user sees one calm card, not jargon beneath it.
     if (/Command failed with exit code|API Error:|invalid_request_error|"type"\s*:\s*"error"|Check stderr output/i.test(sysText)) {
       return null;
     }
@@ -946,8 +936,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
   const { userMessage: displayText, elements: selectedElements } = isUser
     ? parseElementContext(rawText)
     : { userMessage: rawText, elements: [] };
-  // A message longer than ~2 screens of text gets the placeholder + block
-  // virtualization treatment (full render in view, reserved-height placeholder off).
+  // A message longer than ~2 screens of text gets the placeholder + block virtualization treatment (full render in view, reserved-height placeholder off).
   const isOversizedAssistant = !isUser && !isStreaming
     && rawText.length > oversizedCharThreshold(viewportHeight, viewportWidth);
   const [isOversizedInViewport, setIsOversizedInViewport] = useState(false);
@@ -970,11 +959,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
     >{markdownWindow.text}</ReactMarkdown>
   ), [markdownWindow.text]);
 
-  // Height to reserve for this message's off-screen placeholder before it has ever
-  // been measured. Estimated from the FULL text length (we render in full when in
-  // view) with the same model as AgentChat's spacer estimate, so the placeholder
-  // and the spacer reserve the same space. Once rendered, oversizedContentHeights
-  // wins over this.
+  // Height to reserve for this message's off-screen placeholder before it has ever been measured. Estimated from the FULL text length (we render in full when in view) with the same model as AgentChat's spacer estimate, so the placeholder and the spacer reserve the same space. Once rendered, oversizedContentHeights wins over this.
   const placeholderFallbackHeight = useMemo(
     () => estimateRenderedTextHeight(rawText, viewportWidth),
     [rawText, viewportWidth],
@@ -998,9 +983,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
   const activeSessionId = useAppSelector((state) => state.agents.activeSessionId);
   const openswarmError = !isUser ? parseOpenSwarmError(rawText, overflowCtx) : null;
 
-  // Reports asynchronously, bc without this an oversized message that mounts in
-  // view (e.g. scrolling up into the agent's reply) would paint the blank
-  // placeholder box for a frame and then pop in the real markdown.
+  // Reports asynchronously, bc without this an oversized message that mounts in view (e.g. scrolling up into the agent's reply) would paint the blank placeholder box for a frame and then pop in the real markdown.
   React.useLayoutEffect(() => {
     if (!isOversizedAssistant) {
       setIsOversizedInViewport(false);
@@ -1010,13 +993,10 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
     const node = bubbleRootRef.current;
     if (!node) return;
 
-    // One-screen rootMargin so the message renders its full markdown for a screen
-    // above and below the visible area; only once it drifts a screen past the
-    // viewport does it drop to the height-reserved placeholder.
+    // One-screen rootMargin so the message renders its full markdown for a screen above and below the visible area; only once it drifts a screen past the viewport does it drop to the height-reserved placeholder.
     const bufferPx = Math.max(180, Math.round(viewportHeight || 240));
 
-    // Resolve visibility synchronously (on mount and on demand) so the correct
-    // content paints without waiting on the observer's async callback.
+    // Resolve visibility synchronously (on mount and on demand) so the correct content paints without waiting on the observer's async callback.
     const rootEl: Element = (scrollRoot as Element) ?? document.scrollingElement ?? document.documentElement;
     const evaluate = () => {
       const rootRect = rootEl.getBoundingClientRect();
@@ -1035,9 +1015,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
     });
 
     observer.observe(node);
-    // A programmatic jump (scroll-to-bottom / open pin) settles after this mounts;
-    // re-evaluate synchronously when it does, since the observer sometimes misses
-    // the final transition and leaves this stuck as a placeholder.
+    // A programmatic jump (scroll-to-bottom / open pin) settles after this mounts; re-evaluate synchronously when it does, since the observer sometimes misses the final transition and leaves this stuck as a placeholder.
     scrollRoot?.addEventListener(RECHECK_VISIBILITY_EVENT, evaluate);
     return () => {
       observer.disconnect();
@@ -1045,10 +1023,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
     };
   }, [isOversizedAssistant, message.id, scrollRoot, viewportHeight]);
 
-  // Remember the full-render height of an oversized message while it is on-screen,
-  // so its off-screen placeholder can reserve exactly that height (see the
-  // module-level oversizedContentHeights cache). Measured on the content box only,
-  // which excludes the action bar (rendered by the parent) to avoid a feedback loop.
+  // Remember the full-render height of an oversized message while it is on-screen, so its off-screen placeholder can reserve exactly that height (see the module-level oversizedContentHeights cache). Measured on the content box only, which excludes the action bar (rendered by the parent) to avoid a feedback loop.
   React.useLayoutEffect(() => {
     if (!isOversizedAssistant || !shouldRenderMarkdown) return;
     const node = contentRef.current;
@@ -1064,9 +1039,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
     }
   }, [message.id, openswarmError?.kind]);
 
-  // A run that failed on a subscription/connection error means the card may be
-  // showing a stale "Connected" (the optimistic mark, or a token that went stale
-  // mid-session); re-pull the real 9Router/cloud status so it flips to Reconnect.
+  // A run that failed on a subscription/connection error means the card may be showing a stale "Connected" (the optimistic mark, or a token that went stale mid-session); re-pull the real 9Router/cloud status so it flips to Reconnect.
   React.useEffect(() => {
     if (openswarmError?.kind === 'auth') {
       dispatch(fetchSubscriptionStatus());
@@ -1117,10 +1090,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
         sx={{
           maxWidth: '85%',
           minWidth: 0,
-          // Oversized messages are block-virtualized, so the set of rendered
-          // blocks (and thus the widest visible content) changes as you scroll.
-          // Pin them to a stable width so the bubble doesn't shrink-to-fit and
-          // resize horizontally frame to frame. Normal messages keep shrink-to-fit.
+          // Oversized messages are block-virtualized, so the set of rendered blocks (and thus the widest visible content) changes as you scroll. Pin them to a stable width so the bubble doesn't shrink-to-fit and resize horizontally frame to frame. Normal messages keep shrink-to-fit.
           ...(isOversizedAssistant ? { width: '85%' } : {}),
           bgcolor: isUser ? c.user.bubble : c.bg.surface,
           border: isUser ? (isFailed ? `1px solid ${c.status.error}` : 'none') : `1px solid ${c.border.subtle}`,
@@ -1131,10 +1101,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
           overflow: 'hidden',
           opacity: isPending ? 0.7 : 1,
           transition: 'opacity 0.2s, border-color 0.2s',
-          // User bubbles ease in instead of popping. Assistant bubbles are left
-          // alone on purpose: they reveal by typing, and animating them would
-          // flash at the streaming -> committed handoff. Transform+opacity only,
-          // so it rides the compositor and never shifts layout or the scroll.
+          // User bubbles ease in instead of popping. Assistant bubbles are left alone on purpose: they reveal by typing, and animating them would flash at the streaming -> committed handoff. Transform+opacity only, so it rides the compositor and never shifts layout or the scroll.
           ...(isUser && !editing ? {
             animation: 'msgBubbleEnter 160ms ease-out',
             '@keyframes msgBubbleEnter': {
@@ -1347,10 +1314,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
                 {isOversizedAssistant && !isOversizedInViewport ? (
                   <Box
                     sx={{
-                      // Reserve the height this message had when last rendered full
-                      // (cached across unmount) so the box doesn't collapse and the
-                      // scrollbar stays put. Falls back to a content-aware estimate
-                      // (matched to the spacer estimate) until it's been measured.
+                      // Reserve the height this message had when last rendered full (cached across unmount) so the box doesn't collapse and the scrollbar stays put. Falls back to a content-aware estimate (matched to the spacer estimate) until it's been measured.
                       minHeight: oversizedContentHeights.get(message.id)
                         || placeholderFallbackHeight
                         || Math.min(420, Math.max(180, viewportHeight || 240)),
@@ -1360,10 +1324,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
                     aria-hidden="true"
                   />
                 ) : isOversizedAssistant ? (
-                  // In view, but virtualize WITHIN the message: only blocks near the
-                  // viewport render their markdown, the rest are reserved-height
-                  // placeholders, so an extremely long message never parses/mounts
-                  // more than the on-screen portion plus a buffer.
+                  // In view, but virtualize WITHIN the message: only blocks near the viewport render their markdown, the rest are reserved-height placeholders, so an extremely long message never parses/mounts more than the on-screen portion plus a buffer.
                   <WindowedMarkdown
                     messageId={message.id}
                     text={rawText}
@@ -1372,9 +1333,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, editing = false, o
                     viewportWidth={viewportWidth}
                   />
                 ) : (
-                  // Normal (non-oversized) render. Streaming always lands here
-                  // (oversized requires !isStreaming); the reveal subtree lets
-                  // useSmoothText append chars between parses.
+                  // Normal (non-oversized) render. Streaming always lands here (oversized requires !isStreaming); the reveal subtree lets useSmoothText append chars between parses.
                   <Box ref={revealRef}>{renderedMarkdown}</Box>
                 )}
                 {isStreaming && <StreamingCursor />}

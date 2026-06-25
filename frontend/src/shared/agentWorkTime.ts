@@ -1,7 +1,4 @@
-// Wall-clock "work time" for an agent session: how long the user actually
-// waited across all turns (prompt -> last assistant/system reply of that turn).
-// Shared so the dashboard chat card timer and the workflow subtitle report the
-// exact same number for the same session.
+// Wall-clock "work time" for an agent session: how long the user actually waited across all turns (prompt -> last assistant/system reply of that turn). Shared so the dashboard chat card timer and the workflow subtitle report the exact same number for the same session.
 
 type WorkMessage = { role: string; timestamp: string; elapsed_ms?: number; hidden?: boolean };
 
@@ -9,12 +6,7 @@ export function getAgentWorkTime(
   messages: WorkMessage[],
   status: string,
 ): { total: number; last: number } {
-  // Covers thinking + every tool call + assistant text generation + any
-  // subagent/MCP work, anything that consumed user attention. NOT the sum of
-  // thinking.elapsed_ms (that misses tool execution). For each user message we
-  // find the LAST adjacent assistant/system message before the next user
-  // message, that's the turn boundary. In-flight turns extrapolate to now while
-  // running. Hidden messages (auto-continuation prompts) are skipped.
+  // Covers thinking + every tool call + assistant text generation + any subagent/MCP work, anything that consumed user attention. NOT the sum of thinking.elapsed_ms (that misses tool execution). For each user message we find the LAST adjacent assistant/system message before the next user message, that's the turn boundary. In-flight turns extrapolate to now while running. Hidden messages (auto-continuation prompts) are skipped.
   const visible = messages.filter((m) => !m.hidden);
   let totalMs = 0;
   let lastMs = 0;

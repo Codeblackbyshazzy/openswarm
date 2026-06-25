@@ -21,10 +21,7 @@ type ActivityListener = (browserId: string, activity: BrowserActivity | null) =>
 const activityMap = new Map<string, BrowserActivity>();
 const listeners = new Set<ActivityListener>();
 
-// A webview keeps churning for a beat after an action lands; capturing it into the
-// dashboard snapshot during that churn is what crashes the renderer (SharedImage
-// 'non-existent mailbox' -> V8 ToLocalChecked), so we hold "busy" this long past
-// the last command before letting the thumbnail capture run again.
+// A webview keeps churning for a beat after an action lands; capturing it into the dashboard snapshot during that churn is what crashes the renderer (SharedImage 'non-existent mailbox' -> V8 ToLocalChecked), so we hold "busy" this long past the last command before letting the thumbnail capture run again.
 const BUSY_COOLDOWN_MS = 1500;
 let lastActivityAt = 0;
 
@@ -42,9 +39,7 @@ export function getActivity(browserId: string): BrowserActivity | null {
   return activityMap.get(browserId) ?? null;
 }
 
-// True while an agent is actively driving any browser webview (a command is in
-// flight, or one finished within the cooldown). The dashboard thumbnail capture
-// checks this and skips rather than screenshot a live, churning webview.
+// True while an agent is actively driving any browser webview (a command is in flight, or one finished within the cooldown). The dashboard thumbnail capture checks this and skips rather than screenshot a live, churning webview.
 export function isAnyBrowserBusy(): boolean {
   if (activityMap.size > 0) return true;
   return Date.now() - lastActivityAt < BUSY_COOLDOWN_MS;
@@ -76,9 +71,7 @@ export function getActionLabel(action: string): string {
   return ACTION_LABELS[action] ?? 'Working...';
 }
 
-// Draw each cached element's index as a colored chip on the live page right
-// before capture (browser-use's trick): the screenshot then speaks the same
-// numbers as BrowserListInteractives, so the vision side can act by index.
+// Draw each cached element's index as a colored chip on the live page right before capture (browser-use's trick): the screenshot then speaks the same numbers as BrowserListInteractives, so the vision side can act by index.
 const _ANNOTATION_COLORS = ['#e5484d', '#0091ff', '#30a46c', '#f76b15', '#8e4ec6', '#00a2c7'];
 const _ANNOTATE_BUDGET_MS = 1500;
 
@@ -162,19 +155,13 @@ async function handleScreenshot(wv: BrowserWebview, params?: Record<string, any>
 }
 
 async function captureRetry(wv: BrowserWebview): Promise<Record<string, any>> {
-  // capturePage throws UnknownVizError if the webview hasn't composited a frame
-  // yet (the Viz compositor races the first paint, reliably bit turn-0 captures).
-  // Retry a few times with a short backoff so a cold first screenshot succeeds
-  // instead of burning a whole agent turn on a transient error.
+  // capturePage throws UnknownVizError if the webview hasn't composited a frame yet (the Viz compositor races the first paint, reliably bit turn-0 captures). Retry a few times with a short backoff so a cold first screenshot succeeds instead of burning a whole agent turn on a transient error.
   let lastErr: any;
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
       const nativeImage = await wv.capturePage();
       if (!nativeImage.isEmpty()) {
-        // Stable PNG capture. The resize()+toJPEG() variant was reverted: it's the
-        // prime suspect for the renderer "V8 Empty MaybeLocal" crash, NativeImage's
-        // JPEG codec returns an empty image on some retina captures, which is the
-        // shape of that native fault. A stable app beats a faster screenshot.
+        // Stable PNG capture. The resize()+toJPEG() variant was reverted: it's the prime suspect for the renderer "V8 Empty MaybeLocal" crash, NativeImage's JPEG codec returns an empty image on some retina captures, which is the shape of that native fault. A stable app beats a faster screenshot.
         const dataUrl = nativeImage.toDataURL();
         const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
         return { image: base64, url: wv.getURL(), title: wv.getTitle() };
@@ -188,8 +175,7 @@ async function captureRetry(wv: BrowserWebview): Promise<Record<string, any>> {
   return { error: `Screenshot failed after retries: ${lastErr?.message || String(lastErr)}` };
 }
 
-// Count the safe (GET) API endpoints captured for this site so the backend can
-// nudge the agent toward the fast network path. Best-effort, never throws.
+// Count the safe (GET) API endpoints captured for this site so the backend can nudge the agent toward the fast network path. Best-effort, never throws.
 async function countSafeRoutes(wv: BrowserWebview): Promise<number> {
   try {
     const bridge = (window as any).openswarm?.cdpRoutesGet as
@@ -206,15 +192,12 @@ async function handleGetText(wv: BrowserWebview): Promise<Record<string, any>> {
   const text: string = await wv.executeJavaScript(
     'document.body.innerText.substring(0, 15000)'
   );
-  // Sampled HERE (on a read), not on navigate: by the time the agent reads the
-  // page, the SPA's XHR/fetch have fired, so routes are actually captured.
+  // Sampled HERE (on a read), not on navigate: by the time the agent reads the page, the SPA's XHR/fetch have fired, so routes are actually captured.
   const routes_available = await countSafeRoutes(wv);
   return { text, url: wv.getURL(), title: wv.getTitle(), routes_available };
 }
 
-// Recent warn+error console output for this webview (captured in main.js). Lets a
-// stuck agent see the page's OWN errors (JS exceptions, failed loads) instead of
-// guessing. Read-only, fail-safe: any miss returns an empty, honest result.
+// Recent warn+error console output for this webview (captured in main.js). Lets a stuck agent see the page's OWN errors (JS exceptions, failed loads) instead of guessing. Read-only, fail-safe: any miss returns an empty, honest result.
 async function handleGetConsole(wv: BrowserWebview): Promise<Record<string, any>> {
   try {
     const bridge = (window as any).openswarm?.getWebviewConsole as
@@ -242,11 +225,7 @@ async function handleNavigate(wv: BrowserWebview, params: Record<string, any>): 
   const raw = params.url as string;
   if (!raw) return { error: 'url parameter is required' };
   const url = resolveInput(raw);
-  // loadURL resolves only on the full 'load' event, which heavy SPAs (LinkedIn,
-  // Gmail) hold open with persistent connections long past our timeout even though
-  // the page is usable in a second. Return the moment the DOM is ready and let the
-  // agent's next wait settle the rest, the way a person clicks before every
-  // background request has finished.
+  // loadURL resolves only on the full 'load' event, which heavy SPAs (LinkedIn, Gmail) hold open with persistent connections long past our timeout even though the page is usable in a second. Return the moment the DOM is ready and let the agent's next wait settle the rest, the way a person clicks before every background request has finished.
   let removeReady = () => {};
   const domReady = new Promise<void>((resolve) => {
     const onReady = () => resolve();
@@ -264,8 +243,7 @@ async function handleNavigate(wv: BrowserWebview, params: Record<string, any>): 
   } finally {
     removeReady();
   }
-  // Route-count is sampled on the next READ (handleGetText), not here: at
-  // navigate-return the SPA's XHRs haven't fired yet, so this would always be ~0.
+  // Route-count is sampled on the next READ (handleGetText), not here: at navigate-return the SPA's XHRs haven't fired yet, so this would always be ~0.
   return { text: `Navigated to ${url}`, url };
 }
 
@@ -406,8 +384,7 @@ async function getChildSessions(wv: BrowserWebview): Promise<ChildSession[]> {
   }
 }
 
-// Roles whose name is useful as disambiguating context for a nearby control
-// (the person's name above a "Message" button, the section heading of a form).
+// Roles whose name is useful as disambiguating context for a nearby control (the person's name above a "Message" button, the section heading of a form).
 const _CONTEXT_ROLES = new Set(['heading', 'statictext', 'link']);
 const _CONTEXT_MAX_CHARS = 60;
 const _CONTEXT_LOOKBACK = 30;
@@ -430,10 +407,7 @@ function axNodesToCandidates(nodes: any[], sessionId?: string): RankItem[] {
     if (!n || n.ignored || n.backendDOMNodeId == null) return false;
     return INTERACTIVE_ROLES.has(extractAxValue(n.role));
   };
-  // Which card/section does this control sit in? Nearest named non-interactive
-  // ancestor wins (a listitem's name aggregates its card text); else the nearest
-  // preceding heading/text/link in document order (browser-use's trick). This is
-  // what tells "Message" for Tyler apart from "Message" for everyone else.
+  // Which card/section does this control sit in? Nearest named non-interactive ancestor wins (a listitem's name aggregates its card text); else the nearest preceding heading/text/link in document order (browser-use's trick). This is what tells "Message" for Tyler apart from "Message" for everyone else.
   const contextOf = (node: any, ownName: string): string => {
     let p = parentOf.get(String(node.nodeId));
     for (let hops = 0; p && hops < 12; hops++) {
@@ -457,10 +431,7 @@ function axNodesToCandidates(nodes: any[], sessionId?: string): RankItem[] {
     }
     return '';
   };
-  // A same-named interactive ancestor owns this hit target (a link inside a
-  // button, an icon twin inside its labeled wrapper); listing both just gives
-  // the model two indexes for one click. Names must match so a menu never
-  // swallows its menuitems.
+  // A same-named interactive ancestor owns this hit target (a link inside a button, an icon twin inside its labeled wrapper); listing both just gives the model two indexes for one click. Names must match so a menu never swallows its menuitems.
   const twinOfAncestor = (node: any, name: string): boolean => {
     if (!name) return false;
     let p = parentOf.get(String(node.nodeId));
@@ -494,10 +465,7 @@ function axNodesToCandidates(nodes: any[], sessionId?: string): RankItem[] {
   return out;
 }
 
-// Cumulative top-left offset of a frame within the root viewport: climb the
-// session chain adding each owning <iframe>'s top-left. Used ONLY to place the
-// cosmetic click ripple; the click itself dispatches in the element's own
-// frame, so this is best-effort. Verified getFrameOwner works through Electron.
+// Cumulative top-left offset of a frame within the root viewport: climb the session chain adding each owning <iframe>'s top-left. Used ONLY to place the cosmetic click ripple; the click itself dispatches in the element's own frame, so this is best-effort. Verified getFrameOwner works through Electron.
 async function frameOffset(
   wv: BrowserWebview, sessionId: string | undefined, children: ChildSession[],
 ): Promise<{ dx: number; dy: number }> {
@@ -521,14 +489,7 @@ async function frameOffset(
   return { dx, dy };
 }
 
-// Enumerate interactive elements across the root frame + every attached OOPIF
-// child frame. Shared by list_interactives (numbered list) and click_by_name
-// (stable re-resolution for replay), so both see the exact same surface.
-// Root gets a generous budget (a big real page legitimately takes a few seconds);
-// only a genuinely hung renderer exceeds it. Child frames (usually tracker/ad OOPIFs
-// on heavy sites) must be quick or they're skipped, and we cap how many we walk so an
-// ad-heavy page can't multiply full-tree calls. The page's own content is in the root
-// tree (the about:blank compose iframe is same-process, so it's in the root too).
+// Enumerate interactive elements across the root frame + every attached OOPIF child frame. Shared by list_interactives (numbered list) and click_by_name (stable re-resolution for replay), so both see the exact same surface. Root gets a generous budget (a big real page legitimately takes a few seconds); only a genuinely hung renderer exceeds it. Child frames (usually tracker/ad OOPIFs on heavy sites) must be quick or they're skipped, and we cap how many we walk so an ad-heavy page can't multiply full-tree calls. The page's own content is in the root tree (the about:blank compose iframe is same-process, so it's in the root too).
 const _AX_ROOT_TIMEOUT_MS = 8000;
 const _AX_CHILD_TIMEOUT_MS = 2500;
 const _MAX_AX_CHILD_FRAMES = 6;
@@ -602,9 +563,7 @@ async function enumerateCandidates(wv: BrowserWebview): Promise<RankItem[]> {
 
   const root = await walkSession(undefined, _AX_ROOT_TIMEOUT_MS, 'page perception');
   if (!root.ok) {
-    // A saturated/hung renderer can't answer; surface a clear, actionable signal
-    // instead of silently blocking to the hard command timeout, so the agent can
-    // wait a beat and retry (the freeze is often intermittent) rather than abort.
+    // A saturated/hung renderer can't answer; surface a clear, actionable signal instead of silently blocking to the hard command timeout, so the agent can wait a beat and retry (the freeze is often intermittent) rather than abort.
     throw new Error(
       `the page is too busy to read right now (${root.lastErr?.message || 'timed out'}); `
       + 'wait a moment with BrowserWait and try again, or reload the page.');
@@ -620,9 +579,7 @@ async function enumerateCandidates(wv: BrowserWebview): Promise<RankItem[]> {
   return candidates;
 }
 
-// Resolve + click a specific backend node (revalidate, frame-local box model,
-// OS-level dispatch in the element's own frame, cosmetic top-level ripple).
-// Shared by click_index (cache lookup) and click_by_name (fresh resolution).
+// Resolve + click a specific backend node (revalidate, frame-local box model, OS-level dispatch in the element's own frame, cosmetic top-level ripple). Shared by click_index (cache lookup) and click_by_name (fresh resolution).
 async function clickBackendNode(
   wv: BrowserWebview, backendNodeId: number, sessionId: string | undefined, label: string,
   opts: { role?: string; text?: string } = {},
@@ -635,8 +592,7 @@ async function clickBackendNode(
     return { error: `${label} is no longer valid (${err.message || 'node not found'}). The page may have changed.` };
   }
 
-  // Brief outline pulse on the element the agent chose, so a watching user
-  // sees WHAT is being acted on, not just a ripple somewhere on the page.
+  // Brief outline pulse on the element the agent chose, so a watching user sees WHAT is being acted on, not just a ripple somewhere on the page.
   if (resolvedObjectId) {
     sendCdp(wv, 'Runtime.callFunctionOn', {
       objectId: resolvedObjectId,
@@ -649,11 +605,7 @@ async function clickBackendNode(
     }, sessionId).catch(() => {});
   }
 
-  // A text box is focused DIRECTLY by node id, never by screen coordinates. Inside an
-  // about:blank compose iframe (LinkedIn/Gmail messaging) the coordinate path lands on
-  // the wrong element (the box model is frame-local but the click dispatches in the root
-  // frame), while DOM.focus reaches the node in any frame. With a `text` arg we then
-  // insert the whole string at once, no clicking, no character-by-character typing.
+  // A text box is focused DIRECTLY by node id, never by screen coordinates. Inside an about:blank compose iframe (LinkedIn/Gmail messaging) the coordinate path lands on the wrong element (the box model is frame-local but the click dispatches in the root frame), while DOM.focus reaches the node in any frame. With a `text` arg we then insert the whole string at once, no clicking, no character-by-character typing.
   const _role = opts.role || '';
   const _wantsText = typeof opts.text === 'string' && opts.text.length > 0;
   if (/\b(textbox|searchbox)\b/i.test(_role) || (/\bcombobox\b/i.test(_role) && _wantsText)) {
@@ -663,11 +615,7 @@ async function clickBackendNode(
       return { error: `${label} could not be focused (${err?.message || 'focus failed'}); it may be disabled or hidden.` };
     }
     if (typeof opts.text === 'string' && opts.text.length > 0) {
-      // Read the text back from the node itself; "insert reported OK" is not
-      // "the box has the text" (rich-text editors can swallow synthetic input).
-      // Returns the box's actual content (or null on miss) so the result can
-      // echo the OBSERVED state; a bare "typed it" claim loses to a wrongly
-      // pessimistic expect-confirm and provokes a double-fill.
+      // Read the text back from the node itself; "insert reported OK" is not "the box has the text" (rich-text editors can swallow synthetic input). Returns the box's actual content (or null on miss) so the result can echo the OBSERVED state; a bare "typed it" claim loses to a wrongly pessimistic expect-confirm and provokes a double-fill.
       const readBack = async (): Promise<string | null> => {
         try {
           const t = await sendCdp(wv, 'DOM.resolveNode', { backendNodeId }, sessionId);
@@ -722,9 +670,7 @@ async function clickBackendNode(
   const lx = (content[0] + content[4]) / 2;
   const ly = (content[1] + content[5]) / 2;
 
-  // Hit-test before dispatching: a sticky banner or header twin can cover the
-  // element's center, and a blind coordinate click lands on the overlay instead
-  // (the "Reactivate Premium" misfire). If covered, click the chosen node itself.
+  // Hit-test before dispatching: a sticky banner or header twin can cover the element's center, and a blind coordinate click lands on the overlay instead (the "Reactivate Premium" misfire). If covered, click the chosen node itself.
   let covered = false;
   let targetObjectId: string | undefined;
   try {
@@ -777,12 +723,7 @@ async function clickBackendNode(
   };
 }
 
-// Drop list rows the user literally cannot click: zero-size nodes and ones
-// whose center hits a DIFFERENT element (modal backdrop, sticky header, cookie
-// banner). Ground truth via elementFromPoint, the same predicate the click
-// path trusts. Offscreen-but-scrollable elements are kept; the page-wide list
-// is deliberately wider than the viewport. Chunked with a hard budget so a
-// heavy page degrades to an unfiltered list, never a stall.
+// Drop list rows the user literally cannot click: zero-size nodes and ones whose center hits a DIFFERENT element (modal backdrop, sticky header, cookie banner). Ground truth via elementFromPoint, the same predicate the click path trusts. Offscreen-but-scrollable elements are kept; the page-wide list is deliberately wider than the viewport. Chunked with a hard budget so a heavy page degrades to an unfiltered list, never a stall.
 const _OCCLUSION_BUDGET_MS = 1500;
 const _OCCLUSION_CHUNK = 10;
 async function dropCoveredElements(
@@ -838,16 +779,12 @@ async function handleListInteractives(wv: BrowserWebview, params: Record<string,
     return { error: `getFullAXTree failed: ${err.message || String(err)}` };
   }
 
-  // Dedupe twins, rank what a human acts on first (and the current goal
-  // highest), cap the long tail.
+  // Dedupe twins, rank what a human acts on first (and the current goal highest), cap the long tail.
   const goal = typeof params?.goal === 'string' ? params.goal : '';
   const { shown: ranked, truncated } = rankAndCapInteractives(candidates, { goal });
   const { kept: shown, dropped: covered } = await dropCoveredElements(wv, ranked);
 
-  // The previous look's cache feeds two things: * markers for brand-new
-  // elements, and STABLE indices so the same element keeps the same number
-  // across looks (the model can act on a remembered index without re-reading
-  // the whole list, browser-use's stable-hash trick on our node ids).
+  // The previous look's cache feeds two things: * markers for brand-new elements, and STABLE indices so the same element keeps the same number across looks (the model can act on a remembered index without re-reading the whole list, browser-use's stable-hash trick on our node ids).
   let prevIds: Set<string> | null = null;
   const prevIndexByKey = new Map<string, number>();
   try {
@@ -864,8 +801,7 @@ async function handleListInteractives(wv: BrowserWebview, params: Record<string,
   const keyOf = (el: RankItem) => `${el.sessionId || ''}:${el.backendNodeId}`;
   const isNew = (el: RankItem) => !!prevIds && prevIds.size > 0 && !prevIds.has(keyOf(el));
 
-  // Sticky only while some elements carried over; full turnover (a navigation,
-  // node ids all changed) or runaway numbering restarts cleanly at 1.
+  // Sticky only while some elements carried over; full turnover (a navigation, node ids all changed) or runaway numbering restarts cleanly at 1.
   const matchedPrev = shown.filter((el) => prevIndexByKey.has(keyOf(el))).length;
   let nextFree = prevIndexByKey.size > 0 ? Math.max(...prevIndexByKey.values()) + 1 : 1;
   const sticky = matchedPrev > 0 && nextFree + shown.length < 1000;
@@ -886,9 +822,7 @@ async function handleListInteractives(wv: BrowserWebview, params: Record<string,
     };
   });
 
-  // Cache in main-process so click_index can resolve across separate WS commands.
-  // role+name ride along so click_index can report WHAT it clicked (the agent
-  // loop records that as a stable, replayable click-by-name step).
+  // Cache in main-process so click_index can resolve across separate WS commands. role+name ride along so click_index can report WHAT it clicked (the agent loop records that as a stable, replayable click-by-name step).
   const indexMap: Record<number, { backendNodeId: number; sessionId?: string; role?: string; name?: string }> = {};
   for (const el of interactives) {
     indexMap[el.index] = { backendNodeId: el.backendNodeId, sessionId: el.sessionId, role: el.role, name: el.name };
@@ -900,8 +834,7 @@ async function handleListInteractives(wv: BrowserWebview, params: Record<string,
     // best-effort; click_index falls back to re-listing.
   }
 
-  // ctx only where it disambiguates: rows whose role+name appear more than
-  // once (eight "Message" buttons). Unique rows skip it to keep tokens lean.
+  // ctx only where it disambiguates: rows whose role+name appear more than once (eight "Message" buttons). Unique rows skip it to keep tokens lean.
   const nameCounts = new Map<string, number>();
   for (const el of interactives) {
     const k = `${el.role}|${el.name}`;
@@ -968,8 +901,7 @@ async function handleClickIndex(wv: BrowserWebview, params: Record<string, any>)
 
   const result = await clickBackendNode(wv, backendNodeId, sessionId, `index ${idx}`,
     { role, text: typeof params.text === 'string' ? params.text : undefined });
-  // Surface what was clicked so the agent loop can record a stable,
-  // replayable click-by-name step (indices are ephemeral; names aren't).
+  // Surface what was clicked so the agent loop can record a stable, replayable click-by-name step (indices are ephemeral; names aren't).
   if (!result.error) {
     result.clickedRole = role || '';
     result.clickedName = name || '';
@@ -977,8 +909,7 @@ async function handleClickIndex(wv: BrowserWebview, params: Record<string, any>)
   return result;
 }
 
-// Robust click for REPLAY: re-resolve the target fresh by (role, name) instead
-// of a stale index, so a recorded skill survives index shifts between runs.
+// Robust click for REPLAY: re-resolve the target fresh by (role, name) instead of a stale index, so a recorded skill survives index shifts between runs.
 async function handleClickByName(wv: BrowserWebview, params: Record<string, any>): Promise<Record<string, any>> {
   const wantName = String(params.name || '').trim();
   const wantRole = String(params.role || '').trim();
@@ -990,10 +921,7 @@ async function handleClickByName(wv: BrowserWebview, params: Record<string, any>
     return { error: `enumerate failed: ${err.message || String(err)}` };
   }
   const norm = (s: string) => s.trim().toLowerCase();
-  // Exact (role,name) first, then name-only, so we click the most specific match.
-  // Long names are card blobs whose SUFFIX mutates between visits (feed snippets,
-  // counters) while the prefix stays stable; fall back to a 40-char prefix match
-  // so a replayed click survives the churn.
+  // Exact (role,name) first, then name-only, so we click the most specific match. Long names are card blobs whose SUFFIX mutates between visits (feed snippets, counters) while the prefix stays stable; fall back to a 40-char prefix match so a replayed click survives the churn.
   const wantPrefix = norm(wantName).slice(0, 40);
   const match =
     candidates.find((c) => (!wantRole || norm(c.role) === norm(wantRole)) && norm(c.name) === norm(wantName)) ||
@@ -1062,10 +990,7 @@ async function handleBatch(wv: BrowserWebview, params: Record<string, any>): Pro
     }
     results.push({ index: i, type: subType, ...subResult });
 
-    // A failed sub-action means every later one is operating on a page that
-    // isn't in the state it assumed, so stop instead of compounding the error
-    // (browser-use's multi_act breaks the same way). The terminal read is the
-    // last action, so a read failure never trips this.
+    // A failed sub-action means every later one is operating on a page that isn't in the state it assumed, so stop instead of compounding the error (browser-use's multi_act breaks the same way). The terminal read is the last action, so a read failure never trips this.
     if (subResult.error && i < actions.length - 1) {
       aborted_at = i + 1;
       abort_reason = `Sub-action ${i + 1} (${subType}) failed: ${subResult.error}; remaining ${actions.length - i - 1} action(s) skipped`;
@@ -1192,8 +1117,7 @@ async function handleWait(wv: BrowserWebview, params: Record<string, any>): Prom
         settled = true; found = !!probe.found; break;
       }
     } catch {
-      // Mid-navigation pages aren't evaluable yet; a few misses is normal, but a
-      // wedged tab shouldn't make us burn the whole cap, so bail after a short streak.
+      // Mid-navigation pages aren't evaluable yet; a few misses is normal, but a wedged tab shouldn't make us burn the whole cap, so bail after a short streak.
       if (++probeErrors >= 3) break;
     }
   }
@@ -1280,11 +1204,7 @@ async function handleGetElements(wv: BrowserWebview, params: Record<string, any>
   }
 }
 
-// Tier 1: detect a site's declared WebMCP tools (navigator.modelContext). When a
-// site exposes its own tools the agent can prefer them over scraping the UI. The
-// API is a Chrome 149 origin-trial standard; this Electron's Chromium predates it
-// so real pages return "not present" today, this is forward-compatible probing,
-// also covers the MCP-B convention (getRegisteredTools/listTools/tools array).
+// Tier 1: detect a site's declared WebMCP tools (navigator.modelContext). When a site exposes its own tools the agent can prefer them over scraping the UI. The API is a Chrome 149 origin-trial standard; this Electron's Chromium predates it so real pages return "not present" today, this is forward-compatible probing, also covers the MCP-B convention (getRegisteredTools/listTools/tools array).
 async function handleDetectWebMCP(wv: BrowserWebview): Promise<Record<string, any>> {
   const code = `(() => {
     const mc = navigator.modelContext;
@@ -1316,9 +1236,7 @@ async function handleDetectWebMCP(wv: BrowserWebview): Promise<Record<string, an
   }
 }
 
-// Tier 2: the safe GET routes captured for the current site, so the agent can
-// fetch data directly instead of re-scraping the UI. Only same-origin GET/HEAD
-// routes are listed; those are all that replay_route will run.
+// Tier 2: the safe GET routes captured for the current site, so the agent can fetch data directly instead of re-scraping the UI. Only same-origin GET/HEAD routes are listed; those are all that replay_route will run.
 async function handleListRoutes(wv: BrowserWebview): Promise<Record<string, any>> {
   const bridge = (window as any).openswarm?.cdpRoutesGet as
     | ((id: number, origin?: string) => Promise<any[]>) | undefined;
@@ -1342,9 +1260,7 @@ async function handleListRoutes(wv: BrowserWebview): Promise<Record<string, any>
   };
 }
 
-// Tier 2: replay a captured endpoint directly. GET/HEAD only (idempotent) and
-// same-origin only; the fetch runs IN the page so cookies/CSRF come for free.
-// Mutating methods are intentionally refused, those must go through the UI.
+// Tier 2: replay a captured endpoint directly. GET/HEAD only (idempotent) and same-origin only; the fetch runs IN the page so cookies/CSRF come for free. Mutating methods are intentionally refused, those must go through the UI.
 async function handleReplayRoute(wv: BrowserWebview, params: Record<string, any>): Promise<Record<string, any>> {
   const rawUrl = params.url as string;
   const method = String(params.method || 'GET').toUpperCase();
@@ -1385,8 +1301,7 @@ async function handleEvaluate(wv: BrowserWebview, params: Record<string, any>): 
   try {
     const result = await wv.executeJavaScript(expression);
     const text = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
-    // evaluate is the agent's main read path; sample routes here too (XHRs have
-    // fired by now) so the backend can surface the fast network tier once.
+    // evaluate is the agent's main read path; sample routes here too (XHRs have fired by now) so the backend can surface the fast network tier once.
     const routes_available = await countSafeRoutes(wv);
     return { text: text ?? 'undefined', url: wv.getURL(), routes_available };
   } catch (err: any) {
@@ -1394,13 +1309,9 @@ async function handleEvaluate(wv: BrowserWebview, params: Record<string, any>): 
   }
 }
 
-// The registry is renderer-local and a card briefly unregisters on remount /
-// tab-switch; a command landing in that gap shouldn't hard-fail. Wait a bounded
-// window for (re)registration before giving up, so the error stays a real
-// "card is gone" signal rather than a transient race.
+// The registry is renderer-local and a card briefly unregisters on remount / tab-switch; a command landing in that gap shouldn't hard-fail. Wait a bounded window for (re)registration before giving up, so the error stays a real "card is gone" signal rather than a transient race.
 async function awaitWebview(browserId: string, tabId?: string): Promise<BrowserWebview | undefined> {
-  // A suspended (snapshot-swapped) card has no webview at all; wake it and
-  // wait out the remount + page reload before the command touches it.
+  // A suspended (snapshot-swapped) card has no webview at all; wake it and wait out the remount + page reload before the command touches it.
   const wasSuspended = !!store.getState().dashboardLayout.suspendedBrowserCards[browserId];
   if (wasSuspended) store.dispatch(resumeBrowserCard(browserId));
   const deadline = Date.now() + (wasSuspended ? 12000 : 2000);
@@ -1422,8 +1333,7 @@ async function awaitWebview(browserId: string, tabId?: string): Promise<BrowserW
   return wv;
 }
 
-// The backend re-broadcasts unanswered commands to heal a dead-socket gap, so
-// a duplicate request_id must never run twice (a re-sent click would double-click).
+// The backend re-broadcasts unanswered commands to heal a dead-socket gap, so a duplicate request_id must never run twice (a re-sent click would double-click).
 const inflightCommands = new Set<string>();
 const completedCommands = new Map<string, Record<string, any>>();
 const _COMPLETED_CACHE_MAX = 50;

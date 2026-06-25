@@ -52,17 +52,13 @@ export function useDashboardInteractions({
     selection.selectCard(id, type, false);
     dispatch(bringToFront({ id, type }));
 
-    // The Workflows window is an app you click around inside, not a card you
-    // re-center every tap. Single-click only raises + selects it; double-click
-    // still zoom-to-fits (handleCardDoubleClick). Without this, clicking any
-    // button inside it yanked the canvas into a re-zoom.
+    // The Workflows window is an app you click around inside, not a card you re-center every tap. Single-click only raises + selects it; double-click still zoom-to-fits (handleCardDoubleClick). Without this, clicking any button inside it yanked the canvas into a re-zoom.
     if (type === 'workflows-hub' || type === 'workflows-monitor') return;
 
     const alreadyExpanded = type === 'agent' && expandedSessionIds.includes(id);
 
     if (alreadyExpanded) {
-      // Delay single-click collapse so double-click can override.
-      // Double-click handler (handleCardDoubleClick) clears clickTimerRef.
+      // Delay single-click collapse so double-click can override. Double-click handler (handleCardDoubleClick) clears clickTimerRef.
       clickTimerRef.current = setTimeout(() => {
         clickTimerRef.current = null;
         dispatch(collapseSession(id));
@@ -79,9 +75,7 @@ export function useDashboardInteractions({
       const rect = getCardRect(id, type);
       if (rect) canvas.actions.fitToCards([rect], 1.15, true, type === 'browser' ? 0.8 : undefined);
       setTimeout(() => {
-        // Don't blur an input/textarea/contentEditable the user is typing in
-        // (e.g. a workflow card's embedded chat); the click that selected the
-        // card also focused the field, and blurring it kills the cursor.
+        // Don't blur an input/textarea/contentEditable the user is typing in (e.g. a workflow card's embedded chat); the click that selected the card also focused the field, and blurring it kills the cursor.
         const active = document.activeElement as HTMLElement | null;
         if (!active) return;
         const tag = active.tagName;
@@ -111,8 +105,7 @@ export function useDashboardInteractions({
     if (e.button !== 0) return;
     if (isCardTarget(e.target, e.currentTarget)) return;
 
-    // Canvas click , drop any lingering input focus so arrow-key nav
-    // works immediately without the user having to press Escape first.
+    // Canvas click, drop any lingering input focus so arrow-key nav works immediately without the user having to press Escape first.
     const active = document.activeElement as HTMLElement | null;
     const activeTag = active?.tagName;
     if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || (active as any)?.isContentEditable) {
@@ -168,9 +161,7 @@ export function useDashboardInteractions({
       const rect = getCardRect(id, type);
       if (rect) canvas.actions.fitToCards([rect], 1.15, true);
       setTimeout(() => {
-        // Don't blur an input/textarea/contentEditable the user is typing in
-        // (e.g. a workflow card's embedded chat); the click that selected the
-        // card also focused the field, and blurring it kills the cursor.
+        // Don't blur an input/textarea/contentEditable the user is typing in (e.g. a workflow card's embedded chat); the click that selected the card also focused the field, and blurring it kills the cursor.
         const active = document.activeElement as HTMLElement | null;
         if (!active) return;
         const tag = active.tagName;

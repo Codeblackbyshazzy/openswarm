@@ -12,9 +12,7 @@ import {
 } from 'lucide-react';
 import { useClaudeTokens } from '@/shared/styles/ThemeContext';
 
-// Whole-word keyword -> icon. Looked up per title token (never substring), so
-// "admin" can't trip the "ad" rule. Keep keys lowercase + singular; plurals
-// are handled by the trailing-s strip in pickIcon. Add gerunds explicitly.
+// Whole-word keyword -> icon. Looked up per title token (never substring), so "admin" can't trip the "ad" rule. Keep keys lowercase + singular; plurals are handled by the trailing-s strip in pickIcon. Add gerunds explicitly.
 const KEYWORDS: Record<string, LucideIcon> = {
   timer: Timer, pomodoro: Timer, stopwatch: Timer, countdown: Timer, break: Timer,
   clock: Clock, reminder: Clock, alarm: Clock, deadline: Clock,
@@ -89,8 +87,7 @@ const DashboardGlyph: React.FC<DashboardGlyphProps> = ({ name, size = 16 }) => {
     return <Icon size={size} strokeWidth={1.75} color={c.accent.primary} />;
   }
 
-  // No keyword hit: a tinted monogram of the first letter. Honest identity,
-  // never a misleading icon. A title with no latin letters falls back to the glyph.
+  // No keyword hit: a tinted monogram of the first letter. Honest identity, never a misleading icon. A title with no latin letters falls back to the glyph.
   const letter = title.match(/[a-z0-9]/i)?.[0]?.toUpperCase();
   if (!letter) {
     return <LayoutDashboard size={size} strokeWidth={1.75} color={c.accent.primary} />;

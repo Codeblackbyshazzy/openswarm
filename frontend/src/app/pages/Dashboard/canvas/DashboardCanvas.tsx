@@ -168,12 +168,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
           right: 0,
           zIndex: 10,
           pointerEvents: 'none',
-          // p: 3 (24px) was leaving a chunky air gap between the sidebar
-          // edge and the dashboard header that read as "two disconnected
-          // panels" rather than one continuous surface. 0.75 (6px)
-          // tightens the inset so the header floats just inside the
-          // content area without losing its breathing room from the
-          // top-most pixel.
+          // p: 3 (24px) was leaving a chunky air gap between the sidebar edge and the dashboard header that read as "two disconnected panels" rather than one continuous surface. 0.75 (6px) tightens the inset so the header floats just inside the content area without losing its breathing room from the top-most pixel.
           p: 0.75,
           pb: 0,
           background: `linear-gradient(to bottom, ${c.bg.page} 60%, transparent)`,

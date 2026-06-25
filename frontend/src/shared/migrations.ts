@@ -1,5 +1,4 @@
-// Runs synchronously before React mounts so state-resets land before the first selector read.
-// Each migration is gated by a localStorage flag so it runs once per install; keep `run` idempotent.
+// Runs synchronously before React mounts so state-resets land before the first selector read. Each migration is gated by a localStorage flag so it runs once per install; keep `run` idempotent.
 
 interface Migration {
   key: string;

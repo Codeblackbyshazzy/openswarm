@@ -102,8 +102,7 @@ const DashboardCardLayer: React.FC<DashboardCardLayerProps> = ({
   const monitorCard = useAppSelector((s) => s.dashboardLayout.workflowsMonitorCard);
   const monitorWorkflowId = useAppSelector((s) => s.dashboardLayout.workflowsMonitorId);
   const monitorWorkflow = useAppSelector((s) => (monitorWorkflowId ? s.workflows.items[monitorWorkflowId] : undefined));
-  // The monitor's workflow vanished (trashed/deleted) while open: tear the card
-  // + its tether down instead of leaving an orange line pointing at nothing.
+  // The monitor's workflow vanished (trashed/deleted) while open: tear the card + its tether down instead of leaving an orange line pointing at nothing.
   React.useEffect(() => {
     if (monitorCard && !monitorWorkflow) dispatch(closeWorkflowMonitor());
   }, [monitorCard, monitorWorkflow, dispatch]);
@@ -173,9 +172,7 @@ const DashboardCardLayer: React.FC<DashboardCardLayerProps> = ({
             exitTarget={exitTarget}
             isSelected={isSel}
             isHighlighted={highlightedCardId === sid}
-            // Only selected cards need the live drag delta; passing
-            // it to everyone broke memo equality for unselected
-            // cards on every mouse-move during multi-drag.
+            // Only selected cards need the live drag delta; passing it to everyone broke memo equality for unselected cards on every mouse-move during multi-drag.
             multiDragDelta={isSel ? multiDragDelta : null}
             onCardSelect={onCardSelect}
             onDragStart={onDragStart}

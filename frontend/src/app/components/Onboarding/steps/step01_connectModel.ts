@@ -5,9 +5,7 @@ import { hasModelConnected, hasFreeTrialActive, freeRunsLow } from './skipPredic
 export const step01: OnboardingStep = {
   id: 'connect_model',
   stage: 'get_started',
-  // Moved to last in "Get started": the user only meets this after they've
-  // seen value, framed as "keep going". Stays suppressed while the free trial
-  // is armed and runs aren't low; un-suppresses when they're about to run out.
+  // Moved to last in "Get started": the user only meets this after they've seen value, framed as "keep going". Stays suppressed while the free trial is armed and runs aren't low; un-suppresses when they're about to run out.
   index: 2,
   title: 'Keep going: connect your model',
   description: 'Your free runs are limited. Add your own model to keep building.',

@@ -60,9 +60,7 @@ function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-// Resolve after `ms`, OR early the moment `stepId` lands in completedSteps. Lets a stale recovery
-// popup auto-dismiss when the step it was apologizing for actually completes (e.g. launch_agent
-// auto-completing right after a transient throw), instead of sitting the full read-timeout.
+// Resolve after `ms`, OR early the moment `stepId` lands in completedSteps. Lets a stale recovery popup auto-dismiss when the step it was apologizing for actually completes (e.g. launch_agent auto-completing right after a transient throw), instead of sitting the full read-timeout.
 function sleepOrStepComplete(store: Store<RootState>, stepId: string, ms: number): Promise<void> {
   return new Promise<void>((resolve) => {
     let settled = false;
@@ -219,8 +217,7 @@ export async function runStep(args: RunStepArgs): Promise<void> {
           "No worries, feel free to explore. Tap Show me whenever you're ready." +
             debugSuffix,
         );
-        // 14s read window (ACPopup streams ~30ms/char), but bail the instant the step completes
-        // so a transient throw on a step that then auto-completes doesn't leave a dead-end "Show me".
+        // 14s read window (ACPopup streams ~30ms/char), but bail the instant the step completes so a transient throw on a step that then auto-completes doesn't leave a dead-end "Show me".
         await sleepOrStepComplete(store, step.id, 14000);
         ac.hidePopup();
       }
@@ -862,11 +859,7 @@ function waitForCondition(
             finish(false);
             return;
           }
-          // Off-script click during a wait for a specific target: if it's not any
-          // tour control and not the cursor/popup, the user has gone their own
-          // way, so tell the director to back off (it aborts the step silently).
-          // Scoped here to click-target waits so free-interaction waits
-          // (redux_predicate / event_bus) never cancel on a stray click.
+          // Off-script click during a wait for a specific target: if it's not any tour control and not the cursor/popup, the user has gone their own way, so tell the director to back off (it aborts the step silently). Scoped here to click-target waits so free-interaction waits (redux_predicate / event_bus) never cancel on a stray click.
           if (!(el instanceof Element)) return;
           if (el.closest('[data-onboarding], [data-select-type]')) return;
           for (let n: Element | null = el; n; n = n.parentElement) {

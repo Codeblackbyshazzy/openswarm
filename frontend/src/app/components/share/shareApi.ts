@@ -1,7 +1,4 @@
-// Thin fetch helpers for the .swarm endpoints. The global interceptor in
-// shared/config.ts attaches the bearer token, so we never set it here. Errors
-// surface the backend's short detail message (those are already user-facing) or
-// a friendly fallback; callers translate to a toast.
+// Thin fetch helpers for the .swarm endpoints. The global interceptor in shared/config.ts attaches the bearer token, so we never set it here. Errors surface the backend's short detail message (those are already user-facing) or a friendly fallback; callers translate to a toast.
 import { API_BASE } from '@/shared/config';
 
 import {

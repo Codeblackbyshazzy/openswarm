@@ -1,20 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-// Generic list windowing, lifted from AgentChat's transcript virtualizer so a
-// long schedule list mounts only the rows near the viewport (off-screen rows
-// unmount, replaced by measured-height spacers). Rows can be any height; the
-// hook measures them once on screen and estimates the rest. Top-anchored: the
-// list reads from the top, no bottom-following like the chat does.
+// Generic list windowing, lifted from AgentChat's transcript virtualizer so a long schedule list mounts only the rows near the viewport (off-screen rows unmount, replaced by measured-height spacers). Rows can be any height; the hook measures them once on screen and estimates the rest. Top-anchored: the list reads from the top, no bottom-following like the chat does.
 
 // Keep this many screens of real content mounted on EACH side of the viewport.
 const BUFFER_SCREENS_PER_SIDE = 3;
 // Floor on mounted count so one very tall row can't strand an empty window.
 const MIN_BUFFER_ITEMS = 2;
 
-// Pure solver: given scroll position and a per-index height accessor (measured
-// where known, estimated otherwise), return the [start, end) slice to mount.
-// Buffer is in PIXELS (N screens per side), so a few tall rows can't blow the
-// mounted set up to the whole list.
+// Pure solver: given scroll position and a per-index height accessor (measured where known, estimated otherwise), return the [start, end) slice to mount. Buffer is in PIXELS (N screens per side), so a few tall rows can't blow the mounted set up to the whole list.
 export function computeDesiredWindow(
   scrollTop: number,
   clientHeight: number,
@@ -49,12 +42,10 @@ export function computeDesiredWindow(
 }
 
 interface UseWindowedListArgs {
-  // Stable id per row, in render order. Heights are cached by id so a measured
-  // row keeps its height across re-renders even as the window slides.
+  // Stable id per row, in render order. Heights are cached by id so a measured row keeps its height across re-renders even as the window slides.
   ids: string[];
   estimateHeight: (index: number) => number;
-  // Off below this gates windowing entirely: render all, no spacers. Short
-  // lists don't benefit and the spacer recompute just fights the scrollbar.
+  // Off below this gates windowing entirely: render all, no spacers. Short lists don't benefit and the spacer recompute just fights the scrollbar.
   enabled: boolean;
 }
 
@@ -103,9 +94,7 @@ export function useWindowedList({ ids, estimateHeight, enabled }: UseWindowedLis
     const loose = computeDesiredWindow(el.scrollTop, clientHeight, count, heightOf, loosePx);
     const curStart = startRef.current;
     const curEnd = endRef.current;
-    // Hysteresis: must-mount the tight band, but keep already-mounted edges
-    // until they drift past the looser band, so rows on the boundary don't
-    // flip-flop mount/unmount on every scroll tick.
+    // Hysteresis: must-mount the tight band, but keep already-mounted edges until they drift past the looser band, so rows on the boundary don't flip-flop mount/unmount on every scroll tick.
     let next = Math.max(loose.start, Math.min(curStart, tight.start));
     let nextEnd = Math.min(loose.end, Math.max(curEnd, tight.end));
     next = Math.max(0, Math.min(next, Math.max(0, nextEnd - 1)));
@@ -139,8 +128,7 @@ export function useWindowedList({ ids, estimateHeight, enabled }: UseWindowedLis
     };
   }, [scrollEl, enabled, total, heightVersion, applyWindow]);
 
-  // Measure mounted rows after paint; a real height replaces its estimate and
-  // nudges the window + spacers to the truth on the next frame.
+  // Measure mounted rows after paint; a real height replaces its estimate and nudges the window + spacers to the truth on the next frame.
   useLayoutEffect(() => {
     if (!scrollEl) return;
     let changed = false;
@@ -168,9 +156,7 @@ export function useWindowedList({ ids, estimateHeight, enabled }: UseWindowedLis
     let bottom = 0;
     for (let i = safeEnd; i < total; i++) bottom += heightOf(i);
     return { topSpacer: top, bottomSpacer: bottom };
-    // heightVersion: spacers depend on the measured-height map (a ref the dep
-    // checker can't see), recompute when a measurement lands.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // heightVersion: spacers depend on the measured-height map (a ref the dep checker can't see), recompute when a measurement lands. eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, safeStart, safeEnd, total, heightVersion, heightOf]);
 
   return { setScrollEl, onScroll, start: safeStart, end: safeEnd, topSpacer, bottomSpacer };

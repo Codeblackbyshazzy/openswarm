@@ -2,8 +2,7 @@ import type { Workflow, WorkflowRun, ScheduleConfig, ActiveRun } from '@/shared/
 import type { WorkflowsRunContext } from '@/shared/state/dashboardLayoutSlice';
 import { isScheduleActive } from '@/app/pages/Workflows/scheduleUtils';
 
-// The design speaks in four cadence buckets; the backend speaks in repeat_unit.
-// These two functions are the only place the two vocabularies meet.
+// The design speaks in four cadence buckets; the backend speaks in repeat_unit. These two functions are the only place the two vocabularies meet.
 export type Freq = 'daily' | 'weekly' | 'monthly' | 'interval';
 
 export function freqOf(sched: ScheduleConfig): Freq {
@@ -20,8 +19,7 @@ export function freqOf(sched: ScheduleConfig): Freq {
   }
 }
 
-// Build the schedule patch for a cadence-button press, preserving the user's
-// existing time/days where the new cadence still uses them.
+// Build the schedule patch for a cadence-button press, preserving the user's existing time/days where the new cadence still uses them.
 export function patchForFreq(sched: ScheduleConfig, freq: Freq): Partial<ScheduleConfig> {
   switch (freq) {
     case 'daily':

@@ -1,20 +1,10 @@
-// Renderer-side mirror of the backend's smart-wait (browser_wait.py): a `wait`
-// that returns the instant the page is READY instead of blind-sleeping. A top-level
-// BrowserWait gets this on the backend, but a `wait` INSIDE a BrowserBatch runs
-// entirely here, so without this it would fall back to a dumb sleep.
-//
-// Two readiness signals plus a target: settle when the agent's `until` target is
-// present (no waiting blind), else when the page goes quiet by EITHER the network
-// OR the DOM settling (beacon-heavy SPAs never idle the network but their DOM does).
+// Renderer-side mirror of the backend's smart-wait (browser_wait.py): a `wait` that returns the instant the page is READY instead of blind-sleeping. A top-level BrowserWait gets this on the backend, but a `wait` INSIDE a BrowserBatch runs entirely here, so without this it would fall back to a dumb sleep. Two readiness signals plus a target: settle when the agent's `until` target is present (no waiting blind), else when the page goes quiet by EITHER the network OR the DOM settling (beacon-heavy SPAs never idle the network but their DOM does).
 
 export const SETTLE_FLOOR_MS = 250; // never settle before this unless the target is already there
 export const SETTLE_QUIET_MS = 400; // network OR DOM must be quiet this long to count as settled
 export const SETTLE_POLL_MS = 150;
 
-// Probe built per wait so it can also look for the agent's target. Returns ready +
-// quiet (network-idle ms) + elems (element count; the caller watches it stop changing
-// = DOM settle) + found (the `until` target is present + visible). `until` is JSON-
-// encoded into a string literal, so it is data, never executable.
+// Probe built per wait so it can also look for the agent's target. Returns ready + quiet (network-idle ms) + elems (element count; the caller watches it stop changing = DOM settle) + found (the `until` target is present + visible). `until` is JSON- encoded into a string literal, so it is data, never executable.
 export function settleProbeJs(until: string): string {
   const spec = JSON.stringify(until || '');
   return (
@@ -32,8 +22,7 @@ export function settleProbeJs(until: string): string {
   );
 }
 
-// Pure decision. Stop the instant the target is present; otherwise, past the floor and
-// once the document is complete, stop as soon as it's quiet by EITHER network OR DOM.
+// Pure decision. Stop the instant the target is present; otherwise, past the floor and once the document is complete, stop as soon as it's quiet by EITHER network OR DOM.
 export function shouldStopWaiting(
   ready: boolean,
   quietMs: number,

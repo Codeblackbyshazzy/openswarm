@@ -21,11 +21,7 @@ const ScheduleCard: React.FC<{ workflow: Workflow }> = ({ workflow }) => {
 
   const patchSched = (p: Partial<ScheduleConfig>) => patch(workflow, { schedule: { ...sched, ...p } });
 
-  // The "Run at" field is an uncontrolled native time input so React doesn't
-  // reset the segment's pending-digit state between keystrokes (a controlled
-  // value made typing 4 then 5 land 05 instead of 45). To still reflect edits
-  // from elsewhere (e.g. the agent reschedules), push the store time in
-  // imperatively, and only when it actually differs from what's shown.
+  // The "Run at" field is an uncontrolled native time input so React doesn't reset the segment's pending-digit state between keystrokes (a controlled value made typing 4 then 5 land 05 instead of 45). To still reflect edits from elsewhere (e.g. the agent reschedules), push the store time in imperatively, and only when it actually differs from what's shown.
   const timeRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const el = timeRef.current;
@@ -34,9 +30,7 @@ const ScheduleCard: React.FC<{ workflow: Workflow }> = ({ workflow }) => {
     if (el.value !== want) el.value = want;
   }, [sched.hour, sched.minute]);
 
-  // Turning a weekly schedule on with no days picked is "unconfigured", so the
-  // backend silently forces it back off and the switch looks dead. Seed today's
-  // weekday so the default Weekly 9am toggles on (and stays on) in one click.
+  // Turning a weekly schedule on with no days picked is "unconfigured", so the backend silently forces it back off and the switch looks dead. Seed today's weekday so the default Weekly 9am toggles on (and stays on) in one click.
   const toggleEnabled = () => {
     if (!enabled && sched.repeat_unit === 'week' && sched.on_days.length === 0) {
       patchSched({ enabled: true, on_days: [new Date().getDay()] });
@@ -45,8 +39,7 @@ const ScheduleCard: React.FC<{ workflow: Workflow }> = ({ workflow }) => {
     }
   };
 
-  // Local draft so the interval field can be cleared / mid-typed below the
-  // floor without snapping; we warn instead and commit a valid value.
+  // Local draft so the interval field can be cleared / mid-typed below the floor without snapping; we warn instead and commit a valid value.
   const [intervalDraft, setIntervalDraft] = useState<string | null>(null);
 
   const freqBtn = (active: boolean): CSSProperties => ({
@@ -79,8 +72,7 @@ const ScheduleCard: React.FC<{ workflow: Workflow }> = ({ workflow }) => {
   // Picking a finite limit resets the lifetime counter so "run 3 times" always means 3 from now.
   const setMaxRuns = (n: number | null) => patchSched(n == null ? { max_runs: null } : { max_runs: n, runs_count: 0 });
 
-  // A scheduled workflow with no steps fires but does nothing, so flag it.
-  // Mirror the test-warning's draft-or-live read so the banner tracks edits.
+  // A scheduled workflow with no steps fires but does nothing, so flag it. Mirror the test-warning's draft-or-live read so the banner tracks edits.
   const hasNoSteps = !(workflow.draft_steps ?? workflow.steps ?? []).some((s) => s.text && s.text.trim());
 
   return (

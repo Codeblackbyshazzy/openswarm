@@ -112,13 +112,10 @@ const POLL_INTERVAL_ACTIVE_MS = 2000;
 const POLL_INTERVAL_IDLE_MS = 15000;
 // Settle window after a content change/paint before snapshotting, so the app's JS has a beat to render.
 const CAPTURE_SETTLE_MS = 1000;
-// Fast app-switching minted a webview renderer per app you blew past, piling them up faster than
-// Electron tore the old ones down (the grey-out / OOM on 8GB machines). Hold the heavy preview until
-// this app has stayed open a beat; apps you fast-switch past unmount first and never spawn a renderer.
+// Fast app-switching minted a webview renderer per app you blew past, piling them up faster than Electron tore the old ones down (the grey-out / OOM on 8GB machines). Hold the heavy preview until this app has stayed open a beat; apps you fast-switch past unmount first and never spawn a renderer.
 const PREVIEW_MOUNT_DEBOUNCE_MS = 250;
 
-// Fingerprint of the files that actually affect the rendered preview, so renames,
-// schema tweaks, and SKILL.md edits don't trigger a needless re-screenshot.
+// Fingerprint of the files that actually affect the rendered preview, so renames, schema tweaks, and SKILL.md edits don't trigger a needless re-screenshot.
 function previewRenderKey(files: Record<string, string>): string {
   const ignore = new Set(['meta.json', 'schema.json', 'SKILL.md']);
   return Object.keys(files)
@@ -339,9 +336,7 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
   // Gates the preview webview behind PREVIEW_MOUNT_DEBOUNCE_MS so fast-switched-past apps never mount one.
   const [previewSettled, setPreviewSettled] = useState(false);
 
-  // Thumbnail capture state. lastCaptured starts at the current render key when a
-  // thumbnail already exists, so merely opening an app doesn't re-shoot (and re-sort) it;
-  // null when there's no thumbnail yet, so the first paint backfills one.
+  // Thumbnail capture state. lastCaptured starts at the current render key when a thumbnail already exists, so merely opening an app doesn't re-shoot (and re-sort) it; null when there's no thumbnail yet, so the first paint backfills one.
   const filesRef = useRef(files);
   filesRef.current = files;
   const isAgentActiveRef = useRef(false);
@@ -378,10 +373,7 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
     document.body.style.userSelect = '';
   }, []);
 
-  // Seed from the existing session id so a warm reopen resolves effectiveSessionId
-  // on the FIRST render (no "Initializing agent..." blank frame while the mount
-  // effect re-derives it). Cold opens still read null until fetchSession lands,
-  // because the selector requires the session to actually be in the store.
+  // Seed from the existing session id so a warm reopen resolves effectiveSessionId on the FIRST render (no "Initializing agent..." blank frame while the mount effect re-derives it). Cold opens still read null until fetchSession lands, because the selector requires the session to actually be in the store.
   const [initialDraftId, setInitialDraftId] = useState<string | null>(output?.session_id ?? null);
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   // Reuse the Output's workspace_id across remounts so we don't orphan agent edits or chat history.
@@ -395,13 +387,7 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
   const modelsByProvider = useAppSelector((s) => s.models.byProvider);
   const modelsLoaded = useAppSelector((s) => s.models.loaded);
 
-  // Spam-clicking sidebar apps used to fire EVERY app's seed + agent-init + runtime boot on
-  // each click, flooding the backend: the "Initializing agent..." stall (the landed app's init
-  // can't get through the backlog) and, under enough load, an orderly self-quit. Gate all the
-  // heavy per-app work behind sustained focus, it only runs if you STAY on the app ~800ms. A
-  // brand-new app (no output id yet) is always a deliberate open, so it settles immediately,
-  // keeping the onboarding /apps/new flow snappy. A warm reopen still renders its chat instantly
-  // from initialDraftId above, this only delays the background reattach/seed for click-throughs.
+  // Spam-clicking sidebar apps used to fire EVERY app's seed + agent-init + runtime boot on each click, flooding the backend: the "Initializing agent..." stall (the landed app's init can't get through the backlog) and, under enough load, an orderly self-quit. Gate all the heavy per-app work behind sustained focus, it only runs if you STAY on the app ~800ms. A brand-new app (no output id yet) is always a deliberate open, so it settles immediately, keeping the onboarding /apps/new flow snappy. A warm reopen still renders its chat instantly from initialDraftId above, this only delays the background reattach/seed for click-throughs.
   const isNewApp = !output?.id;
   const [focusSettled, setFocusSettled] = useState(isNewApp);
   useEffect(() => {
@@ -441,12 +427,7 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
     (async () => {
       // Reattach: Output has an existing session + workspace; skip seeding/draft so we don't clobber agent state.
       if (output?.session_id && output?.workspace_id) {
-        // Mount the chat NOW so a warm conversation renders instantly; holding it
-        // behind the verification round-trips blanked the chat for seconds on
-        // every reopen. The fetch is load-bearing on cold opens: effectiveSessionId
-        // resolves only once the session is IN the store, and AgentChat (the other
-        // hydrator) can't mount until then. The stale-id guard below still runs in
-        // the background and swaps in a fresh draft on the rare 404.
+        // Mount the chat NOW so a warm conversation renders instantly; holding it behind the verification round-trips blanked the chat for seconds on every reopen. The fetch is load-bearing on cold opens: effectiveSessionId resolves only once the session is IN the store, and AgentChat (the other hydrator) can't mount until then. The stale-id guard below still runs in the background and swaps in a fresh draft on the rare 404.
         dispatch(fetchSession(output.session_id));
         setInitialDraftId(output.session_id);
 
@@ -719,17 +700,12 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
   useEffect(() => {
     if (prevAgentActive.current && !isAgentActive) {
       if (workspaceId) setTimeout(pollWorkspace, 500);
-      // A change just finished: quietly save a version so the user can go back to
-      // it. Delayed so files + a fresh preview settle first. Fire-and-forget and
-      // error-swallowed; saving history must never disrupt the editor, and the
-      // backend dedupes so a run that changed nothing won't pile up a junk version.
+      // A change just finished: quietly save a version so the user can go back to it. Delayed so files + a fresh preview settle first. Fire-and-forget and error-swallowed; saving history must never disrupt the editor, and the backend dedupes so a run that changed nothing won't pile up a junk version.
       const eid = output?.id ?? createdIdRef.current;
       if (eid) {
         const label = lastUserPromptRef.current.slice(0, 140);
         window.setTimeout(async () => {
-          // A new run started inside the settle window: skip, or we'd snapshot a
-          // half-written workspace under the previous run's label. Its own
-          // completion will capture the settled state.
+          // A new run started inside the settle window: skip, or we'd snapshot a half-written workspace under the previous run's label. Its own completion will capture the settled state.
           if (isAgentActiveRef.current) return;
           let thumbnail: string | null = null;
           try { thumbnail = (await previewRef.current?.capture()) ?? null; } catch { /* preview not mounted */ }
@@ -810,10 +786,7 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
     };
   };
 
-  // Snapshot the live preview once content settles. Guards: skip mid-agent-run, skip
-  // if nothing visual changed since the last shot, skip until the app row exists.
-  // capture() returns null when the preview isn't mounted/ready, so a miss leaves
-  // lastCaptured untouched and a later paint can still backfill the thumbnail.
+  // Snapshot the live preview once content settles. Guards: skip mid-agent-run, skip if nothing visual changed since the last shot, skip until the app row exists. capture() returns null when the preview isn't mounted/ready, so a miss leaves lastCaptured untouched and a later paint can still backfill the thumbnail.
   const captureAppThumbnail = useCallback(() => {
     if (isAgentActiveRef.current) return;
     const eid = output?.id ?? createdIdRef.current;
@@ -978,10 +951,7 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
     };
   }, [workspaceId, runtimeShouldRun, appendTerminalLine]);
 
-  // One-shot trigger on the same sustained-focus gate as the seed: flips runtimeShouldRun true
-  // once this app is the focus pick (focusSettled) and you're on Preview/Terminal, never flips
-  // back. workspaceId is already downstream of the focus-gated seed, so this just keeps the
-  // intent explicit, an app you click past never boots a vite runtime, only one you settle on.
+  // One-shot trigger on the same sustained-focus gate as the seed: flips runtimeShouldRun true once this app is the focus pick (focusSettled) and you're on Preview/Terminal, never flips back. workspaceId is already downstream of the focus-gated seed, so this just keeps the intent explicit, an app you click past never boots a vite runtime, only one you settle on.
   useEffect(() => {
     if (!workspaceId || runtimeShouldRun || !focusSettled) return;
     const wantsRuntime = activeTab === TAB_PREVIEW || activeTab === TAB_TERMINAL;
@@ -1000,8 +970,7 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
     setIframePainted(false);
   }, [workspaceServeUrl]);
 
-  // Mount the preview only once this app has been the open one for a beat. The timer is cancelled on
-  // unmount, so blowing through apps faster than PREVIEW_MOUNT_DEBOUNCE_MS never spawns their renderers.
+  // Mount the preview only once this app has been the open one for a beat. The timer is cancelled on unmount, so blowing through apps faster than PREVIEW_MOUNT_DEBOUNCE_MS never spawns their renderers.
   useEffect(() => {
     const t = window.setTimeout(() => setPreviewSettled(true), PREVIEW_MOUNT_DEBOUNCE_MS);
     return () => window.clearTimeout(t);
@@ -1128,9 +1097,7 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
     };
   }, [files, name, description]);
 
-  // Live-preview (Vite/HMR) mode patches the webview without a load event, so onContentLoad
-  // misses most agent edits. Re-arm capture when files settle or the agent goes idle;
-  // captureAppThumbnail debounces and skips mid-run, no-op, and not-yet-saved cases.
+  // Live-preview (Vite/HMR) mode patches the webview without a load event, so onContentLoad misses most agent edits. Re-arm capture when files settle or the agent goes idle; captureAppThumbnail debounces and skips mid-run, no-op, and not-yet-saved cases.
   useEffect(() => {
     if (!frontendUrl) return;
     captureAppThumbnail();
@@ -1191,12 +1158,7 @@ const ViewEditor: React.FC<Props> = ({ output }) => {
           position: 'relative',
           bgcolor: 'transparent',
           transition: 'background-color 0.15s',
-          // Draw the line on the CHAT side of the seam, never centered. The app
-          // preview is an Electron <webview> (its own compositor layer that floats
-          // above normal DOM and ignores z-index), so a centered line had its
-          // right half swallowed by the webview in the body but not in the
-          // header, the long-standing thick-at-top look. Anchoring left of the
-          // seam keeps the whole line over plain DOM, so it's uniform.
+          // Draw the line on the CHAT side of the seam, never centered. The app preview is an Electron <webview> (its own compositor layer that floats above normal DOM and ignores z-index), so a centered line had its right half swallowed by the webview in the body but not in the header, the long-standing thick-at-top look. Anchoring left of the seam keeps the whole line over plain DOM, so it's uniform.
           '&::after': {
             content: '""',
             position: 'absolute',

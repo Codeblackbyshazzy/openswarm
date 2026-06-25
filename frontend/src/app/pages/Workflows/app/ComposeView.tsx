@@ -16,10 +16,7 @@ import StepsCard from './StepsCard';
 import SaveGuard from './SaveGuard';
 import type { AppNav } from './types';
 
-// Short pill label for the clean cluster, plus the richer prompt actually sent
-// so the agent gets real detail. Spread across personas (work, money, research,
-// lifestyle, monitoring) so most people see one that fits. Keep labels similar
-// length so they cluster two-per-row.
+// Short pill label for the clean cluster, plus the richer prompt actually sent so the agent gets real detail. Spread across personas (work, money, research, lifestyle, monitoring) so most people see one that fits. Keep labels similar length so they cluster two-per-row.
 const NEW_CHIPS: Array<{ label: string; prompt: string }> = [
   { label: 'Summarize my inbox daily', prompt: 'Each morning, summarize my inbox and draft replies to the important emails.' },
   { label: 'Recap my weekly spending', prompt: 'Every Sunday, recap my spending, subscriptions, upcoming bills, and any weird charges.' },
@@ -42,8 +39,7 @@ const ComposeView: React.FC<{ nav: AppNav }> = ({ nav }) => {
 
   const workflow = useAppSelector((s) => (draftId ? s.workflows.items[draftId] : undefined));
 
-  // One unsaved draft per visit to "New". The backend hides unsaved drafts from
-  // lists, so an abandoned one stays out of the way until GC.
+  // One unsaved draft per visit to "New". The backend hides unsaved drafts from lists, so an abandoned one stays out of the way until GC.
   useEffect(() => {
     if (created.current) return;
     created.current = true;
@@ -59,23 +55,15 @@ const ComposeView: React.FC<{ nav: AppNav }> = ({ nav }) => {
   const session = useAppSelector((s) => (sessionId ? s.agents.sessions[sessionId] : undefined));
   const agentBusy = session?.status === 'running' || session?.status === 'waiting_approval';
   const visibleMsgs = (session?.messages || []).filter((m) => !m.hidden).length;
-  // The agent has actually said something back, not just the user's own message
-  // sitting alone in the gap before the turn even starts. Gate the pane + handoff
-  // on THIS: "any message exists" is true the instant you send, so it used to
-  // fling you to the detail page before the agent ever replied.
+  // The agent has actually said something back, not just the user's own message sitting alone in the gap before the turn even starts. Gate the pane + handoff on THIS: "any message exists" is true the instant you send, so it used to fling you to the detail page before the agent ever replied.
   const agentReplied = (session?.messages || []).some((m) => m.role === 'assistant' && !m.hidden);
-  // Landing state: the blank page (incl. before the session has loaded, so the
-  // right pane starts closed rather than open-then-snap-shut). Gone the moment a
-  // message lands or the agent starts working, so its "thinking" never shows here.
+  // Landing state: the blank page (incl. before the session has loaded, so the right pane starts closed rather than open-then-snap-shut). Gone the moment a message lands or the agent starts working, so its "thinking" never shows here.
   const composeEmpty = !agentBusy && visibleMsgs === 0;
-  // Open the pane only once the agent has fully answered (not mid-response, where
-  // the chat is reflowing and the slide looks janky). Header toggle overrides it.
+  // Open the pane only once the agent has fully answered (not mid-response, where the chat is reflowing and the slide looks janky). Header toggle overrides it.
   const autoOpen = !agentBusy && agentReplied;
   const paneOpen = paneManual ?? autoOpen;
 
-  // Once it's revealed (in the sidebar) AND the agent has finished its first
-  // answer, hand off to the detail page, after a beat so the right-pane open
-  // animation plays here first. Same sticky edit session, so the chat carries over.
+  // Once it's revealed (in the sidebar) AND the agent has finished its first answer, hand off to the detail page, after a beat so the right-pane open animation plays here first. Same sticky edit session, so the chat carries over.
   useEffect(() => {
     if (handedOff.current || !draftId || !workflow) return;
     if (workflow.unsaved === false && autoOpen) {
@@ -90,17 +78,13 @@ const ComposeView: React.FC<{ nav: AppNav }> = ({ nav }) => {
     dispatch(sendMessage({ sessionId, prompt: text, mode: session.mode, model: session.model }));
   };
 
-  // The conversation started, so the workflow is real: reveal it under Workflows
-  // (and hand off to its detail) right away. The title stays "Untitled workflow"
-  // until the first step lands and the backend auto-names it (auto_named stays
-  // true), so the name types in from the steps, not the raw prompt.
+  // The conversation started, so the workflow is real: reveal it under Workflows (and hand off to its detail) right away. The title stays "Untitled workflow" until the first step lands and the backend auto-names it (auto_named stays true), so the name types in from the steps, not the raw prompt.
   const revealed = useRef(false);
   const firstUserMsg = (session?.messages || []).find((m) => m.role === 'user' && !m.hidden);
   useEffect(() => {
     if (revealed.current || !workflow || !firstUserMsg || workflow.unsaved === false) return;
     revealed.current = true;
-    // Reveal immediately so it lands in the sidebar the moment you send; the
-    // handoff to detail waits for the agent to finish (see effect above).
+    // Reveal immediately so it lands in the sidebar the moment you send; the handoff to detail waits for the agent to finish (see effect above).
     dispatch(updateWorkflow({ id: workflow.id, patch: { unsaved: false } }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firstUserMsg, workflow?.unsaved, dispatch]);
@@ -125,9 +109,7 @@ const ComposeView: React.FC<{ nav: AppNav }> = ({ nav }) => {
     finally { setTesting(false); }
   };
 
-  // No steps / no title is fine, you can save a bare workflow and fill it in
-  // later. No If-Match: this is the user's own brand-new draft, so there's no
-  // concurrent edit to guard against and a stale stamp shouldn't block the save.
+  // No steps / no title is fine, you can save a bare workflow and fill it in later. No If-Match: this is the user's own brand-new draft, so there's no concurrent edit to guard against and a stale stamp shouldn't block the save.
   const finalizeSave = () => {
     dispatch(updateWorkflow({ id: workflow.id, patch: { unsaved: false } }));
     nav.selectWorkflow(workflow.id);
