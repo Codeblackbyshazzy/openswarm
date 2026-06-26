@@ -1767,6 +1767,26 @@ app.whenReady().then(async () => {
   configureBrowsingSession(session.defaultSession);
   configureBrowsingSession(session.fromPartition(BROWSER_PARTITION));
 
+  // Add a "Google Chrome" brand to the browser partition's sec-ch-ua request hints so they match the navigator.userAgentData patch injected on dom-ready and the spoofed Chrome UA string; a Chrome UA paired with Chromium-only hints is the embedded-app tell aggressive anti-bot (Cloudflare) flags on a real human. Scoped to the browser partition, the app's own file:// + localhost traffic is untouched.
+  const addGoogleChromeBrand = (value) => {
+    if (typeof value !== 'string' || value.includes('"Google Chrome"')) return value;
+    const m = value.match(/"Chromium";v="([^"]+)"/);
+    return m ? `${value}, "Google Chrome";v="${m[1]}"` : value;
+  };
+  session.fromPartition(BROWSER_PARTITION).webRequest.onBeforeSendHeaders(
+    { urls: ['http://*/*', 'https://*/*'] },
+    (details, callback) => {
+      const headers = { ...(details.requestHeaders || {}) };
+      for (const k of Object.keys(headers)) {
+        const lk = k.toLowerCase();
+        if (lk === 'sec-ch-ua' || lk === 'sec-ch-ua-full-version-list') {
+          headers[k] = addGoogleChromeBrand(headers[k]);
+        }
+      }
+      callback({ requestHeaders: headers });
+    },
+  );
+
   // Read-only logging for DRM license requests — no modifying interceptors
   // so the network stack can set Content-Type and other headers normally.
   session.defaultSession.webRequest.onSendHeaders(
@@ -2161,6 +2181,32 @@ app.on('web-contents-created', (_event, contents) => {
       lastRecoveryReloadAt = now;
       console.log(`[webview] renderer unresponsive on wcId ${contents.id}; reloading to recover`);
       try { contents.reload(); } catch { /* nothing more we can do from here */ }
+    });
+
+    // Match navigator.userAgentData to the spoofed Chrome UA + the browser-partition sec-ch-ua header rewrite so the page world agrees with the headers; contextIsolation hides the preload, so this page-world patch is injected here. A Chrome UA with Chromium-only hints is the embedded-app tell that aggressive anti-bot (Cloudflare) flags on a real human.
+    contents.on('dom-ready', () => {
+      contents.executeJavaScript(`
+        (function(){
+          try {
+            var orig = navigator.userAgentData;
+            if (!orig || !Array.isArray(orig.brands) || orig.brands.some(function(b){ return b.brand === 'Google Chrome'; })) return;
+            var addChrome = function(list){
+              if (!Array.isArray(list) || list.some(function(b){ return b.brand === 'Google Chrome'; })) return list;
+              var ch = list.find(function(b){ return b.brand === 'Chromium'; });
+              return ch ? list.concat([{ brand: 'Google Chrome', version: ch.version }]) : list;
+            };
+            var brands = addChrome(orig.brands);
+            var patched = {
+              brands: brands,
+              mobile: orig.mobile,
+              platform: orig.platform,
+              getHighEntropyValues: function(h){ return orig.getHighEntropyValues(h).then(function(v){ if (v && Array.isArray(v.fullVersionList)) v.fullVersionList = addChrome(v.fullVersionList); return v; }); },
+              toJSON: function(){ return { brands: brands, mobile: orig.mobile, platform: orig.platform }; },
+            };
+            Object.defineProperty(navigator, 'userAgentData', { get: function(){ return patched; }, configurable: true });
+          } catch (e) {}
+        })();
+      `).catch(() => {});
     });
 
     // WebAuthn/passkey shim. Injected on every dom-ready in the main world
