@@ -1143,7 +1143,7 @@ const agentsSlice = createSlice({
         state.loading = false;
       })
       .addCase(launchAgent.fulfilled, (state, action) => {
-        state.sessions[action.payload.id] = { ...action.payload, name: normalizeSessionName(action.payload.name), tool_group_meta: action.payload.tool_group_meta ?? {} };
+        state.sessions[action.payload.id] = { ...action.payload, name: normalizeSessionName(action.payload.name), tool_group_meta: action.payload.tool_group_meta ?? {}, pending_approvals: action.payload.pending_approvals ?? [] };
         state.activeSessionId = action.payload.id;
         if (!state.expandedSessionIds.includes(action.payload.id)) {
           state.expandedSessionIds.push(action.payload.id);
@@ -1156,7 +1156,7 @@ const agentsSlice = createSlice({
         const { draftId, session } = action.payload;
         const shouldExpand = action.meta.arg.expand !== false;
         delete state.sessions[draftId];
-        state.sessions[session.id] = { ...session, name: normalizeSessionName(session.name), tool_group_meta: session.tool_group_meta ?? {} };
+        state.sessions[session.id] = { ...session, name: normalizeSessionName(session.name), tool_group_meta: session.tool_group_meta ?? {}, pending_approvals: session.pending_approvals ?? [] };
         state.activeSessionId = session.id;
         state.draftLaunchMap[draftId] = session.id;
         state.expandedSessionIds = state.expandedSessionIds.map((id) => (id === draftId ? session.id : id));
@@ -1242,7 +1242,7 @@ const agentsSlice = createSlice({
       })
       .addCase(duplicateSession.fulfilled, (state, action) => {
         const session = action.payload;
-        state.sessions[session.id] = { ...session, name: normalizeSessionName(session.name) };
+        state.sessions[session.id] = { ...session, name: normalizeSessionName(session.name), pending_approvals: session.pending_approvals ?? [] };
       })
       .addCase(closeSession.fulfilled, (state, action) => {
         const sessionId = action.payload;
@@ -1309,7 +1309,7 @@ const agentsSlice = createSlice({
       })
       .addCase(resumeSession.fulfilled, (state, action) => {
         const session = action.payload;
-        state.sessions[session.id] = { ...session, name: normalizeSessionName(session.name), tool_group_meta: session.tool_group_meta ?? {} };
+        state.sessions[session.id] = { ...session, name: normalizeSessionName(session.name), tool_group_meta: session.tool_group_meta ?? {}, pending_approvals: session.pending_approvals ?? [] };
         delete state.history[session.id];
         state.activeSessionId = session.id;
         if (!state.expandedSessionIds.includes(session.id)) {
@@ -1381,6 +1381,7 @@ const agentsSlice = createSlice({
               ...session,
               name: normalizeSessionName(session.name),
               tool_group_meta: session.tool_group_meta ?? {},
+              pending_approvals: session.pending_approvals ?? [],
             };
           }
         }

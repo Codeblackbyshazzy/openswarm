@@ -250,7 +250,13 @@ class SessionLifecycle(AgentManagerProtocol):
             if sid in seen:
                 continue
             if data.get("mode") == "browser-agent" and data.get("parent_session_id") == parent_session_id:
-                results.append(data)
+                # Validate + model_dump like the in-memory branch above; a raw legacy dict that predates a field (e.g. pending_approvals) would ship half-shaped and crash the renderer.
+                try:
+                    sess = AgentSession(**data)
+                except Exception:
+                    logger.warning(f"get_browser_agent_children: skipping unloadable session {sid}", exc_info=True)
+                    continue
+                results.append(sess.model_dump(mode="json"))
 
         return results
 
