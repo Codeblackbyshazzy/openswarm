@@ -376,6 +376,8 @@ class AppRuntime:
         env = {k: v for k, v in os.environ.items() if k != "OPENSWARM_AUTH_TOKEN"}
         # Hand the workspace's backend/run.sh the exact interpreter we're running on. In the packaged build that's the bundled standalone Python, so a fresh machine with no system `python3` still works; in dev it's whatever launched uvicorn. OPENSWARM_NODE_PATH already rides in via os.environ (set by the Electron shell) for run.sh's Node resolution.
         env["OPENSWARM_PYTHON"] = sys.executable
+        # Force npm to skip dependency lifecycle scripts for every install run.sh triggers. An imported app's package.json is untrusted (it brings its own run.sh, so we can't gate the flag there); a malicious dep's postinstall would otherwise run arbitrary code on the host the moment its preview boots. Vite/esbuild get their platform binary via optionalDependencies, not a script, so this doesn't break the build.
+        env["npm_config_ignore_scripts"] = "true"
         return env
 
     async def stop(self) -> None:

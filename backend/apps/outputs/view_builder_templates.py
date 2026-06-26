@@ -303,7 +303,7 @@ def ensure_warm_cache() -> str | None:
             tmpl_pkg = os.path.join(WEBAPP_TEMPLATE_DIR, "frontend", "package.json")
             tmpl_lock = os.path.join(WEBAPP_TEMPLATE_DIR, "frontend", "package-lock.json")
             shutil.copyfile(tmpl_pkg, os.path.join(cache_dir, "package.json"))
-            base_flags = ["--prefer-offline", "--no-audit", "--no-fund", "--loglevel=error"]
+            base_flags = ["--prefer-offline", "--no-audit", "--no-fund", "--loglevel=error", "--ignore-scripts"]
             npm = p_resolve_npm()
             if npm is None:
                 logger.info("webapp-template: no npm available; skipping warm cache (workspace will install on first run)")
