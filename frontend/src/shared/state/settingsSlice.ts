@@ -123,7 +123,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   default_max_turns: null,
   default_thinking_level: 'auto',
   zoom_sensitivity: 50,
-  theme: 'dark',
+  theme: 'light',
   new_agent_shortcut: 'Meta+l',
   anthropic_api_key: null,
   browser_homepage: 'https://duckduckgo.com',

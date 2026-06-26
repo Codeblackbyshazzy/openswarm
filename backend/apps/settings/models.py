@@ -39,7 +39,7 @@ class AppSettings(BaseModel):
     default_max_turns: Optional[int] = None
     default_thinking_level: Literal["off", "low", "medium", "high", "auto"] = "auto"
     zoom_sensitivity: float = 50.0
-    theme: str = "dark"
+    theme: str = "light"
     # Shared across App Builder workspaces (each runs its own vite port / localStorage origin); null = follow system.
     app_template_theme_override: Optional[Literal["light", "dark"]] = None
     new_agent_shortcut: str = "Meta+l"
