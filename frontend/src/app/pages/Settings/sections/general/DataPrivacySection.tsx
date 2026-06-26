@@ -20,11 +20,15 @@ const DataPrivacySection: React.FC<{ styles: SettingsStyles }> = ({ styles }) =>
   const [busy, setBusy] = useState(false);
   const [eraseText, setEraseText] = useState('');
   const [err, setErr] = useState<string | null>(null);
+  const [clearOpen, setClearOpen] = useState(false);
+  const [clearedOk, setClearedOk] = useState(false);
 
   const closeAll = () => {
     if (busy) return;
     setResetOpen(false);
     setEraseOpen(false);
+    setClearOpen(false);
+    setClearedOk(false);
     setEraseText('');
     setErr(null);
   };
@@ -56,6 +60,24 @@ const DataPrivacySection: React.FC<{ styles: SettingsStyles }> = ({ styles }) =>
     } catch {
       setBusy(false);
       setErr("Couldn't erase just now. Try again in a moment.");
+    }
+  };
+
+  const doClearBrowser = async () => {
+    const api = window.openswarm;
+    if (!api?.clearBrowserData) {
+      setErr('This only works in the desktop app.');
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.clearBrowserData();
+      setBusy(false);
+      setClearedOk(true);
+    } catch {
+      setBusy(false);
+      setErr("Couldn't clear browsing data just now. Try again in a moment.");
     }
   };
 
@@ -100,6 +122,14 @@ const DataPrivacySection: React.FC<{ styles: SettingsStyles }> = ({ styles }) =>
         <Button variant="outlined" size="small" onClick={() => { setErr(null); setResetOpen(true); }} sx={rowBtnSx}>Reset</Button>
       </Box>
 
+      <Box sx={{ ...rowSx, borderBottom: `1px solid ${c.border.subtle}` }}>
+        <Box>
+          <Typography sx={labelSx}>Clear browsing data</Typography>
+          <Typography sx={descSx}>Signs you out of sites opened in browser cards and clears their cookies, cache, and local storage. Your chats, apps, and settings stay.</Typography>
+        </Box>
+        <Button variant="outlined" size="small" onClick={() => { setErr(null); setClearedOk(false); setClearOpen(true); }} sx={rowBtnSx}>Clear</Button>
+      </Box>
+
       <Box sx={rowSx}>
         <Box>
           <Typography sx={{ ...labelSx, color: c.status.error }}>Erase all content and settings</Typography>
@@ -116,6 +146,24 @@ const DataPrivacySection: React.FC<{ styles: SettingsStyles }> = ({ styles }) =>
           <Box sx={actionRowSx}>
             <Button onClick={closeAll} disabled={busy} sx={cancelSx}>Cancel</Button>
             <Button onClick={doReset} disabled={busy} sx={{ color: c.accent.primary, textTransform: 'none', fontWeight: 600 }}>{busy ? 'Resetting…' : 'Reset'}</Button>
+          </Box>
+        </Box>
+      </Dialog>
+
+      <Dialog open={clearOpen} onClose={closeAll} PaperProps={{ sx: dialogPaperSx }}>
+        <Box sx={{ p: 2.5 }}>
+          <Typography sx={titleSx}>{clearedOk ? 'Browsing data cleared' : 'Clear browsing data?'}</Typography>
+          <Typography sx={bodySx}>{clearedOk ? 'Cookies, cache, and local storage for browser cards are gone. Reload a browser card to see it signed out.' : 'This signs you out of sites in browser cards and clears their cookies, cache, and local storage. Your chats, apps, and settings stay.'}</Typography>
+          {err && <Typography sx={errSx}>{err}</Typography>}
+          <Box sx={actionRowSx}>
+            {clearedOk ? (
+              <Button onClick={closeAll} sx={{ color: c.accent.primary, textTransform: 'none', fontWeight: 600 }}>Done</Button>
+            ) : (
+              <>
+                <Button onClick={closeAll} disabled={busy} sx={cancelSx}>Cancel</Button>
+                <Button onClick={doClearBrowser} disabled={busy} sx={{ color: c.accent.primary, textTransform: 'none', fontWeight: 600 }}>{busy ? 'Clearing…' : 'Clear'}</Button>
+              </>
+            )}
           </Box>
         </Box>
       </Dialog>

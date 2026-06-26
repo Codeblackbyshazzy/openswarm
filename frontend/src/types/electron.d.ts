@@ -49,6 +49,7 @@ declare global {
     onWebviewNewWindow: (cb: (url: string, webContentsId: number) => void) => () => void;
     openExternal: (url: string) => Promise<void>;
     hardReset?: () => Promise<void>;
+    clearBrowserData?: () => Promise<{ ok: boolean }>;
     onAuthUrl?: (cb: (url: string) => void) => () => void;
     onOauthClaim?: (cb: (url: string) => void) => () => void;
   }

@@ -2448,6 +2448,14 @@ ipcMain.handle('get-webview-preload-path', () => {
   return `file://${path.join(__dirname, 'webview-preload.js')}`;
 });
 
+// Wipe ONLY the browser-card partition (cookies/cache/localStorage/IndexedDB), never the app's defaultSession. Surfaced as Settings -> Data & Privacy -> Clear browsing data.
+ipcMain.handle('browser:clear-data', async () => {
+  const ses = session.fromPartition(BROWSER_PARTITION);
+  await ses.clearStorageData();
+  await ses.clearCache();
+  return { ok: true };
+});
+
 ipcMain.handle('get-update-status', () => cachedUpdateStatus);
 
 // One-shot recovery info: if the crash-watchdog relaunched us, returns the
