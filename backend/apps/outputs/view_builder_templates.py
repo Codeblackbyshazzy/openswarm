@@ -374,7 +374,7 @@ def p_try_link_dir(src: str, target: str) -> bool:
         return False
 
 
-def p_link_node_modules(workspace_dir: str) -> None:
+def link_node_modules(workspace_dir: str) -> None:
     """After copytree, point the workspace's frontend/node_modules at
     the warm-cache directory. Safe fallback; if the cache isn't ready,
     the workspace's run.sh will fall through to its own install path."""
@@ -570,7 +570,7 @@ def seed_webapp_template_workspace(workspace_dir: str, frontend_port: int) -> No
         dirs_exist_ok=True,
     )
     # Symlink the workspace's frontend/node_modules at the warm cache so `npm install` can be skipped entirely by the workspace run.sh.
-    p_link_node_modules(workspace_dir)
+    link_node_modules(workspace_dir)
     env_path = os.path.join(workspace_dir, ".env")
     env_example_path = os.path.join(workspace_dir, ".env.example")
     src_example = os.path.join(WEBAPP_TEMPLATE_DIR, ".env.example")
