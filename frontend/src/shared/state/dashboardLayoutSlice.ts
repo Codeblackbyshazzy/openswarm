@@ -734,6 +734,8 @@ const dashboardLayoutSlice = createSlice({
         width: w,
         height: h,
         zOrder: card.zOrder || state.nextZOrder++,
+        // An agent-spawned card must carry its home dashboard or it renders on EVERY dashboard; trust the backend's tag, fall back to the current dashboard so an old/untagged payload can't bleed.
+        dashboard_id: card.dashboard_id ?? getLastDashboardId() ?? undefined,
       };
     },
 
@@ -1027,6 +1029,8 @@ const dashboardLayoutSlice = createSlice({
         width: width || DEFAULT_BROWSER_CARD_W,
         height: height || DEFAULT_BROWSER_CARD_H,
         zOrder: state.nextZOrder++,
+        // Pasted onto the dashboard the user is looking at, else it bleeds onto every dashboard.
+        dashboard_id: getLastDashboardId() ?? undefined,
       };
     },
 

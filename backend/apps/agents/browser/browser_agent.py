@@ -2008,6 +2008,7 @@ async def p_create_browser_card(dashboard_id: str, url: str, parent_session_id: 
         width=1280,
         height=800,
         spawned_by=parent_session_id,
+        dashboard_id=dashboard_id,
     )
     dashboard.layout.browser_cards[browser_id] = card
     dashboard.updated_at = datetime.now()
