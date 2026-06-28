@@ -1079,7 +1079,8 @@ const AgentChat: React.FC<AgentChatProps> = ({ sessionId: sessionIdProp, onClose
             return match ? match[1] : '';
           }).filter(Boolean)
         );
-        const allSameMcp = mcpServers.size === 1 && pairs.length > 0;
+        // Only wrap MCP calls in a group when there's more than one; a lone call would just double up the group header on top of its own (e.g. "Browser Navigation 1/1" over "Opened a browser"), so render it bare instead.
+        const allSameMcp = mcpServers.size === 1 && pairs.length > 1;
 
         if (allSameMcp) {
           const mcpServer = [...mcpServers][0];
