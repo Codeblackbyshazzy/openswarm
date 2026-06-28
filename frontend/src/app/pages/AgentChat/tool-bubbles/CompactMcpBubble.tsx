@@ -67,78 +67,96 @@ export const CompactMcpBubble: React.FC<CompactMcpBubbleProps> = ({
     ? <GoogleServiceIcon service={mcpInfo.service} size={14} />
     : null;
 
+  // Once expanded (and there's a label above it), the args drop to their own full-width line instead of fighting the label for a cramped column that breaks URLs mid-token.
+  const stackBelow = showBody && canToggleDetails && !hideVerbLabel && !!visibleSummary && !isError;
+
   return (
     <Box {...selectAttrs} sx={{ my: 0 }}>
       <Box
         onClick={canToggleDetails ? toggle : undefined}
         sx={{
-          display: 'flex',
-          alignItems: showBody && canToggleDetails ? 'flex-start' : 'center',
-          gap: 0.75,
-          px: 1.5,
-          py: 0.6,
           cursor: canToggleDetails ? 'pointer' : 'default',
           borderBottom: showBody && canToggleDetails ? `1px solid ${c.border.subtle}` : 'none',
           '&:hover': canToggleDetails ? { bgcolor: 'rgba(0,0,0,0.02)' } : undefined,
         }}
       >
-        {ServiceIcon}
-        {!hideVerbLabel && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, px: 1.5, py: 0.6 }}>
+          {ServiceIcon}
+          {!hideVerbLabel && (
+            <Typography
+              sx={{
+                color: c.accent.primary,
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                flexShrink: 0,
+              }}
+            >
+              {serviceLabel}
+            </Typography>
+          )}
+          {visibleSummary && !isError && !stackBelow && (
+            <Typography
+              sx={{
+                color: hideVerbLabel ? c.text.primary : c.text.secondary,
+                fontSize: '0.74rem',
+                // Args are data (ids, URLs, params), so they read in mono, not the body serif.
+                fontFamily: c.font.mono,
+                flex: 1,
+                minWidth: 0,
+                ...(showBody && canToggleDetails
+                  ? { whiteSpace: 'normal', overflowWrap: 'anywhere' }
+                  : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }),
+              }}
+            >
+              {visibleSummary}
+            </Typography>
+          )}
+          {(stackBelow || !visibleSummary) && !showTimer && <Box sx={{ flex: 1 }} />}
+          {showTimer && (
+            <>
+              <Box sx={{ flex: 1 }} />
+              <ElapsedTimer startTime={call.timestamp} />
+            </>
+          )}
+          {isDenied && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
+              <BlockIcon sx={{ fontSize: 12, color: c.status.error }} />
+              <Typography sx={{ color: c.status.error, fontSize: '0.68rem', fontWeight: 500 }}>denied</Typography>
+            </Box>
+          )}
+          {result && !isDenied && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
+              {isError && (
+                <ErrorOutlineIcon sx={{ fontSize: 12, color: c.status.error }} />
+              )}
+              {resultElapsedMs != null && (
+                <Typography sx={{ fontSize: '0.63rem', fontFamily: c.font.mono, color: c.text.tertiary }}>
+                  {formatElapsed(resultElapsedMs)}
+                </Typography>
+              )}
+            </Box>
+          )}
+          {canToggleDetails && (
+            <IconButton size="small" sx={{ color: c.text.tertiary, p: 0.15, flexShrink: 0 }}>
+              {showBody ? <ExpandLessIcon sx={{ fontSize: 16 }} /> : <ExpandMoreIcon sx={{ fontSize: 16 }} />}
+            </IconButton>
+          )}
+        </Box>
+        {stackBelow && (
           <Typography
             sx={{
-              color: c.accent.primary,
-              fontSize: '0.78rem',
-              fontWeight: 600,
-              flexShrink: 0,
-            }}
-          >
-            {serviceLabel}
-          </Typography>
-        )}
-        {visibleSummary && !isError && (
-          <Typography
-            sx={{
-              color: hideVerbLabel ? c.text.primary : c.text.secondary,
+              color: c.text.secondary,
               fontSize: '0.74rem',
-              flex: 1,
-              minWidth: 0,
-              ...(showBody && canToggleDetails
-                ? { whiteSpace: 'normal', wordBreak: 'break-word' }
-                : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }),
+              fontFamily: c.font.mono,
+              whiteSpace: 'normal',
+              overflowWrap: 'anywhere',
+              lineHeight: 1.5,
+              px: 1.5,
+              pb: 0.6,
             }}
           >
             {visibleSummary}
           </Typography>
-        )}
-        {!visibleSummary && !showTimer && <Box sx={{ flex: 1 }} />}
-        {showTimer && (
-          <>
-            <Box sx={{ flex: 1 }} />
-            <ElapsedTimer startTime={call.timestamp} />
-          </>
-        )}
-        {isDenied && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
-            <BlockIcon sx={{ fontSize: 12, color: c.status.error }} />
-            <Typography sx={{ color: c.status.error, fontSize: '0.68rem', fontWeight: 500 }}>denied</Typography>
-          </Box>
-        )}
-        {result && !isDenied && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
-            {isError && (
-              <ErrorOutlineIcon sx={{ fontSize: 12, color: c.status.error }} />
-            )}
-            {resultElapsedMs != null && (
-              <Typography sx={{ fontSize: '0.63rem', fontFamily: c.font.mono, color: c.text.tertiary }}>
-                {formatElapsed(resultElapsedMs)}
-              </Typography>
-            )}
-          </Box>
-        )}
-        {canToggleDetails && (
-        <IconButton size="small" sx={{ color: c.text.tertiary, p: 0.15, flexShrink: 0 }}>
-          {showBody ? <ExpandLessIcon sx={{ fontSize: 16 }} /> : <ExpandMoreIcon sx={{ fontSize: 16 }} />}
-        </IconButton>
         )}
       </Box>
 
