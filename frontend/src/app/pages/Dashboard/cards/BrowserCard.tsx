@@ -122,9 +122,9 @@ function markWindowsWebviewSurvived(): void {
 const isWindows = navigator.userAgent.includes('Windows');
 const isElectron = navigator.userAgent.includes('Electron') && (!isWindows || windowsWebviewEnabled());
 
+// Keep the openswarm/<ver> product token: Google's sign-in flags a BARE Chrome UA as not-genuine-Chrome and blocks it ("browser may not be secure"), but tolerates a UA carrying a product token. Only the Electron token must go (that one Google hard-blocks).
 const chromeUserAgent = navigator.userAgent
-  .replace(/\s*Electron\/\S+/i, '')
-  .replace(/\s*openswarm\/\S+/i, '');
+  .replace(/\s*Electron\/\S+/i, '');
 
 // Persistent partition so browser-card logins/cookies/localStorage outlive a reload or quit. MUST match BROWSER_PARTITION in electron/main.js, which configures permissions + iframe header-strip on this exact partition.
 const BROWSER_PARTITION = 'persist:openswarm-browser';
