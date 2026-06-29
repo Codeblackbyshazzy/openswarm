@@ -8,7 +8,7 @@ import time
 from contextlib import asynccontextmanager
 from fastapi import HTTPException
 from backend.config.Apps import SubApp
-from backend.apps.skills.models import Skill, SkillCreate, SkillUpdate, SkillWorkspaceSeedRequest
+from backend.apps.skills.models import Skill, SkillCreate, SkillLoadRequest, SkillUpdate, SkillWorkspaceSeedRequest
 
 logger = logging.getLogger(__name__)
 
@@ -141,12 +141,23 @@ def p_seed_built_in_skills() -> None:
         save_index(index)
 
 
+def p_prune_orphan_index() -> None:
+    """Drop index entries whose skill files are gone (deleted out-of-band, e.g. a
+    manual rm of the folder), so ghosts don't pile up as dead metadata or escalate
+    install slugs (pdf -> pdf-2 -> pdf-3) by squatting a name with nothing on disk."""
+    index = load_index()
+    alive = {k: v for k, v in index.items() if skill_md_path(k)[0] is not None}
+    if len(alive) != len(index):
+        save_index(alive)
+
+
 @asynccontextmanager
 async def skills_lifespan():
     os.makedirs(SKILLS_DIR, exist_ok=True)
     os.makedirs(SKILLS_WORKSPACE_DIR, exist_ok=True)
     try:
         p_seed_built_in_skills()
+        p_prune_orphan_index()
     except Exception:
         # Don't block app startup on a skill-seed failure; the worst case is the user has to manually paste the skill in once.
         logger.exception("failed to seed built-in skills")
@@ -199,6 +210,9 @@ def p_build_skill(skill_id: str, content: str, md_path: str, kind: str, index: d
         built_in=bool(meta.get("built_in", False)),
         dir_path=skill_dir if kind == "folder" else "",
         has_supporting_files=(kind == "folder" and p_has_supporting_files(skill_dir)),
+        source=meta.get("source", ""),
+        folder=meta.get("folder", ""),
+        version=meta.get("version", ""),
     )
 
 
@@ -233,9 +247,49 @@ def sync_skills() -> list[Skill]:
     return result
 
 
+def format_skill_for_prompt(name: str, content: str, folder: str | None) -> str:
+    """The exact prompt block for one skill, shared by manual attach
+    (resolve_attached_skills) and the on-demand Skill tool so both inject
+    byte-identical text. `folder` is the supporting-files dir when the skill
+    ships any, else None."""
+    block = f"[Using skill: {name}]\n\n{content}"
+    if folder:
+        block += (
+            f"\n\nThis skill bundles supporting files in {folder}. "
+            "Read them with your normal file tools (Read / Glob / Bash) when "
+            "the steps above call for one; don't guess their contents."
+        )
+    return block
+
+
+def p_resolve_skill(skill_id: str, skills_list: list[Skill]) -> Skill | None:
+    """Resolve the identifier the model handed the Skill tool: exact id first,
+    then a case-insensitive match on id/command/name so a near-miss still loads."""
+    for s in skills_list:
+        if s.id == skill_id:
+            return s
+    low = skill_id.strip().lower()
+    for s in skills_list:
+        if low and low in (s.id.lower(), s.command.lower(), s.name.lower()):
+            return s
+    return None
+
+
 @skills.router.get("/list")
 async def list_skills():
     return {"skills": [s.model_dump() for s in sync_skills()]}
+
+
+@skills.router.post("/load")
+async def load_skill(body: SkillLoadRequest):
+    """Back the Skill tool: resolve a skill id to its prompt-ready text. On a miss
+    we return the installed ids (not a 404) so the model can self-correct its next call."""
+    skills_list = sync_skills()
+    target = p_resolve_skill(body.id, skills_list)
+    if target is None:
+        return {"ok": False, "error": "unknown_skill", "available": [s.id for s in skills_list]}
+    folder = target.dir_path if (target.dir_path and target.has_supporting_files) else None
+    return {"ok": True, "text": format_skill_for_prompt(target.name, target.content, folder)}
 
 
 def p_parse_skill_frontmatter(raw: str) -> dict:
@@ -307,15 +361,24 @@ async def get_skill(skill_id: str):
     raise HTTPException(status_code=404, detail="Skill not found")
 
 
+def p_clear_skill_dir(skill_id: str) -> None:
+    """Empty a skill's folder before an in-place update so files removed upstream
+    don't linger as orphans. write_folder_skill recreates the dir right after."""
+    import shutil
+    d = os.path.join(SKILLS_DIR, p_safe_slug(skill_id))
+    if os.path.isdir(d):
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def p_safe_slug(raw: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", (raw or "").strip().lower()).strip("-")
     return slug or "skill"
 
 
 def p_skill_exists(slug: str) -> bool:
+    # Existence is decided by FILES on disk only: a lingering index entry whose folder was deleted out-of-band (a manual rm) is a ghost and must not block reusing its slug.
     return (
-        slug in load_index()
-        or os.path.isfile(os.path.join(SKILLS_DIR, f"{slug}.md"))
+        os.path.isfile(os.path.join(SKILLS_DIR, f"{slug}.md"))
         or os.path.isdir(os.path.join(SKILLS_DIR, slug))
     )
 
@@ -360,11 +423,16 @@ def write_folder_skill(skill_id: str, files: dict[str, str], meta: dict) -> Skil
             f.write(content)
 
     index = load_index()
-    index[slug] = {
+    entry = {
         "name": meta.get("name") or slug,
         "description": meta.get("description", ""),
         "command": meta.get("command", slug),
     }
+    # Carry provenance (source/folder/version) when an installer supplies it, so updates can be detected later. User-created skills omit these and stay un-versioned.
+    for k in ("source", "folder", "version"):
+        if meta.get(k):
+            entry[k] = meta[k]
+    index[slug] = entry
     save_index(index)
 
     md_path, kind = skill_md_path(slug)

@@ -15,6 +15,10 @@ class Skill(BaseModel):
     # Multi-file skills live in ~/.claude/skills/<id>/ with a SKILL.md plus supporting files (scripts, templates). dir_path is set for those; empty for a legacy flat <id>.md skill. has_supporting_files flags extra files beyond SKILL.md so the prompt layer knows to point the agent at the folder for on-demand reading.
     dir_path: str = ""
     has_supporting_files: bool = False
+    # Provenance for registry-installed skills, used to detect + apply updates. source is owner/repo ('' for user-created), folder is the skill's path in that repo, version is the folder's git tree SHA at install time (changes iff something inside the folder changes upstream).
+    source: str = ""
+    folder: str = ""
+    version: str = ""
 
 
 class SkillCreate(BaseModel):
@@ -29,6 +33,10 @@ class SkillUpdate(BaseModel):
     description: Optional[str] = None
     content: Optional[str] = None
     command: Optional[str] = None
+
+
+class SkillLoadRequest(BaseModel):
+    id: str
 
 
 class SkillWorkspaceSeedRequest(BaseModel):
