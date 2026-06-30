@@ -87,7 +87,7 @@ Always branch off of the latest `dev`.
 6. **Wait for review and approval.**
 7. **The maintainer merges it into `dev`** (branches are deleted automatically after merge).
 
-### For outside contributors (people not on the core team)
+### External Contributors
 
 1. Fork the repo (creates your own copy).
 2. Clone your fork.
