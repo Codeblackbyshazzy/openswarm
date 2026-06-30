@@ -373,7 +373,11 @@ const BrowserCard: React.FC<Props> = ({
         dispatch(updateBrowserTabTitle({ browserId, tabId, title: wv.getTitle() }));
       };
 
-      const onLoadStart = () => updateTabLocal(tabId, { loading: true });
+      // Only a real main-frame document navigation drives the loading bar. did-start-loading is webContents-level and fires for every sub-frame/ad-iframe load, so busy sites (news, ad-heavy) kept re-sweeping the bar after the page was done; in-place pushState navs (Zillow's map) are instant and need no bar.
+      const onLoadStart = (e: any) => {
+        if (!e || e.isMainFrame === false || e.isInPlace) return;
+        updateTabLocal(tabId, { loading: true });
+      };
       const onLoadStop = () => {
         updateTabLocal(tabId, { loading: false });
         onNavigate();
@@ -411,7 +415,7 @@ const BrowserCard: React.FC<Props> = ({
       wv.addEventListener('did-navigate', onNavigate);
       wv.addEventListener('did-navigate-in-page', onNavigate);
       wv.addEventListener('page-title-updated', onTitleUpdate);
-      wv.addEventListener('did-start-loading', onLoadStart);
+      wv.addEventListener('did-start-navigation', onLoadStart);
       wv.addEventListener('did-stop-loading', onLoadStop);
       wv.addEventListener('page-favicon-updated', onFaviconUpdate);
       wv.addEventListener('ipc-message', onIpcMessage as any);
@@ -424,7 +428,7 @@ const BrowserCard: React.FC<Props> = ({
         wv.removeEventListener('did-navigate', onNavigate);
         wv.removeEventListener('did-navigate-in-page', onNavigate);
         wv.removeEventListener('page-title-updated', onTitleUpdate);
-        wv.removeEventListener('did-start-loading', onLoadStart);
+        wv.removeEventListener('did-start-navigation', onLoadStart);
         wv.removeEventListener('did-stop-loading', onLoadStop);
         wv.removeEventListener('page-favicon-updated', onFaviconUpdate);
         wv.removeEventListener('ipc-message', onIpcMessage as any);
