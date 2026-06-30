@@ -2443,16 +2443,50 @@ app.on('web-contents-created', (_event, contents) => {
         })();
       `).catch(() => {});
 
-      // Agent bridge (window.OPENSWARM_APP). Injected into EVERY app's main world
-      // from the shell so it exists regardless of frontend/src; the lightweight
-      // App Builder mode deletes frontend/src (and with it the template's own
-      // agentBridge.ts), so this is the only entry point a trimmed app can't lose.
-      // Idempotent + guarded: a workspace app that imports its own bridge installs
-      // first and this no-ops, so we never clobber a registered bridge. An app
-      // becomes agent-operable by calling OPENSWARM_APP.register({rules, controls,
-      // getState, invoke}); until it does, describe()/getState() report __ready:false
-      // (the agent then falls back to native keyboard/mouse). Keep this in sync with
-      // backend/apps/outputs/webapp_template/frontend/src/agentBridge.ts.
+      const url = contents.getURL();
+      if (url.includes('spotify')) {
+        contents.executeJavaScript(`
+          (function() {
+            const origFetch = window.fetch;
+            window.fetch = async function(...args) {
+              const resp = await origFetch.apply(this, args);
+              const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+              if (url.includes('widevine-license') && !resp.ok) {
+                const clone = resp.clone();
+                try {
+                  const text = await clone.text();
+                  console.log('[drm-diag] License response ' + resp.status + ': ' + text.substring(0, 500));
+                } catch(e) {}
+              }
+              return resp;
+            };
+
+            // Check EME availability
+            if (navigator.requestMediaKeySystemAccess) {
+              navigator.requestMediaKeySystemAccess('com.widevine.alpha', [{
+                initDataTypes: ['cenc'],
+                audioCapabilities: [{contentType: 'audio/mp4; codecs="mp4a.40.2"'}],
+              }]).then(function(access) {
+                console.log('[drm-diag] Widevine EME access: ' + access.keySystem);
+              }).catch(function(err) {
+                console.log('[drm-diag] Widevine EME FAILED: ' + err.message);
+              });
+            } else {
+              console.log('[drm-diag] EME API not available');
+            }
+          })();
+        `).catch(() => {});
+      }
+    });
+
+    // Agent bridge (window.OPENSWARM_APP): app webviews ONLY, all platforms. Gated
+    // off the browser partition so a normal browser card / agent web automation
+    // never carries this global, since a unique window.OPENSWARM_APP is a one-line
+    // bot tell on the open web. Shell-injected so a trimmed App-Builder app (its
+    // frontend/src + the template's agentBridge.ts deleted) still gets a bridge;
+    // idempotent, so a full app that self-installs its own bridge no-ops here. Keep
+    // in sync with backend/apps/outputs/webapp_template/frontend/src/agentBridge.ts.
+    if (contents.session !== session.fromPartition(BROWSER_PARTITION)) contents.on('dom-ready', () => {
       contents.executeJavaScript(`
         (function() {
           if (window.OPENSWARM_APP) return;
@@ -2520,44 +2554,8 @@ app.on('web-contents-created', (_event, contents) => {
             },
           };
           window.OPENSWARM_APP = bridge;
-          try { console.warn('[openswarm:bridge] shell-injected window.OPENSWARM_APP at', location.href); } catch (_) {}
         })();
       `).catch(() => {});
-
-      const url = contents.getURL();
-      if (url.includes('spotify')) {
-        contents.executeJavaScript(`
-          (function() {
-            const origFetch = window.fetch;
-            window.fetch = async function(...args) {
-              const resp = await origFetch.apply(this, args);
-              const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
-              if (url.includes('widevine-license') && !resp.ok) {
-                const clone = resp.clone();
-                try {
-                  const text = await clone.text();
-                  console.log('[drm-diag] License response ' + resp.status + ': ' + text.substring(0, 500));
-                } catch(e) {}
-              }
-              return resp;
-            };
-
-            // Check EME availability
-            if (navigator.requestMediaKeySystemAccess) {
-              navigator.requestMediaKeySystemAccess('com.widevine.alpha', [{
-                initDataTypes: ['cenc'],
-                audioCapabilities: [{contentType: 'audio/mp4; codecs="mp4a.40.2"'}],
-              }]).then(function(access) {
-                console.log('[drm-diag] Widevine EME access: ' + access.keySystem);
-              }).catch(function(err) {
-                console.log('[drm-diag] Widevine EME FAILED: ' + err.message);
-              });
-            } else {
-              console.log('[drm-diag] EME API not available');
-            }
-          })();
-        `).catch(() => {});
-      }
     });
   }
 });
