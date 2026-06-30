@@ -177,6 +177,194 @@ def test_confirm_install_writes_folder_lists_and_injects(skills_dir, monkeypatch
     assert str(skills_dir / slug) in block
 
 
+class FakeResp:
+    def __init__(self, status, payload=None, text=""):
+        self.status_code = status
+        self.p_payload = payload
+        self.text = text
+
+    def json(self):
+        return self.p_payload
+
+
+CURATED_TREE = {"tree": [
+    {"type": "tree", "path": "skills/pdf", "sha": "PDFSHA1"},
+    {"type": "blob", "path": "skills/pdf/SKILL.md"},
+    {"type": "blob", "path": "skills/pdf/scripts/extract.py"},
+    {"type": "tree", "path": "skills/pdf/scripts", "sha": "SCRIPTSHA"},
+    {"type": "blob", "path": "skills/pdf/reference/notes.md"},
+    {"type": "blob", "path": "skills/pdf-extra/SKILL.md"},
+    {"type": "blob", "path": "skills/other/SKILL.md"},
+]}
+
+
+def test_curated_resolve_fetches_exact_folder_only(monkeypatch):
+    """Curated install must pull the WHOLE skill folder (so scripts/assets land),
+    matched by EXACT path: a sibling folder sharing a name prefix (skills/pdf vs
+    skills/pdf-extra) must not leak in. Here the cache is COLD, so it pays one live
+    tree call."""
+    import asyncio
+    import backend.apps.skill_registry.skill_registry as sr
+    monkeypatch.setattr(sr, "p_curated_tree", [])
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url):
+            if "git/trees" in url:
+                return FakeResp(200, payload=CURATED_TREE)
+            rel = url.split("/main/", 1)[1]
+            return FakeResp(200, text=f"content:{rel}") if rel.startswith("skills/pdf/") else FakeResp(404)
+
+    monkeypatch.setattr(sr.httpx, "AsyncClient", lambda *a, **k: FakeClient())
+
+    resolved = asyncio.run(sr.resolve_curated_skill("skills/pdf"))
+    assert set(resolved["files"].keys()) == {"SKILL.md", "scripts/extract.py", "reference/notes.md"}
+    assert resolved["scripts"] == ["scripts/extract.py"]
+    assert resolved["skill_id"] == "pdf"
+
+
+def test_curated_resolve_uses_warm_cache_with_zero_api_calls(monkeypatch):
+    """B1: when the tree cache is warm, a curated install makes ZERO trees-API calls,
+    it reads paths from the cache and pulls contents over raw only. It also records
+    provenance (source/folder/version) for later update detection."""
+    import asyncio
+    import backend.apps.skill_registry.skill_registry as sr
+    monkeypatch.setattr(sr, "p_curated_tree", CURATED_TREE["tree"])
+
+    class NoApiClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url):
+            if "git/trees" in url or "api.github.com" in url:
+                raise AssertionError(f"warm cache must not hit the API: {url}")
+            rel = url.split("/main/", 1)[1]
+            return FakeResp(200, text=f"content:{rel}") if rel.startswith("skills/pdf/") else FakeResp(404)
+
+    monkeypatch.setattr(sr.httpx, "AsyncClient", lambda *a, **k: NoApiClient())
+
+    resolved = asyncio.run(sr.resolve_curated_skill("skills/pdf"))
+    assert set(resolved["files"].keys()) == {"SKILL.md", "scripts/extract.py", "reference/notes.md"}
+    assert resolved["source"] == "anthropics/skills"
+    assert resolved["folder"] == "skills/pdf"
+    assert resolved["version"] == "PDFSHA1"
+
+
+def test_warm_curated_tree_populates_cache(monkeypatch):
+    """The hourly warm-up caches the repo's full tree so later installs skip the API."""
+    import asyncio
+    import backend.apps.skill_registry.skill_registry as sr
+    monkeypatch.setattr(sr, "p_curated_tree", [])
+
+    class TreeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url):
+            assert "git/trees" in url
+            return FakeResp(200, payload=CURATED_TREE)
+
+    monkeypatch.setattr(sr.httpx, "AsyncClient", lambda *a, **k: TreeClient())
+    asyncio.run(sr.p_warm_curated_tree())
+    assert "skills/pdf/SKILL.md" in sr.p_tree_blob_paths(sr.p_curated_tree)
+
+
+def test_skill_update_detection_and_apply(skills_dir, monkeypatch):
+    """End-to-end versioning: a curated skill recorded at an OLD folder SHA reads as
+    outdated against the warmed tree; applying the update re-fetches, bumps the version,
+    and it stops being outdated."""
+    import secrets as p_secrets
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    import backend.auth as auth_mod
+    import backend.apps.skill_registry.skill_registry as sr
+    import backend.apps.skills.skills as skills_mod
+    if not auth_mod.TOKEN:
+        auth_mod.TOKEN = p_secrets.token_urlsafe(32)
+    client = TestClient(app, headers={"Authorization": f"Bearer {auth_mod.TOKEN}"})
+
+    # Upstream folder SHA for skills/pdf is PDFSHA1 (from the warmed tree).
+    monkeypatch.setattr(sr, "p_curated_tree", CURATED_TREE["tree"])
+    # Installed copy recorded at a STALE version, so it should read as outdated.
+    skills_mod.write_folder_skill("pdf", {"SKILL.md": "old"}, {
+        "name": "PDF", "source": "anthropics/skills", "folder": "skills/pdf", "version": "OLDSHA",
+    })
+
+    r = client.get("/api/skill-registry/updates")
+    assert r.status_code == 200 and "pdf" in r.json()["outdated"]
+
+    async def fake_resolve(folder):
+        return {"name": "PDF", "description": "pdfs", "skill_id": "pdf",
+                "files": {"SKILL.md": "new", "scripts/x.py": "print(1)"},
+                "scripts": ["scripts/x.py"], "secret_findings": [],
+                "source": "anthropics/skills", "folder": "skills/pdf", "version": "PDFSHA1"}
+    monkeypatch.setattr(sr, "resolve_curated_skill", fake_resolve)
+
+    u = client.post("/api/skill-registry/update", json={"skill_id": "pdf"})
+    assert u.status_code == 200 and u.json()["updated"] is True
+    assert (skills_dir / "pdf" / "scripts" / "x.py").exists()
+
+    r2 = client.get("/api/skill-registry/updates")
+    assert "pdf" not in r2.json()["outdated"] and "pdf" in r2.json()["checked"]
+
+
+def test_curated_install_writes_full_folder(skills_dir, monkeypatch):
+    """End-to-end: /install-curated writes the full folder (SKILL.md + scripts), and
+    the skill shows up in /api/skills/list flagged multi-file. (resolve mocked to
+    skip the network; the exact-folder fetch is proven separately.)"""
+    import secrets as p_secrets
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    import backend.auth as auth_mod
+    if not auth_mod.TOKEN:
+        auth_mod.TOKEN = p_secrets.token_urlsafe(32)
+    client = TestClient(app, headers={"Authorization": f"Bearer {auth_mod.TOKEN}"})
+
+    async def fake_resolve(folder):
+        return {
+            "name": "PDF", "description": "work with pdfs",
+            "repo_url": "https://github.com/anthropics/skills/tree/main/skills/pdf",
+            "skill_id": "pdf",
+            "files": {"SKILL.md": "# PDF\nRun scripts/extract.py", "scripts/extract.py": "print('x')"},
+            "scripts": ["scripts/extract.py"], "secret_findings": [],
+        }
+    monkeypatch.setattr("backend.apps.skill_registry.skill_registry.resolve_curated_skill", fake_resolve)
+
+    r = client.post("/api/skill-registry/install-curated", json={"folder": "skills/pdf"})
+    assert r.status_code == 200 and r.json()["installed"] is True
+    slug = r.json()["skill"]["id"]
+    assert (skills_dir / slug / "SKILL.md").exists()
+    assert (skills_dir / slug / "scripts" / "extract.py").exists()
+    listed = {s["id"]: s for s in client.get("/api/skills/list").json()["skills"]}
+    assert slug in listed and listed[slug]["has_supporting_files"] is True
+
+
+def test_manual_rm_leaves_no_ghost_blocking_slug(skills_dir):
+    """A folder deleted out-of-band (manual rm) must not keep squatting its slug via
+    a leftover index entry: existence is by files on disk, and a prune cleans the index."""
+    import shutil
+    skills_mod.write_folder_skill("pdf", {"SKILL.md": "x"}, {"name": "PDF"})
+    shutil.rmtree(skills_dir / "pdf")  # delete the folder, leave the index entry
+    # The ghost index entry must NOT count as existing, so the clean slug is reclaimable.
+    assert skills_mod.p_skill_exists("pdf") is False
+    assert skills_mod.unique_skill_slug("pdf") == "pdf"
+    # And the prune drops the dead entry.
+    assert "pdf" in skills_mod.load_index()
+    skills_mod.p_prune_orphan_index()
+    assert "pdf" not in skills_mod.load_index()
+
+
 def test_write_folder_skill_blocks_path_traversal(skills_dir):
     skills_mod.write_folder_skill(
         "evil",

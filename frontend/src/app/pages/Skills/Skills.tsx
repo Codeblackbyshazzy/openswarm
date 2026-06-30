@@ -47,6 +47,9 @@ import {
   fetchAllRegistrySkills,
   fetchSkillRegistryStats,
   fetchSkillDetail,
+  fetchSkillUpdates,
+  installCuratedSkill,
+  updateInstalledSkill,
   RegistrySkill,
   RegistrySkillDetail,
 } from '@/shared/state/skillRegistrySlice';
@@ -85,6 +88,7 @@ const Skills: React.FC = () => {
     stats: regStats,
     detail: regDetail,
     detailLoading: regDetailLoading,
+    outdated: regOutdated,
   } = useAppSelector((s) => s.skillRegistry);
   const localSkills = Object.values(items);
 
@@ -119,6 +123,7 @@ const Skills: React.FC = () => {
     dispatch(fetchSkills());
     dispatch(fetchSkillRegistryStats());
     dispatch(fetchAllRegistrySkills());
+    dispatch(fetchSkillUpdates());
   }, [dispatch]);
 
   const regGrouped = useMemo(() => {
@@ -186,14 +191,37 @@ const Skills: React.FC = () => {
 
   const handleInstall = async () => {
     if (!selectedReg) return;
-    await dispatch(createSkill({
-      name: selectedReg.name,
-      description: selectedReg.description,
-      content: selectedReg.content,
-      command: selectedReg.name.toLowerCase().replace(/\s+/g, '-'),
-    }));
+    try {
+      await dispatch(installCuratedSkill(selectedReg.folder)).unwrap();
+    } catch (e) {
+      // unwrap() rejects with a plain serialized object, not an Error instance, so read .message off it directly.
+      const msg = (e as { message?: string })?.message || 'unknown error';
+      setSnackbar({ open: true, message: `Install failed: ${msg}` });
+      return;
+    }
+    await dispatch(fetchSkills());
     onboardingBus.emit('skill:installed');
     setSnackbar({ open: true, message: `Installed "${selectedReg.name}" as a local skill` });
+  };
+
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const handleUpdate = async (skill: Skill) => {
+    setUpdatingId(skill.id);
+    let result: { secret_findings: string[] } | null = null;
+    try {
+      result = await dispatch(updateInstalledSkill(skill.id)).unwrap();
+    } catch (e) {
+      const msg = (e as { message?: string })?.message || 'unknown error';
+      setSnackbar({ open: true, message: `Update failed: ${msg}` });
+      setUpdatingId(null);
+      return;
+    }
+    await Promise.all([dispatch(fetchSkills()), dispatch(fetchSkillUpdates())]);
+    setUpdatingId(null);
+    const flagged = result?.secret_findings?.length
+      ? ` (heads up: the update ships ${result.secret_findings.length} file(s) with secret-shaped content)`
+      : '';
+    setSnackbar({ open: true, message: `Updated "${skill.name}" to the latest version${flagged}` });
   };
 
   const handleEditInstall = () => {
@@ -285,7 +313,8 @@ const Skills: React.FC = () => {
     onClick: () => void;
     icon?: React.ReactNode;
     onboardingId?: string;
-  }> = ({ label, selected, onClick, icon, onboardingId }) => (
+    trailing?: React.ReactNode;
+  }> = ({ label, selected, onClick, icon, onboardingId, trailing }) => (
     <Box
       onClick={onClick}
       data-onboarding={onboardingId}
@@ -306,6 +335,7 @@ const Skills: React.FC = () => {
       >
         {label}
       </Typography>
+      {trailing && <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', flexShrink: 0 }}>{trailing}</Box>}
     </Box>
   );
 
@@ -438,6 +468,9 @@ const Skills: React.FC = () => {
                       selected={isSelected('local', sk.id)}
                       onClick={() => selectLocal(sk.id)}
                       icon={<FolderIcon sx={{ fontSize: 15, color: c.text.tertiary, flexShrink: 0 }} />}
+                      trailing={regOutdated.includes(sk.id)
+                        ? <Tooltip title="Update available"><Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: c.status.warning }} /></Tooltip>
+                        : undefined}
                     />
                   ))}
                 </Box>
@@ -641,8 +674,27 @@ const Skills: React.FC = () => {
                     }}
                   />
                 )}
+                {regOutdated.includes(selectedLocal.id) && (
+                  <Chip
+                    label="Update available"
+                    size="small"
+                    sx={{ bgcolor: `${c.status.warning}22`, color: c.status.warning, fontWeight: 600, fontSize: '0.7rem', height: 20 }}
+                  />
+                )}
               </Box>
               <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                {regOutdated.includes(selectedLocal.id) && (
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<DownloadIcon sx={{ fontSize: 16 }} />}
+                    disabled={updatingId === selectedLocal.id}
+                    onClick={() => handleUpdate(selectedLocal)}
+                    sx={{ textTransform: 'none', fontSize: '0.78rem', py: 0.3, bgcolor: c.status.warning, '&:hover': { bgcolor: c.status.warning } }}
+                  >
+                    {updatingId === selectedLocal.id ? 'Updating...' : 'Update'}
+                  </Button>
+                )}
                 <ShareButton target={{ kind: 'skill', id: selectedLocal.id, name: selectedLocal.name }} />
                 <Tooltip title="Edit">
                   <IconButton size="small" onClick={() => openEdit(selectedLocal)} sx={{ color: c.text.tertiary, '&:hover': { color: c.accent.primary } }}>

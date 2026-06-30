@@ -12,6 +12,10 @@ export interface Skill {
   command: string;
   /** Platform-shipped skill; UI hides delete, backend DELETE returns 409. Content still editable. */
   built_in?: boolean;
+  /** Provenance for registry-installed skills (used for update detection). Empty for user-created skills. */
+  source?: string;
+  folder?: string;
+  version?: string;
 }
 
 interface SkillsState {

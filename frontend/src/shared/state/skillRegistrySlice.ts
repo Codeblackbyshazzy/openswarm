@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { API_BASE } from '@/shared/config';
+import { Skill } from '@/shared/state/skillsSlice';
 
 const SKILL_REGISTRY_API = `${API_BASE}/skill-registry`;
 
@@ -24,6 +25,7 @@ interface SkillRegistryState {
   stats: { total: number; categories: Record<string, number>; lastUpdated: number } | null;
   detail: RegistrySkillDetail | null;
   detailLoading: boolean;
+  outdated: string[];
 }
 
 const initialState: SkillRegistryState = {
@@ -35,6 +37,7 @@ const initialState: SkillRegistryState = {
   stats: null,
   detail: null,
   detailLoading: false,
+  outdated: [],
 };
 
 export const searchSkillRegistry = createAsyncThunk(
@@ -66,6 +69,60 @@ export const fetchSkillDetail = createAsyncThunk(
     const res = await fetch(`${SKILL_REGISTRY_API}/detail/${encodeURIComponent(name)}`);
     const data = await res.json();
     return data.skill as RegistrySkillDetail;
+  },
+);
+
+export interface CuratedInstallResult {
+  installed: boolean;
+  skill: Skill;
+  files: string[];
+  scripts: string[];
+}
+
+// Curated install fetches the WHOLE skill folder (scripts/assets), not just SKILL.md, so multi-file skills land complete. Caller refreshes the local skills list after.
+export const installCuratedSkill = createAsyncThunk(
+  'skillRegistry/installCurated',
+  async (folder: string) => {
+    const res = await fetch(`${SKILL_REGISTRY_API}/install-curated`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder }),
+    });
+    if (!res.ok) {
+      const detail = await res.json().catch(() => ({}));
+      throw new Error(detail.detail || `install failed (${res.status})`);
+    }
+    return (await res.json()) as CuratedInstallResult;
+  },
+);
+
+export interface SkillUpdatesResult {
+  outdated: string[];
+  checked: string[];
+  unknown: string[];
+}
+
+// Which installed skills have a newer version upstream. Curated checks are free (cached tree); community checks are best-effort.
+export const fetchSkillUpdates = createAsyncThunk('skillRegistry/updates', async () => {
+  const res = await fetch(`${SKILL_REGISTRY_API}/updates`);
+  if (!res.ok) throw new Error(`updates check failed (${res.status})`);
+  return (await res.json()) as SkillUpdatesResult;
+});
+
+// Re-fetch an installed skill from its recorded source and overwrite it in place, bumping its version. Caller refreshes the local skills list + updates after.
+export const updateInstalledSkill = createAsyncThunk(
+  'skillRegistry/updateInstalled',
+  async (skillId: string) => {
+    const res = await fetch(`${SKILL_REGISTRY_API}/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ skill_id: skillId }),
+    });
+    if (!res.ok) {
+      const detail = await res.json().catch(() => ({}));
+      throw new Error(detail.detail || `update failed (${res.status})`);
+    }
+    return (await res.json()) as { updated: boolean; skill: Skill; scripts: string[]; secret_findings: string[] };
   },
 );
 
@@ -119,6 +176,9 @@ const skillRegistrySlice = createSlice({
       })
       .addCase(fetchSkillDetail.rejected, (state) => {
         state.detailLoading = false;
+      })
+      .addCase(fetchSkillUpdates.fulfilled, (state, action) => {
+        state.outdated = action.payload.outdated;
       });
   },
 });

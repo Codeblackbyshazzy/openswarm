@@ -31,6 +31,13 @@ p_cache: dict[str, dict] = {}
 p_cache_updated_at: float = 0
 p_refresh_task: Optional[asyncio.Task] = None
 
+# The curated repo's recursive file tree, warmed hourly alongside the catalog. A curated install reads paths from here and fetches contents over raw, so it makes ZERO GitHub API calls in the normal case (the trees API is the 60/hr-limited part); update detection reads per-folder tree SHAs from it too. Empty until the first refresh warms it; install falls back to one live tree call then.
+p_curated_tree: list[dict] = []
+p_curated_tree_at: float = 0
+# Community repo trees for update detection, cached briefly (best-effort) so an updates check on skills.sh-installed skills doesn't refetch every page load nor burn the API.
+P_COMMUNITY_TREE_TTL = 600
+p_community_tree_cache: dict[str, tuple] = {}
+
 
 def disk_cache_path() -> str:
     base = os.environ.get("OPENSWARM_SKILL_CACHE_DIR") or os.path.expanduser(
@@ -160,6 +167,28 @@ async def p_fetch_all_skills() -> dict[str, dict]:
     return skills
 
 
+async def p_warm_curated_tree() -> None:
+    """Best-effort: list the anthropics/skills repo once and cache its file paths so
+    curated installs need ZERO trees-API calls (they read paths here, fetch contents
+    over raw). One cheap call per hourly refresh, reused by every install in that hour.
+    Isolated, a failure here never touches the SKILL.md catalog; install falls back to
+    a live tree call while the cache is cold."""
+    global p_curated_tree, p_curated_tree_at
+    owner, _, repo = REPO.partition("/")
+    try:
+        async with httpx.AsyncClient(timeout=30.0, headers=github_headers()) as client:
+            tree = await p_tree_at(client, owner, repo, BRANCH)
+        if tree:
+            p_curated_tree = tree
+            p_curated_tree_at = time.time()
+            logger.info(f"Curated skill tree warmed: {len(p_tree_blob_paths(tree))} file paths cached")
+    except RegistryRateLimited:
+        # Visible on purpose: a rate-limited warm-up means installs stay on the slow live-call path until the IP's quota resets or a token is set.
+        logger.warning("Curated tree warm-up rate-limited by GitHub (60/hr anon limit). Set GITHUB_TOKEN or wait for the hourly reset; installs use a live tree call meanwhile.")
+    except Exception:
+        logger.debug("curated tree warm-up failed; installs fall back to a live tree call", exc_info=True)
+
+
 async def p_refresh_loop():
     global p_cache, p_cache_updated_at
     backoff = P_RETRY_BACKOFF_START_S
@@ -175,6 +204,8 @@ async def p_refresh_loop():
         except Exception as e:
             logger.exception(f"Skill registry refresh error: {e}")
         if ok:
+            # Warm the curated file-tree on the SLOW path only (never on the fast failure-retry below, which would burn the 60/hr quota in seconds).
+            await p_warm_curated_tree()
             # Settle to the slow hourly refresh once we have a good catalog.
             backoff = P_RETRY_BACKOFF_START_S
             await asyncio.sleep(REFRESH_INTERVAL_S)
@@ -330,12 +361,28 @@ class RegistryRateLimited(Exception):
     'try again shortly' rather than a generic failure."""
 
 
+def p_tree_blob_paths(tree: list[dict]) -> list[str]:
+    """The blob (file) paths from a GitHub recursive tree, ignoring tree (dir) entries."""
+    return [t["path"] for t in tree if t.get("type") == "blob" and isinstance(t.get("path"), str)]
+
+
+def p_folder_tree_sha(tree: list[dict], folder: str) -> str:
+    """The git tree SHA of `folder` within a recursive tree: a per-folder fingerprint
+    that changes iff something inside it changes, so one skill going stale never marks
+    its siblings stale. '' when the folder isn't present as a tree entry."""
+    for t in tree:
+        if t.get("type") == "tree" and t.get("path") == folder:
+            return t.get("sha", "") or ""
+    return ""
+
+
 async def p_tree_at(client: httpx.AsyncClient, owner: str, repo: str, branch: str):
-    """(tree | None) for a branch. None on 404 (branch absent); raises on 403."""
+    """(tree | None) for a branch. None on 404 (branch absent); raises on rate limit.
+    GitHub signals the limit as 403 (primary) or 429 (secondary), so treat both."""
     r = await client.get(f"{P_GH_API}/repos/{owner}/{repo}/git/trees/{branch}?recursive=1")
     if r.status_code == 200:
         return r.json().get("tree", [])
-    if r.status_code == 403:
+    if r.status_code in (403, 429):
         raise RegistryRateLimited()
     return None
 
@@ -361,29 +408,29 @@ async def p_fetch_repo_tree(client: httpx.AsyncClient, owner: str, repo: str) ->
     raise ValueError(f"repo {owner}/{repo} has no resolvable default branch")
 
 
-async def resolve_community_skill(source: str, skill_id: str) -> dict:
-    """Resolve a skills.sh entry (source='owner/repo', skill_id=folder name) to
-    its files via the GitHub trees API. Returns name/description/repo_url plus
-    {relpath: content} and the list of script files. Fetches text only; never
-    runs anything. Raises ValueError on a bad source or a missing skill, and
-    RegistryRateLimited when GitHub's anon API is exhausted."""
-    owner, _, repo = source.partition("/")
-    if not owner or not repo:
-        raise ValueError(f"unrecognized source '{source}' (expected owner/repo)")
-    async with httpx.AsyncClient(timeout=30.0, headers=github_headers()) as client:
-        branch, tree = await p_fetch_repo_tree(client, owner, repo)
-        skill_md, members = select_skill_paths(tree, skill_id)
-        skill_dir = skill_md[: -len("/SKILL.md")] if "/" in skill_md else ""
-        prefix = (skill_dir + "/") if skill_dir else ""
-
-        files: dict[str, str] = {}
-        for p in members:
-            rel = p[len(prefix):] if prefix else p
-            raw = await client.get(f"{P_GH_RAW}/{owner}/{repo}/{branch}/{p}")
-            if raw.status_code == 200:
-                files[rel] = raw.text
-        if "SKILL.md" not in files:
-            raise ValueError("SKILL.md could not be fetched")
+async def p_build_resolved_skill(
+    client: httpx.AsyncClient,
+    owner: str,
+    repo: str,
+    branch: str,
+    skill_dir: str,
+    members: list[str],
+    skill_id: str,
+    version: str,
+) -> dict:
+    """Fetch every member file of a resolved skill folder and assemble the install
+    payload (relpaths, scripts list, secret scan, provenance). Shared by the community
+    and curated resolvers so both install the WHOLE folder identically. Fetches text
+    only; never runs anything. `version` is the folder's tree SHA, the update fingerprint."""
+    prefix = (skill_dir + "/") if skill_dir else ""
+    files: dict[str, str] = {}
+    for p in members:
+        rel = p[len(prefix):] if prefix else p
+        raw = await client.get(f"{P_GH_RAW}/{owner}/{repo}/{branch}/{p}")
+        if raw.status_code == 200:
+            files[rel] = raw.text
+    if "SKILL.md" not in files:
+        raise ValueError("SKILL.md could not be fetched")
 
     meta, p_body = p_parse_frontmatter(files["SKILL.md"])
     # Reuse the .swarm importer's content scan: flag files holding secret-shaped literals (the author's leaked key, or a sketchy skill) so the user sees it before installing from an unvetted repo.
@@ -397,7 +444,53 @@ async def resolve_community_skill(source: str, skill_id: str) -> dict:
         "files": files,
         "scripts": sorted(rel for rel in files if is_script_path(rel)),
         "secret_findings": secret_findings,
+        "source": f"{owner}/{repo}",
+        "folder": skill_dir,
+        "version": version,
     }
+
+
+async def resolve_community_skill(source: str, skill_id: str) -> dict:
+    """Resolve a skills.sh entry (source='owner/repo', skill_id=folder name) to
+    its files via the GitHub trees API. Returns name/description/repo_url plus
+    {relpath: content} and the list of script files. Fetches text only; never
+    runs anything. Raises ValueError on a bad source or a missing skill, and
+    RegistryRateLimited when GitHub's anon API is exhausted."""
+    owner, _, repo = source.partition("/")
+    if not owner or not repo:
+        raise ValueError(f"unrecognized source '{source}' (expected owner/repo)")
+    async with httpx.AsyncClient(timeout=30.0, headers=github_headers()) as client:
+        branch, tree = await p_fetch_repo_tree(client, owner, repo)
+        skill_md, members = select_skill_paths(tree, skill_id)
+        skill_dir = skill_md[: -len("/SKILL.md")] if "/" in skill_md else ""
+        version = p_folder_tree_sha(tree, skill_dir)
+        return await p_build_resolved_skill(client, owner, repo, branch, skill_dir, members, skill_id, version)
+
+
+async def resolve_curated_skill(folder: str) -> dict:
+    """Resolve a curated (anthropics/skills) skill folder to ALL its files via the
+    GitHub trees API, so multi-file curated skills (pdf/docx/pptx scripts, etc.)
+    install whole instead of just their SKILL.md. The exact folder comes from our
+    catalog, so we match it precisely (not by basename). Same payload shape as
+    resolve_community_skill. Raises ValueError if the folder has no SKILL.md and
+    RegistryRateLimited when GitHub's anon API is exhausted."""
+    owner, _, repo = REPO.partition("/")
+    skill_dir = folder.rstrip("/")
+    skill_id = skill_dir.rsplit("/", 1)[-1]
+    prefix = skill_dir + "/"
+    async with httpx.AsyncClient(timeout=30.0, headers=github_headers()) as client:
+        tree = p_curated_tree
+        if not tree:
+            # Cold cache (pre-first-refresh, or a failed/rate-limited warm-up): pay one live tree call this once.
+            tree = await p_tree_at(client, owner, repo, BRANCH)
+            if tree is None:
+                raise ValueError(f"could not read {REPO}@{BRANCH} tree")
+        blobs = p_tree_blob_paths(tree)
+        if (prefix + "SKILL.md") not in blobs:
+            raise ValueError(f"no SKILL.md at '{folder}'")
+        members = [p for p in blobs if p.startswith(prefix)][:P_MAX_SKILL_FILES]
+        version = p_folder_tree_sha(tree, skill_dir)
+        return await p_build_resolved_skill(client, owner, repo, BRANCH, skill_dir, members, skill_id, version)
 
 
 async def p_community_search(q: str, limit: int) -> dict:
@@ -472,6 +565,143 @@ async def registry_install(req: p_InstallRequest):
     skill = write_folder_skill(
         slug,
         resolved["files"],
-        {"name": resolved["name"], "description": resolved["description"]},
+        {
+            "name": resolved["name"], "description": resolved["description"],
+            "source": resolved.get("source", ""), "folder": resolved.get("folder", ""), "version": resolved.get("version", ""),
+        },
     )
     return {"installed": True, "skill": skill.model_dump(), "disclosure": disclosure}
+
+
+class p_CuratedInstallRequest(BaseModel):
+    folder: str
+
+
+@skill_registry.router.post("/install-curated")
+async def registry_install_curated(req: p_CuratedInstallRequest):
+    """Install a curated (anthropics/skills) skill with its FULL folder, not just
+    SKILL.md, so scripts/assets land too (the old path wrote only SKILL.md, which
+    left multi-file skills like pdf/docx with dead script references). Curated is
+    the vetted source, so this is one-click; files are still written inert, never
+    executed. Needs network at install time (the catalog only caches SKILL.md)."""
+    try:
+        resolved = await resolve_curated_skill(req.folder)
+    except RegistryRateLimited:
+        raise HTTPException(status_code=429, detail="GitHub rate limit hit fetching this skill; try again in a few minutes.")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"could not fetch skill: {e}")
+
+    from backend.apps.skills.skills import write_folder_skill, unique_skill_slug
+    slug = unique_skill_slug(resolved["skill_id"])
+    skill = write_folder_skill(
+        slug,
+        resolved["files"],
+        {
+            "name": resolved["name"], "description": resolved["description"],
+            "source": resolved.get("source", ""), "folder": resolved.get("folder", ""), "version": resolved.get("version", ""),
+        },
+    )
+    return {
+        "installed": True,
+        "skill": skill.model_dump(),
+        "files": sorted(resolved["files"].keys()),
+        "scripts": resolved["scripts"],
+    }
+
+
+async def p_safe_repo_tree(source: str):
+    """Recursive tree for a community 'owner/repo', cached briefly and best-effort
+    (None on rate-limit / missing repo) so an updates check never fails the whole
+    list because one repo is unreachable."""
+    now = time.time()
+    hit = p_community_tree_cache.get(source)
+    if hit and now - hit[0] < P_COMMUNITY_TREE_TTL:
+        return hit[1]
+    owner, _, repo = source.partition("/")
+    tree = None
+    if owner and repo:
+        try:
+            async with httpx.AsyncClient(timeout=30.0, headers=github_headers()) as client:
+                p_branch, tree = await p_fetch_repo_tree(client, owner, repo)
+        except Exception:
+            tree = None
+    p_community_tree_cache[source] = (now, tree)
+    return tree
+
+
+@skill_registry.router.get("/updates")
+async def registry_updates():
+    """Which installed skills have a newer version upstream. Curated skills check
+    against the warmed tree (zero API calls); community skills re-fetch their repo
+    tree (best-effort, deduped per repo, cached). A skill with no recorded source
+    (user-created, or installed before versioning) is skipped, not reported."""
+    from backend.apps.skills.skills import sync_skills
+    outdated: list[str] = []
+    checked: list[str] = []
+    unknown: list[str] = []
+    community_trees: dict[str, object] = {}
+    for s in sync_skills():
+        if not s.source or not s.folder or not s.version:
+            continue
+        if s.source == REPO:
+            tree = p_curated_tree
+        else:
+            if s.source not in community_trees:
+                community_trees[s.source] = await p_safe_repo_tree(s.source)
+            tree = community_trees[s.source]
+        if not tree:
+            unknown.append(s.id)
+            continue
+        current = p_folder_tree_sha(tree, s.folder)
+        checked.append(s.id)
+        if current and current != s.version:
+            outdated.append(s.id)
+    return {"outdated": outdated, "checked": checked, "unknown": unknown}
+
+
+class p_UpdateRequest(BaseModel):
+    skill_id: str
+
+
+@skill_registry.router.post("/update")
+async def registry_update(req: p_UpdateRequest):
+    """Re-fetch an installed skill from its recorded source and overwrite it in place,
+    bumping its version. Re-runs the secret scan and returns any findings so the UI can
+    flag a community update that newly ships secrets. A skill with no source (user-made)
+    can't be updated."""
+    from backend.apps.skills.skills import sync_skills, write_folder_skill, p_clear_skill_dir
+    target = next((s for s in sync_skills() if s.id == req.skill_id), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail="skill not found")
+    if not target.source or not target.folder:
+        raise HTTPException(status_code=400, detail="this skill has no upstream source to update from")
+    try:
+        if target.source == REPO:
+            resolved = await resolve_curated_skill(target.folder)
+        else:
+            resolved = await resolve_community_skill(target.source, target.folder.rsplit("/", 1)[-1])
+    except RegistryRateLimited:
+        raise HTTPException(status_code=429, detail="GitHub rate limit hit; try again in a few minutes.")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"could not fetch skill: {e}")
+
+    # Overwrite in place: clear first so files removed upstream don't linger, keep the user's command alias, refresh everything else from source.
+    p_clear_skill_dir(target.id)
+    skill = write_folder_skill(
+        target.id,
+        resolved["files"],
+        {
+            "name": resolved["name"], "description": resolved["description"], "command": target.command,
+            "source": resolved.get("source", ""), "folder": resolved.get("folder", ""), "version": resolved.get("version", ""),
+        },
+    )
+    return {
+        "updated": True,
+        "skill": skill.model_dump(),
+        "scripts": resolved["scripts"],
+        "secret_findings": resolved.get("secret_findings", []),
+    }
