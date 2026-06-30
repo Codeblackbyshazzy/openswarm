@@ -1123,22 +1123,25 @@ const BrowserCard: React.FC<Props> = ({
         </Box>
       </Box>
 
-      {/* Loading indicator */}
-      {(activeLocal.loading || (agentActive && agentAction === 'navigate')) && (
-        <LinearProgress
-          sx={{
-            height: 2,
-            flexShrink: 0,
-            bgcolor: 'transparent',
-            '& .MuiLinearProgress-bar': {
-              bgcolor: agentActive ? accentColor : c.accent.primary,
-            },
-          }}
-        />
-      )}
-
       {/* Browser body: stacked webviews */}
       <Box sx={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        {/* Loading bar is an ABSOLUTE overlay, not an in-flow element: a busy page (Zillow's map fires did-start/stop-loading many times a sec for tiles/ads/XHRs) toggled this on/off, and an in-flow 2px bar shoved the webview down/up each time = visible up/down jitter. As an overlay it never moves layout. */}
+        {(activeLocal.loading || (agentActive && agentAction === 'navigate')) && (
+          <LinearProgress
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              zIndex: 4,
+              height: 2,
+              bgcolor: 'transparent',
+              '& .MuiLinearProgress-bar': {
+                bgcolor: agentActive ? accentColor : c.accent.primary,
+              },
+            }}
+          />
+        )}
         {findOpen && !suspendedSnap && (
           <BrowserFindBar browserId={browserId} focusSignal={findFocusSignal} onClose={() => setFindOpen(false)} />
         )}
