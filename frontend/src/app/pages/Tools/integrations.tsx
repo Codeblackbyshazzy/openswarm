@@ -18,7 +18,8 @@ export interface Integration {
   credentialFields?: CredentialField[];
   connectLabel?: string;
   connectInstructions?: string;
-  authType?: 'none' | 'oauth2' | 'env_vars' | 'device_code';
+  authType?: 'none' | 'oauth2' | 'env_vars' | 'device_code' | 'browser_login';
+  loginUrl?: string;
 }
 
 export const INTEGRATIONS: Integration[] = [
@@ -29,6 +30,9 @@ export const INTEGRATIONS: Integration[] = [
     mcp_config: { type: 'stdio', command: 'python', args: ['-m', 'backend.apps.x_mcp_shim'] },
     color: '#000000',
     website: 'https://x.com',
+    authType: 'browser_login',
+    connectLabel: 'Sign in to X',
+    loginUrl: 'https://x.com/i/flow/login',
     connectInstructions: 'Uses your own X account: open x.com in an OpenSwarm browser card and sign in once. Nothing is stored, the integration borrows your live session per request and paces itself to stay within human limits.',
     icon: (
       <svg viewBox="0 0 24 24" width="20" height="20">
@@ -43,6 +47,9 @@ export const INTEGRATIONS: Integration[] = [
     mcp_config: { type: 'stdio', command: 'python', args: ['-m', 'backend.apps.tiktok_mcp_shim'] },
     color: '#FE2C55',
     website: 'https://www.tiktok.com',
+    authType: 'browser_login',
+    connectLabel: 'Sign in to TikTok',
+    loginUrl: 'https://www.tiktok.com/login',
     connectInstructions: 'Uses your own TikTok account: open tiktok.com in an OpenSwarm browser card and sign in once. Nothing is stored. Note: TikTok signs every request, so signed writes and uploads route to the OpenSwarm browser agent (also free, using your real session).',
     icon: (
       <svg viewBox="0 0 24 24" width="20" height="20">
@@ -57,6 +64,9 @@ export const INTEGRATIONS: Integration[] = [
     mcp_config: { type: 'stdio', command: 'python', args: ['-m', 'backend.apps.reddit_mcp_shim'] },
     color: '#FF4500',
     website: 'https://www.reddit.com',
+    authType: 'browser_login',
+    connectLabel: 'Sign in to Reddit',
+    loginUrl: 'https://www.reddit.com/login',
     connectInstructions: 'Uses your own Reddit account: open reddit.com in an OpenSwarm browser card and sign in once. Nothing is stored, the integration borrows your live session per request and paces itself to stay within human limits.',
     icon: (
       <svg viewBox="0 0 24 24" width="22" height="22">

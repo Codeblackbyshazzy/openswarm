@@ -498,6 +498,15 @@ async def browser_agent_run(request: Request):
 # Allowlisted social platforms whose own-session MCP shims may borrow partition cookies. The allowlist is the real scope: even an authenticated localhost caller can only ever read these sites' cookies, never an arbitrary domain, so this can't become a general cookie-theft oracle.
 P_SESSION_COOKIE_DOMAINS = {"reddit.com", "x.com", "twitter.com", "tiktok.com"}
 
+# Per-domain "you're actually logged in" cookie(s). Presence of any = signed in; we check the
+# real session cookie, not just any cookie, so a logged-out visit doesn't read as connected.
+P_SESSION_AUTH_COOKIES = {
+    "reddit.com": ("reddit_session", "token_v2"),
+    "x.com": ("auth_token",),
+    "twitter.com": ("auth_token",),
+    "tiktok.com": ("sessionid", "sessionid_ss"),
+}
+
 
 @app.get("/api/browser-session/cookies")
 async def browser_session_cookies(domain: str = ""):
@@ -515,6 +524,26 @@ async def browser_session_cookies(domain: str = ""):
     if result.get("error"):
         return JSONResponse({"error": result["error"], "cookies": []})
     return JSONResponse({"cookies": result.get("cookies", []), "userAgent": result.get("userAgent", "")})
+
+
+@app.get("/api/browser-session/status")
+async def browser_session_status(domain: str = ""):
+    """Report whether the user is signed in to a vetted platform (has its real session cookie).
+
+    Drives the Actions-page 'Signed in / Not signed in' indicator for the session-borrow MCPs.
+    Same walls as the cookie bridge (auth middleware + allowlist); returns only a boolean, never
+    the cookies themselves.
+    """
+    d = (domain or "").lower().strip().lstrip(".")
+    if d not in P_SESSION_COOKIE_DOMAINS:
+        return JSONResponse({"error": f"domain not allowed: {d or '(empty)'}", "connected": False}, status_code=400)
+    rid = uuid4().hex
+    result = await ws_manager.send_browser_command(rid, "get_session_cookies", "", {"domain": d})
+    if result.get("error"):
+        return JSONResponse({"connected": False, "error": result["error"]})
+    wanted = P_SESSION_AUTH_COOKIES.get(d, ())
+    names = {c.get("name") for c in result.get("cookies", []) if c.get("value")}
+    return JSONResponse({"connected": any(n in names for n in wanted), "domain": d})
 
 
 @app.post("/api/browser-session/action")
