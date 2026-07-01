@@ -77,6 +77,22 @@ export function findBrowserByWebContentsId(wcId: number): string | undefined {
   return undefined;
 }
 
+// Find the live webview currently on `domain` (e.g. tiktok.com). The session-borrow shims use
+// this to drive the user's own already-open, logged-in card for that site, resolving by the
+// LIVE url (not a stale persisted card.url) so the action lands on the real tab.
+export function findWebviewByDomain(domain: string): BrowserWebview | undefined {
+  const d = domain.toLowerCase().replace(/^\./, '');
+  for (const wv of registry.values()) {
+    try {
+      const host = new URL(wv.getURL()).hostname.toLowerCase();
+      if (host === d || host.endsWith('.' + d)) return wv;
+    } catch {
+      // about:blank or a torn-down webview has no parseable URL; skip it.
+    }
+  }
+  return undefined;
+}
+
 // True if ANY registered webview is mid-navigation. Capturing the dashboard (which composites live webview pixels) while a webview's GPU surface is being recycled crashes the renderer (SharedImage 'non-existent mailbox' -> V8 ToLocalChecked), so the thumbnail capture must wait until they've settled.
 export function anyWebviewLoading(): boolean {
   for (const wv of registry.values()) {

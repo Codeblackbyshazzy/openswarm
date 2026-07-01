@@ -517,6 +517,28 @@ async def browser_session_cookies(domain: str = ""):
     return JSONResponse({"cookies": result.get("cookies", []), "userAgent": result.get("userAgent", "")})
 
 
+@app.post("/api/browser-session/action")
+async def browser_session_action(request: Request):
+    """Drive a vetted platform's own live browser card (navigate + JS) for its MCP shim's writes.
+
+    Same trust posture as the cookie bridge: localhost-token-gated (middleware) + the same
+    domain allowlist, and the renderer only ever runs the steps against a card the user
+    already has open on that domain (resolved by the webview's live URL; no such card, no
+    action). So an authenticated localhost caller can only drive these vetted sites' own
+    logged-in tabs, never an arbitrary origin.
+    """
+    body = await request.json()
+    d = (body.get("domain") or "").lower().strip().lstrip(".")
+    if d not in P_SESSION_COOKIE_DOMAINS:
+        return JSONResponse({"error": f"domain not allowed: {d or '(empty)'}"}, status_code=400)
+    steps = body.get("steps")
+    if not isinstance(steps, list) or not steps:
+        return JSONResponse({"error": "steps (a non-empty list) is required"}, status_code=400)
+    rid = uuid4().hex
+    result = await ws_manager.send_browser_command(rid, "perform_action", "", {"domain": d, "steps": steps})
+    return JSONResponse(result)
+
+
 @app.post("/api/mcp-meta/{action}")
 async def mcp_meta(action: str, request: Request):
     """Back the openswarm-mcp-meta stdio MCP server.
