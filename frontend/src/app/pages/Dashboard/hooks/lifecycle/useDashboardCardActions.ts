@@ -65,7 +65,7 @@ export function useDashboardCardActions({
       }
       const card = viewCards[focusKey];
       if (card) {
-        canvasActions.fitToCards([{ x: card.x, y: card.y, width: card.width, height: card.height }], 1.15, true);
+        canvasActions.fitToCards([{ x: card.x, y: card.y, width: card.width, height: card.height }], 1.15, true, undefined, true);
         handleHighlightCard(focusKey);
       }
     }, 200);
@@ -73,19 +73,10 @@ export function useDashboardCardActions({
 
   const handleAddBrowser = useCallback(() => {
     report('dashboard', 'browser_added');
-    const prevIds = new Set(Object.keys(store.getState().dashboardLayout.browserCards));
+    // Camera focus + highlight are handled by the pendingFocusBrowserId effect (useDashboardLifecycle), which fires for browsers from every path (toolbar, link clicks). Doing it here too would double-fit and fight that effect's zoom.
     const pos = getSpawnPlacement(DEFAULT_BROWSER_CARD_W, DEFAULT_BROWSER_CARD_H);
     dispatch(addBrowserCard({ url: browserHomepage, expandedSessionIds, x: pos.x, y: pos.y }));
-    setTimeout(() => {
-      const allBrowserCards = store.getState().dashboardLayout.browserCards;
-      const newId = Object.keys(allBrowserCards).find((id) => !prevIds.has(id));
-      if (newId) {
-        const card = allBrowserCards[newId];
-        canvasActions.fitToCards([{ x: card.x, y: card.y, width: card.width, height: card.height }], 1.15, true);
-        handleHighlightCard(newId);
-      }
-    }, 200);
-  }, [dispatch, browserHomepage, expandedSessionIds, getSpawnPlacement, canvasActions, handleHighlightCard]);
+  }, [dispatch, browserHomepage, expandedSessionIds, getSpawnPlacement]);
 
   const handleAddNote = useCallback(() => {
     report('dashboard', 'note_added');
@@ -97,7 +88,7 @@ export function useDashboardCardActions({
       const newId = Object.keys(allNotes).find((id) => !prevIds.has(id));
       if (newId) {
         const note = allNotes[newId];
-        canvasActions.fitToCards([{ x: note.x, y: note.y, width: note.width, height: note.height }], 1.15, true);
+        canvasActions.fitToCards([{ x: note.x, y: note.y, width: note.width, height: note.height }], 1.15, true, undefined, true);
         handleHighlightCard(newId);
       }
     }, 200);

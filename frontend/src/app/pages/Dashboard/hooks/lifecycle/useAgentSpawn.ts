@@ -13,6 +13,7 @@ import {
 import {
   placeCard,
   removeCard,
+  setCardPosition,
   setGlowingAgentCard,
   setGlowingBrowserCards,
   clearGlowingBrowserCards,
@@ -144,8 +145,8 @@ export function useAgentSpawn({
 
       // Toolbar position in canvas coords drives the spawn-from-toolbar grow animation.
       let origin: SpawnOrigin | null = null;
-      // Where the chat lands: beside the selected card, else in front of the viewport. Feeds the optimistic placement below, replacing the legacy toolbar-position anchor.
-      const spawnPos = getSpawnPlacement(DEFAULT_CARD_W, DEFAULT_CARD_H);
+      // Where the chat lands: beside the selected card, else in front of the viewport. Feeds the optimistic placement below, replacing the legacy toolbar-position anchor. Center on the height it will RENDER at (expanded chats are tall) so it lands vertically centered, not high-biased.
+      const spawnPos = getSpawnPlacement(DEFAULT_CARD_W, expandNewChats ? EXPANDED_CARD_MIN_H : DEFAULT_CARD_H);
       const toolbarEl = toolbarRef.current;
       const vpEl = viewportRef.current;
       if (toolbarEl && vpEl) {
@@ -176,6 +177,8 @@ export function useAgentSpawn({
       const anchorX = browserAnchor ? browserAnchor.x - DEFAULT_CARD_W - GRID_GAP * 12 : spawnPos.x;
       const anchorY = browserAnchor ? browserAnchor.y : spawnPos.y;
       dispatch(placeCard({ sessionId: draftId, x: anchorX, y: anchorY, width: DEFAULT_CARD_W, height: cardHeight, expandedSessionIds }));
+      // placeCard grid-snaps + collision-dodges, drifting the card off the resolved spawn point. Pin it back for the viewport-center / beside-card cases so it lands dead-center as intended; the single-browser dock keeps the dodge so it cascades off an occupied slot.
+      if (!browserAnchor) dispatch(setCardPosition({ sessionId: draftId, x: anchorX, y: anchorY }));
       if (expandNewChats) {
         dispatch(expandSession(draftId));
         setAutoFocusSessionId(draftId);
@@ -197,7 +200,7 @@ export function useAgentSpawn({
             if (bc) rects.push({ x: bc.x, y: bc.y, width: bc.width, height: bc.height });
           }
         }
-        canvasActions.fitToCards(rects, 1.15, true);
+        canvasActions.fitToCards(rects, 1.15, true, undefined, true);
         handleHighlightCard(draftId);
       }
 
@@ -220,7 +223,7 @@ export function useAgentSpawn({
         if (launchAndSendFirstMessage.fulfilled.match(action)) {
           const realId = action.payload.session.id;
           dispatch(generateTitle({ sessionId: realId, prompt }));
-          // Re-point focus/selection at the rekeyed real card; the draft id is gone after the in-place swap. The browser tether rekeys with the card in the dashboardLayout extraReducer. Placement already happened optimistically at spawn (spawnPos / browserAnchor), so there's nothing to re-place here.
+          // Re-point focus/selection at the rekeyed real card; the draft id is gone after the in-place swap. The browser tether rekeys with the card in the dashboardLayout extraReducer. Placement + centered fit already happened optimistically at spawn (spawnPos / browserAnchor), so there's nothing to re-place here.
           if (expandNewChats) setAutoFocusSessionId(realId);
           else setPendingSelectSessionId(realId);
 

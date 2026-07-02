@@ -227,6 +227,7 @@ export function useDashboardLifecycle({
           1.15,
           true,
           0.8,
+          true,
         );
         handleHighlightCard(browserId);
       }

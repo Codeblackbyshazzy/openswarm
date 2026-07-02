@@ -469,7 +469,7 @@ export function placeInParentColumn(
   return placeBesideCard(state, parentCard, newW, newH, expandedSessionIds, exclude);
 }
 
-// Where a user-created card (chat/app/browser/note) should land. Resolved in the UI layer where selection + viewport are known, then handed to the add reducers as an explicit x/y. `beside` (the currently selected card) docks the new card to its right, stacking under that column; `viewportCenter` (canvas-space center of what the user is looking at) drops it "in front of you". Both collision-dodge; with neither, falls back to the legacy top-left grid scan.
+// Where a user-created card (chat/app/browser/note) should land. Resolved in the UI layer where selection + viewport are known, then handed to the add reducers as an explicit x/y. `beside` (the currently selected card) docks the new card to its right, stacking under that column (collision-aware); `viewportCenter` (canvas-space center of what the user is looking at) drops it dead-center "in front of you", overlapping whatever's there. With neither, falls back to the legacy top-left grid scan.
 export interface SpawnAnchor {
   beside?: { x: number; y: number; width: number; height: number };
   viewportCenter?: { x: number; y: number };
@@ -485,11 +485,11 @@ export function computeSpawnPosition(
   if (anchor.beside) {
     return placeBesideCard(state, anchor.beside, newW, newH, expandedSessionIds);
   }
-  const rects = collectOccupiedRects(state, expandedSessionIds);
   if (anchor.viewportCenter) {
-    return findOpenSpotNear(anchor.viewportCenter.x - newW / 2, anchor.viewportCenter.y - newH / 2, rects, newW, newH);
+    // Land dead-center, "in front of you", even if a card is already there. Overlap is intentional (new card sits on top via its higher zOrder); dodging to free space is exactly the "spawned off to the side" behavior we're removing.
+    return { x: anchor.viewportCenter.x - newW / 2, y: anchor.viewportCenter.y - newH / 2 };
   }
-  return findOpenGridCell(rects, newW, newH);
+  return findOpenGridCell(collectOccupiedRects(state, expandedSessionIds), newW, newH);
 }
 
 // Reconnect-refetch merge: ADD only the cards the snapshot carries that the client is missing (e.g. a spawned browser whose broadcast was lost in a socket gap), collision-resolving each against the live layout so a recovered card can't land on a card already on canvas, and NEVER touch a card the client already has (that's exactly what preserves its live, collision-placed position). The shared `occupied` list carries placements forward so two recovered cards in the same pass also avoid each other.
