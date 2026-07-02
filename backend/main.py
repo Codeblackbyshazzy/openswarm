@@ -363,6 +363,23 @@ async def websocket_dashboard(websocket: WebSocket):
         ws_manager.disconnect_global(websocket)
 
 
+@app.websocket("/ws/electron-main")
+async def websocket_electron_main(websocket: WebSocket):
+    """The Electron MAIN process (not the renderer) attaches here to serve partition-cookie
+    reads for the session-borrow bridge. Main doesn't throttle when the window is backgrounded,
+    so cookie reads over this socket don't hit the renderer's intermittent-timeout problem."""
+    if not p_ws_auth_ok(websocket):
+        return
+    await ws_manager.connect_main(websocket)
+    try:
+        while True:
+            msg = json.loads(await websocket.receive_text())
+            if msg.get("event") == "browser:result":
+                ws_manager.resolve_browser_command(msg.get("data", {}).get("request_id", ""), msg.get("data", {}))
+    except WebSocketDisconnect:
+        ws_manager.disconnect_main(websocket)
+
+
 @app.get("/api/dev/token")
 async def dev_token():
     """Hand the per-install token to the dev frontend, which has no Electron
@@ -508,19 +525,28 @@ P_SESSION_AUTH_COOKIES = {
 }
 
 
+async def p_read_session_cookies(domain: str) -> dict:
+    """Read a vetted platform's live partition cookies. Prefers the Electron MAIN bridge
+    (throttle-free) and falls back to the renderer when main hasn't attached or can't answer."""
+    if ws_manager.main_connection is not None:
+        result = await ws_manager.send_main_command(uuid4().hex, "get_session_cookies", {"domain": domain})
+        if not result.get("error"):
+            return result
+    return await ws_manager.send_browser_command(uuid4().hex, "get_session_cookies", "", {"domain": domain})
+
+
 @app.get("/api/browser-session/cookies")
 async def browser_session_cookies(domain: str = ""):
     """Hand a vetted platform's live partition cookies + UA to its own-session MCP shim.
 
     Auth is the standard localhost token (middleware). Cookies are read live from
-    Electron's persist:openswarm-browser partition via the dashboard bridge and are
-    never persisted server-side; the shim talks to the site as the user's browser.
+    Electron's persist:openswarm-browser partition and are never persisted server-side;
+    the shim talks to the site as the user's browser.
     """
     d = (domain or "").lower().strip().lstrip(".")
     if d not in P_SESSION_COOKIE_DOMAINS:
         return JSONResponse({"error": f"domain not allowed: {d or '(empty)'}", "cookies": []}, status_code=400)
-    rid = uuid4().hex
-    result = await ws_manager.send_browser_command(rid, "get_session_cookies", "", {"domain": d})
+    result = await p_read_session_cookies(d)
     if result.get("error"):
         return JSONResponse({"error": result["error"], "cookies": []})
     return JSONResponse({"cookies": result.get("cookies", []), "userAgent": result.get("userAgent", "")})
@@ -537,8 +563,7 @@ async def browser_session_status(domain: str = ""):
     d = (domain or "").lower().strip().lstrip(".")
     if d not in P_SESSION_COOKIE_DOMAINS:
         return JSONResponse({"error": f"domain not allowed: {d or '(empty)'}", "connected": False}, status_code=400)
-    rid = uuid4().hex
-    result = await ws_manager.send_browser_command(rid, "get_session_cookies", "", {"domain": d})
+    result = await p_read_session_cookies(d)
     if result.get("error"):
         return JSONResponse({"connected": False, "error": result["error"]})
     wanted = P_SESSION_AUTH_COOKIES.get(d, ())

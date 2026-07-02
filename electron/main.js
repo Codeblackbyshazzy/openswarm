@@ -1078,6 +1078,7 @@ function markBackendReady() {
     workflowsLifecycle.setBackend({ port: backendPort, token: authToken });
     workflowsLifecycle.startPolling();
   } catch (_) {}
+  try { connectMainBridge(); } catch (_) {}
 }
 
 function getAuthTokenFilePath() {
@@ -2778,7 +2779,7 @@ ipcMain.handle('browser:clear-data', async () => {
 
 // Hand the user's own logged-in cookies for a vetted social platform to its session-backed MCP shim (Reddit/X/TikTok). Reads from the browser partition's main-process cookie store, so httpOnly auth cookies (e.g. reddit_session) are included, which document.cookie can't see. Allowlisted domains ONLY, so this can never become a general cookie-theft surface; the backend re-checks the same allowlist before it ever calls this.
 const SESSION_COOKIE_DOMAINS = ['reddit.com', 'x.com', 'twitter.com', 'tiktok.com'];
-ipcMain.handle('get-partition-cookies', async (_e, domain) => {
+async function readPartitionCookies(domain) {
   const d = String(domain || '').toLowerCase().trim().replace(/^\./, '');
   if (!SESSION_COOKIE_DOMAINS.includes(d)) {
     return { cookies: [], userAgent: '', error: `domain not allowed: ${d || '(empty)'}` };
@@ -2795,7 +2796,38 @@ ipcMain.handle('get-partition-cookies', async (_e, domain) => {
   } catch (err) {
     return { cookies: [], userAgent: '', error: `cookie read failed: ${err && err.message}` };
   }
-});
+}
+ipcMain.handle('get-partition-cookies', (_e, domain) => readPartitionCookies(domain));
+
+// The renderer relays cookie reads for the session-borrow bridge, but macOS throttles it when the
+// window is backgrounded, so those reads intermittently time out. Main never throttles: hold our own
+// socket to the backend and answer get_session_cookies here. Cookie reads only; the renderer still
+// owns everything that needs a live webview (navigate/click/perform_action).
+let p_mainBridgeWs = null;
+let p_mainBridgeStopped = false;
+function connectMainBridge() {
+  if (p_mainBridgeStopped || !backendPort || !authToken || p_mainBridgeWs) return;
+  let ws;
+  try {
+    ws = new WebSocket(`ws://127.0.0.1:${backendPort}/ws/electron-main?token=${encodeURIComponent(authToken)}`);
+  } catch (_) {
+    setTimeout(connectMainBridge, 3000);
+    return;
+  }
+  p_mainBridgeWs = ws;
+  ws.addEventListener('message', async (ev) => {
+    let msg;
+    try { msg = JSON.parse(typeof ev.data === 'string' ? ev.data : ''); } catch (_) { return; }
+    if (!msg || msg.event !== 'browser:command') return;
+    const cmd = msg.data || {};
+    if (cmd.action !== 'get_session_cookies') return;
+    const result = await readPartitionCookies((cmd.params && cmd.params.domain) || '');
+    try { ws.send(JSON.stringify({ event: 'browser:result', data: { request_id: cmd.request_id, ...result } })); } catch (_) {}
+  });
+  const retry = () => { p_mainBridgeWs = null; if (!p_mainBridgeStopped) setTimeout(connectMainBridge, 3000); };
+  ws.addEventListener('close', retry);
+  ws.addEventListener('error', () => { try { ws.close(); } catch (_) { retry(); } });
+}
 
 ipcMain.handle('get-update-status', () => cachedUpdateStatus);
 

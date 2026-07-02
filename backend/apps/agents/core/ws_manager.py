@@ -46,6 +46,8 @@ class ConnectionManager:
         self.active_dashboard_id: Optional[str] = None
         self.pending_futures: dict[str, asyncio.Future] = {}
         self.browser_futures: dict[str, asyncio.Future] = {}
+        # The Electron MAIN process (not the renderer) holds a single WS here. Cookie reads route to it so they don't ride the renderer, which macOS throttles when the window is backgrounded (the source of the session-borrow bridge's intermittent timeouts).
+        self.main_connection: Optional[WebSocket] = None
 
     async def connect_session(self, session_id: str, websocket: WebSocket):
         await websocket.accept()
@@ -56,6 +58,15 @@ class ConnectionManager:
     async def connect_global(self, websocket: WebSocket):
         await websocket.accept()
         self.global_connections.append(websocket)
+
+    async def connect_main(self, websocket: WebSocket):
+        """Register the single Electron-main bridge socket (replaces any stale prior one)."""
+        await websocket.accept()
+        self.main_connection = websocket
+
+    def disconnect_main(self, websocket: WebSocket):
+        if self.main_connection is websocket:
+            self.main_connection = None
 
     def disconnect_session(self, session_id: str, websocket: WebSocket):
         if session_id in self.connections:
@@ -213,11 +224,15 @@ class ConnectionManager:
     async def broadcast_global(self, event: str, data: dict):
         """Send to all dashboard connections; bypasses seq_log (dashboard resumes via full state refetch)."""
         payload = json.dumps({"event": event, "data": data})
+        dead: list[WebSocket] = []
         for ws in list(self.global_connections):
             try:
                 await ws.send_text(payload)
             except Exception:
-                pass
+                dead.append(ws)
+        # A renderer that reloaded without a clean close leaves a half-open socket here; a browser command broadcast into it is lost forever (the future then times out). Drop any socket that fails a send so the next command only targets live renderers.
+        for ws in dead:
+            self.disconnect_global(ws)
 
     async def send_approval_request(
         self, session_id: str, request_id: str, tool_name: str, tool_input: dict,
@@ -290,6 +305,27 @@ class ConnectionManager:
                 )
                 if done:
                     return future.result()
+        finally:
+            self.browser_futures.pop(request_id, None)
+
+    async def send_main_command(self, request_id: str, action: str, params: dict) -> dict:
+        """Send a command straight to the throttle-free Electron MAIN socket (cookie reads only); returns a not-connected error so the caller can fall back to the renderer."""
+        ws = self.main_connection
+        if ws is None:
+            return {"error": "Electron main bridge not connected"}
+        loop = asyncio.get_event_loop()
+        future = loop.create_future()
+        self.browser_futures[request_id] = future
+        payload = {"request_id": request_id, "action": action, "browser_id": "", "tab_id": "", "params": params}
+        try:
+            await ws.send_text(json.dumps({"event": "browser:command", "data": payload}))
+            done, _ = await asyncio.wait({future}, timeout=BROWSER_CMD_TIMEOUTS.get(action, BROWSER_CMD_TIMEOUT_DEFAULT))
+            if done:
+                return future.result()
+            return {"error": "Electron main bridge timed out"}
+        except Exception as e:
+            self.disconnect_main(ws)
+            return {"error": f"Electron main bridge send failed: {e}"}
         finally:
             self.browser_futures.pop(request_id, None)
 
