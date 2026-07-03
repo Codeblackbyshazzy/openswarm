@@ -204,8 +204,8 @@ class RunOptions(AgentManagerProtocol):
         # claude.ai partner MCPs (Notion/Google/Gmail). We already hard-block their tools just below,
         # but the CLI still spawned+connected them every turn (~1.5s of pure dead-weight TTFT, measured).
         # Our builtins + any MCPActivate'd server go through mcp_servers, so they're unaffected; this
-        # only stops the already-blocked account MCPs from booting. Kill switch: OSW_TTFT_STRICT_MCP=0.
-        if os.environ.get("OSW_TTFT_STRICT_MCP", "1") != "0":
+        # only stops the already-blocked account MCPs from booting. Kill switch: OPENSWARM_STRICT_MCP=0.
+        if os.environ.get("OPENSWARM_STRICT_MCP", "1") != "0":
             p_ea = dict(options_kwargs.get("extra_args") or {})
             p_ea["strict-mcp-config"] = None
             options_kwargs["extra_args"] = p_ea
