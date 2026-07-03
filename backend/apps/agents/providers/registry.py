@@ -112,10 +112,7 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
         {"value": "gemini-3.1-flash-lite", "label": "Gemini 3.1 Flash Lite",
          "context_window": 1_000_000, "router_model_id": "gc/gemini-3.1-flash-lite-preview",
          "api": "gemini-cli", "subscription_only": True, "reasoning": True},
-        # gemini-3-pro removed: gemini-3-pro-preview was shut down 2026-03-09 (dead on both the direct API and the Gemini CLI backend). gemini-3-flash kept: it's superseded on the direct API but still serves on the CLI subscription route.
-        {"value": "gemini-3-flash", "label": "Gemini 3 Flash",
-         "context_window": 1_000_000, "router_model_id": "gc/gemini-3-flash-preview",
-         "api": "gemini-cli", "subscription_only": True, "reasoning": True},
+        # gemini-3-pro removed 2026-03-09 and gemini-3-flash removed 2026-07-03: gemini-3-flash-preview aged out upstream (API-key route hangs with no fail-fast; only an Antigravity sub still masked it). 3.5-flash / 3.1-flash-lite cover the slots.
         # API-key entries: bypass 9Router, call generativelanguage.googleapis.com.
         {"value": "gemini-3.5-flash-api", "label": "Gemini 3.5 Flash (API key)",
          "context_window": 1_000_000, "router_model_id": "gemini-3.5-flash", "model_id": "gemini-3.5-flash",
@@ -248,8 +245,7 @@ def resolve_model_id_for_sdk(short_name: str, settings: AppSettings) -> str:
             return entry.get("model_id", short_name)
     # Gemini lane order: Antigravity OAuth (for the models it serves), then AI Studio apikey, then Gemini CLI. AG bypasses the thoughtSignature validator that breaks multi-step Gemini turns AND supports real reasoning, so a connected AG sub is preferred over the AI Studio key, which otherwise silently shadowed it. The map is AG's allowlist; pro variants 404/400 on AG and are deliberately absent, so they fall through to the key.
     P_ANTIGRAVITY_MAP = {
-        # gemini-3-pro-preview disabled: AG returns 404 even with active conn. gemini-3.1-pro-preview disabled: AG's `gemini-3.1-pro-high` variant 400s every request with "invalid argument" (the `-high` thinking- budget alias on AG requires a thinking_config the CLI doesn't emit). Falls through to the AI Studio key / gc/ instead.
-        "gemini-3-flash-preview": "gemini-3-flash",
+        # gemini-3-pro-preview disabled: AG returns 404 even with active conn. gemini-3.1-pro-preview disabled: AG's `gemini-3.1-pro-high` variant 400s every request with "invalid argument" (the `-high` thinking- budget alias on AG requires a thinking_config the CLI doesn't emit). Falls through to the AI Studio key / gc/ instead. gemini-3-flash-preview key dropped with its registry entry (aged out upstream).
         "gemini-3.1-flash-lite-preview": "gemini-3-flash",
     }
     if entry.get("api") == "gemini-cli":

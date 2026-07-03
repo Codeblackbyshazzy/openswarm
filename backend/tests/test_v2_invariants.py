@@ -555,15 +555,15 @@ def test_resolve_sdk_gemini_prefers_antigravity_over_api_key():
     s = AppSettings()
     s.google_api_key = "ai-studio-key"
     with patch.object(registry, "p_antigravity_connected", return_value=True):
-        # flash IS AG-serveable -> AG wins over the key
-        assert registry.resolve_model_id_for_sdk("gemini-3-flash", s) == "ag/gemini-3-flash"
+        # flash-lite IS AG-serveable -> AG wins over the key (probe retargeted after gemini-3-flash was removed)
+        assert registry.resolve_model_id_for_sdk("gemini-3.1-flash-lite", s) == "ag/gemini-3-flash"
     with patch.object(registry, "p_antigravity_connected", return_value=False):
         # AG not connected -> key
-        assert registry.resolve_model_id_for_sdk("gemini-3-flash", s) == "gemini/gemini-3-flash-preview"
+        assert registry.resolve_model_id_for_sdk("gemini-3.1-flash-lite", s) == "gemini/gemini-3.1-flash-lite-preview"
     # No key, no AG -> gc/ subscription lane untouched
     s2 = AppSettings()
     with patch.object(registry, "p_antigravity_connected", return_value=False):
-        assert registry.resolve_model_id_for_sdk("gemini-3-flash", s2) == "gc/gemini-3-flash-preview"
+        assert registry.resolve_model_id_for_sdk("gemini-3.1-flash-lite", s2) == "gc/gemini-3.1-flash-lite-preview"
 
 
 def test_error_classify_schema_translation_400_is_not_auth():
