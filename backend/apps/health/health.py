@@ -13,7 +13,6 @@ health = SubApp("health", health_lifespan)
 @health.router.get("/check")
 @typechecked
 async def check() -> PlainTextResponse:
-    debug("Health check successful")
     return PlainTextResponse(
         content="OK", 
         status_code=status.HTTP_200_OK,
