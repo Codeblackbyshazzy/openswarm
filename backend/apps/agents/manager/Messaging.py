@@ -17,7 +17,6 @@ from backend.apps.agents.manager.session.session_store import load_session_data
 from backend.apps.agents.manager.session.apply_context_window import apply_context_window
 from backend.apps.agents.manager.prompt.tool_catalog import get_all_tool_names
 from backend.apps.agents.manager.prompt.prompt_context import resolve_mode
-from backend.apps.agents.manager.ttft_probe import ttft_probe
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +44,6 @@ class Messaging(AgentManagerProtocol):
         client_message_id: Optional[str] = None,
     ):
         """Send a follow-up message to an existing session."""
-        ttft_probe(session_id, "msg_received")
         session = self.sessions.get(session_id)
         if not session:
             data = load_session_data(session_id)

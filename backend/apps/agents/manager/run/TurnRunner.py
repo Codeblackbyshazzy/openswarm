@@ -16,7 +16,6 @@ from backend.apps.agents.manager.streaming.state import ThinkingState, TurnState
 from backend.apps.agents.manager.streaming.handle_stream_event import handle_stream_event
 from backend.apps.agents.manager.streaming.handle_assistant_message import handle_assistant_message
 from backend.apps.agents.manager.streaming.handle_result_message import handle_result_message
-from backend.apps.agents.manager.ttft_probe import ttft_probe
 from backend.apps.agents.manager.run.client_pool import (
     acquire_client,
     boot_fingerprint,
@@ -42,7 +41,6 @@ class TurnRunner(AgentManagerProtocol):
                                     global_settings: AppSettings, force_respawn: bool = False) -> None:
         from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, ResultMessage
         from claude_agent_sdk.types import StreamEvent, SystemMessage
-        ttft_probe(session_id, "query_enter")
 
         async def prompt_stream():
             yield {
@@ -94,7 +92,6 @@ class TurnRunner(AgentManagerProtocol):
                             logger.exception("pre-emit thinking pill failed; continuing")
 
                 if turn.first_event:
-                    ttft_probe(session_id, "first_event", type=type(message).__name__)
                     logger.info(f"[MCP-DEBUG] First event received: {type(message).__name__}")
                     turn.first_event = False
 
@@ -113,7 +110,6 @@ class TurnRunner(AgentManagerProtocol):
                         message, session, session_id, turn, thinking, self.live_partial, self.sessions
                     )
                 elif isinstance(message, ResultMessage):
-                    ttft_probe(session_id, "result", chars=turn.assistant_text_chars)
                     await handle_result_message(
                         message, session, session_id, turn, thinking, self.sessions,
                         resolved_model, api_type, global_settings,

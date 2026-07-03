@@ -45,7 +45,8 @@ def boot_fingerprint(options_kwargs: Dict, session: AgentSession) -> str:
     frozen = {k: v for k, v in options_kwargs.items() if k not in P_NON_BOOT_KEYS}
     frozen["p_branch"] = session.active_branch_id
     frozen["p_compacted_through"] = session.compacted_through_msg_id
-    if os.environ.get("OSW_TTFT_PROBE") == "1":
+    # Pool diagnostics (OPENSWARM_POOL_DIAG=1): on a respawn, names WHICH boot field drifted; the tool for debugging respawn churn (e.g. the thinking short/long-prompt flip) in the field.
+    if os.environ.get("OPENSWARM_POOL_DIAG") == "1":
         digests = {k: hashlib.sha256(json.dumps(v, sort_keys=True, default=str).encode()).hexdigest()[:10] for k, v in frozen.items()}
         prev = p_last_field_digests.get(session.id)
         if prev is not None:

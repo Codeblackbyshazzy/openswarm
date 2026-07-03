@@ -14,7 +14,6 @@ from backend.apps.agents.core.models import AgentSession
 from backend.apps.agents.core.ws_manager import ws_manager
 from backend.apps.agents.manager.streaming.state import ThinkingState, TurnState
 from backend.apps.agents.manager.streaming.PartialReply import PartialReply
-from backend.apps.agents.manager.ttft_probe import ttft_probe
 
 try:
     from claude_agent_sdk.types import StreamEvent
@@ -45,7 +44,6 @@ async def handle_stream_event(
 
         if block_type == "text":
             if turn.stream_text_msg_id is None:
-                ttft_probe(session_id, "first_text_block")
                 turn.stream_text_msg_id = uuid4().hex
                 await ws_manager.send_to_session(session_id, "agent:stream_start", {
                     "session_id": session_id,
@@ -56,8 +54,6 @@ async def handle_stream_event(
 
         elif block_type == "thinking":
             # Reasoning trace from thinking-capable models (GPT-5.3 Codex, Gemini 3 Pro/Flash, Claude with extended thinking). Rendered as a collapsible "thinking" message in the UI via the existing stream infrastructure, the frontend already handles role="thinking" for the DynamicIsland/agent card rendering.
-            if not thinking.block_starts:
-                ttft_probe(session_id, "first_thinking_block")
             thinking_msg_id = uuid4().hex
             turn.stream_block_index_map[index] = thinking_msg_id
             # Server-stamp start so we can accumulate per-turn elapsed_ms across multiple thinking blocks (think → tool → think → answer turns sum correctly).
@@ -89,8 +85,6 @@ async def handle_stream_event(
 
         if msg_id and delta_type == "text_delta":
             text_chunk = delta.get("text", "")
-            if turn.assistant_text_chars == 0:
-                ttft_probe(session_id, "first_text_delta", chars=len(text_chunk))
             turn.assistant_text_chars += len(text_chunk)
             turn.stream_text_accum += text_chunk
             live_partial[session_id] = PartialReply(
