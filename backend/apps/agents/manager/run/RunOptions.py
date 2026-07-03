@@ -6,6 +6,7 @@ the gate hooks resolve across the MRO unchanged."""
 
 import json
 import logging
+import os
 from typing import Dict, List, Optional, Union
 from typeguard import typechecked
 
@@ -198,6 +199,16 @@ class RunOptions(AgentManagerProtocol):
             }
         if session.max_turns:
             options_kwargs["max_turns"] = session.max_turns
+
+        # --strict-mcp-config makes the CLI use ONLY the mcp_servers we pass, ignoring the account's
+        # claude.ai partner MCPs (Notion/Google/Gmail). We already hard-block their tools just below,
+        # but the CLI still spawned+connected them every turn (~1.5s of pure dead-weight TTFT, measured).
+        # Our builtins + any MCPActivate'd server go through mcp_servers, so they're unaffected; this
+        # only stops the already-blocked account MCPs from booting. Kill switch: OSW_TTFT_STRICT_MCP=0.
+        if os.environ.get("OSW_TTFT_STRICT_MCP", "1") != "0":
+            p_ea = dict(options_kwargs.get("extra_args") or {})
+            p_ea["strict-mcp-config"] = None
+            options_kwargs["extra_args"] = p_ea
 
         # The claude_code preset auto-attaches the user's claude.ai- connected partner MCPs (`mcp__claude_ai_*`). Those bypass our MCPActivate gate, don't share OAuth state with the OpenSwarm Gmail/Calendar/Drive connectors the user actually configured here, and confuse the model into picking the partner shim instead of our vetted server. Hard-block them at the SDK layer so the model can't even attempt the call.
         options_kwargs["disallowed_tools"] = [
