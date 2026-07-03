@@ -34,6 +34,7 @@ from backend.apps.outputs.runtime_proc import (
     RECENT_ERRORS_MAX,
     TERMINATE_GRACE_SECONDS,
     background_priority_kwargs,
+    ensure_force_port_shim,
     find_free_port,
     is_new_mode,
     is_port_free,
@@ -207,6 +208,8 @@ class AppRuntime:
             return await self.p_start_old_mode()
 
     async def p_start_new_mode(self) -> bool:
+        # Legacy workspaces (scaffolded pre-multi-instance) ignore the forced ports; self-heal their run.sh so a second instance stops colliding on the primary's ports.
+        ensure_force_port_shim(self.workspace_path)
         env_path = os.path.join(self.workspace_path, ".env")
         fp_raw = read_env_value(env_path, "FRONTEND_PORT")
         bp_raw = read_env_value(env_path, "BACKEND_PORT")
