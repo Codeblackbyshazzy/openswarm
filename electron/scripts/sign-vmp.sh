@@ -57,7 +57,7 @@ if echo "$VERIFY_OUTPUT" | grep -q "Signature is valid" && ! echo "$VERIFY_OUTPU
 fi
 
 echo "[vmp] Signing Electron with production VMP certificate..."
-if python3 -m castlabs_evs.vmp sign-pkg "$ELECTRON_DIR" "${EVS_AUTH[@]}" 2>&1; then
+if python3 -m castlabs_evs.vmp "${EVS_AUTH[@]}" sign-pkg "$ELECTRON_DIR" 2>&1; then
   echo "[vmp] VMP signing successful — full DRM playback enabled"
   # Re-fix symlinks in case signing modified the bundle
   fix_framework_symlinks

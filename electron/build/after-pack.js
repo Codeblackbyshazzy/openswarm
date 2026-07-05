@@ -45,7 +45,8 @@ function signVmp(context) {
     console.log(`[afterPack] VMP-signing ${target}`);
     // Creds go via the environment (EVS reads EVS_ACCOUNT_NAME/EVS_PASSWD), never on
     // the argv — a password in a command line is readable by any `ps` on the host.
-    execFileSync(py, ['-m', 'castlabs_evs.vmp', 'sign-pkg', target, '--no-ask'], {
+    // --no-ask is a GLOBAL castlabs flag; it must precede the subcommand or vmp.py rejects it (killed the first 1.5.5 release run).
+    execFileSync(py, ['-m', 'castlabs_evs.vmp', '--no-ask', 'sign-pkg', target], {
       stdio: 'inherit',
       env: { ...process.env, EVS_ACCOUNT_NAME: acct, EVS_PASSWD: pass },
     });
