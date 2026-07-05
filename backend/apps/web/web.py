@@ -36,6 +36,8 @@ class SearchBody(BaseModel):
     num_results: int = Field(5, ge=1, le=10, description="Max results to return.")
     # Hint from the MCP server about which primary provider the session is using. Lets us route to that provider's native search tool (Gemini googleSearch, OpenAI web_search_preview) when available, costs come out of the user's existing primary budget.
     primary: str | None = Field(None, description="Primary provider hint: 'gemini' | 'openai' | 'anthropic' | None")
+    # Set by the openswarm-web shim from OPENSWARM_BROWSER_OK; the browser-fallback nudge must never fire in a session without browser-delegation tools.
+    browser_ok: bool = Field(False, description="Whether this session has browser-delegation tools available.")
 
 
 class FetchBody(BaseModel):
@@ -477,10 +479,11 @@ async def search(body: SearchBody) -> dict:
             "DuckDuckGo is rate-limiting this network and every configured provider "
             "errored (see details below)."
         )
-    nudge = p_browser_fallback_nudge(body.query)
+    nudge = p_browser_fallback_nudge(body.query) if body.browser_ok else ""
+    p_results_text = f"No results for: {body.query}\n\n{tail}" + (f"\n\n{nudge}" if nudge else "")
     return {
         "query": body.query,
-        "results": f"No results for: {body.query}\n\n{tail}\n\n{nudge}",
+        "results": p_results_text,
         "backend": "none",
         "cascade_errors": errors,
     }

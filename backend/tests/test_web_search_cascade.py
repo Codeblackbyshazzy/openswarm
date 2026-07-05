@@ -138,9 +138,25 @@ async def test_everything_fails_nudges_browser_not_retry(monkeypatch):
         raise RuntimeError("openai down")
     monkeypatch.setattr(W, "p_openai_websearch", p_openai_boom)
 
-    res = await search(SearchBody(query="sony zv-e10 price"))
+    res = await search(SearchBody(query="sony zv-e10 price", browser_ok=True))
     assert res["backend"] == "none"
     assert "CreateBrowserAgent" in res["results"]
+    assert "retry" not in res["results"].lower()
+
+
+@pytest.mark.asyncio
+async def test_nudge_suppressed_when_browser_denied(monkeypatch):
+    # A session without browser-delegation tools must never be told to call CreateBrowserAgent.
+    p_ddg_throttled(monkeypatch)
+    monkeypatch.setattr(W, "p_resolve_openai_api_key", lambda: "okey")
+
+    async def p_openai_boom(*a, **k):
+        raise RuntimeError("openai down")
+    monkeypatch.setattr(W, "p_openai_websearch", p_openai_boom)
+
+    res = await search(SearchBody(query="sony zv-e10 price"))
+    assert res["backend"] == "none"
+    assert "CreateBrowserAgent" not in res["results"]
     assert "retry" not in res["results"].lower()
 
 

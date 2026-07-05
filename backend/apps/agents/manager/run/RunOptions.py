@@ -132,7 +132,8 @@ class RunOptions(AgentManagerProtocol):
             connection_mode=getattr(global_settings, "connection_mode", "own_key"),
         )
         if need_web_mcp:
-            register_web_mcp_server(mcp_servers, p_m)
+            # browser_ok gates the search-dead fallback nudge: never tell the model to call CreateBrowserAgent in a session where browser delegation is denied.
+            register_web_mcp_server(mcp_servers, p_m, browser_ok=bool(browser_delegation_tools))
 
         effective_allowed, effective_disallowed = build_effective_tool_lists(
             session, mcp_servers, builtin_perms, need_web_mcp,
