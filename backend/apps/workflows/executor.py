@@ -446,7 +446,7 @@ async def execute(
     return run
 
 
-async def _await_session_idle(session_id: str, run_id: Optional[str] = None, idle_timeout_s: float = 600.0) -> str:
+async def _await_session_idle(session_id: str, run_id: Optional[str] = None, idle_timeout_s: float = 1200.0) -> str:
     """Wait out the current step's agent turn. Returns a disposition:
       'idle'    turn finished, advance to the next step
       'error'   the agent session errored
