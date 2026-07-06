@@ -57,15 +57,16 @@ from google_workspace_mcp import __main__ as p_gw_main  # noqa: E402,F401
 from google_workspace_mcp.app import mcp  # noqa: E402
 
 
-# Fail-open: if the cap helper can't load (unexpected bundle layout), run uncapped rather than break the whole Google Workspace tool.
+# Patch the TOOL MANAGER, not mcp.call_tool: FastMCP.__init__ registers self.call_tool as a bound method with the low-level server, so rebinding the attribute never reaches stdio dispatch; the bound handler resolves self._tool_manager.call_tool dynamically on every request, so this one does. Fail-open: if the helper can't load or upstream reshapes, run uncapped rather than break the whole Google Workspace tool.
 try:
     p_cap = p_load_cap()
-    p_orig_call_tool = mcp.call_tool
+    p_tool_manager = mcp._tool_manager  # noqa: SLF001
+    p_orig_tm_call_tool = p_tool_manager.call_tool
 
-    async def p_capped_call_tool(name, arguments):
-        return p_cap(await p_orig_call_tool(name, arguments))
+    async def p_capped_tm_call_tool(name, arguments, **kwargs):
+        return p_cap(await p_orig_tm_call_tool(name, arguments, **kwargs))
 
-    mcp.call_tool = p_capped_call_tool
+    p_tool_manager.call_tool = p_capped_tm_call_tool
 except Exception as p_e:
     print(f"[gws-shim] result cap disabled ({p_e}); running uncapped", file=sys.stderr)
 
