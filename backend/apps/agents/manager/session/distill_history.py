@@ -93,12 +93,11 @@ async def distilled_history_summary(session: AgentSession, settings: AppSettings
 
 @typechecked
 async def p_call_distiller(session: AgentSession, settings: AppSettings, body: str) -> str:
-    from backend.apps.agents.providers.registry import resolve_aux_model, get_api_type
+    from backend.apps.agents.providers.registry import resolve_aux_model
     from backend.apps.settings.credentials import get_anthropic_client_for_model
 
-    aux_model, _ = await resolve_aux_model(
-        settings, preferred_tier="haiku", primary_api=get_api_type(session.model),
-    )
+    # No primary_api: a background summary wants the most RELIABLE cheap tier, not the chat's family. Forcing the family routed a gemini/codex chat's distill onto a same-family aux that 404s (gemini-direct google endpoint the Anthropic client can't call) or 401s (codex token rotation); the proven classifier omits it too and resolves to whatever anthropic-compatible lane the user has.
+    aux_model, _ = await resolve_aux_model(settings, preferred_tier="haiku")
     client = get_anthropic_client_for_model(settings, aux_model)
     resp = await client.messages.create(
         model=aux_model,
