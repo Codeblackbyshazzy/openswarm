@@ -663,14 +663,20 @@ def test_dashboard_get_strips_only_orphan_session_cards():
 
 
 def test_banned_models_not_offered():
-    """Gemini 3.1 Pro (no working lane: AG can't serve it, AI Studio key 429s
-    pro-preview) stays pulled from the picker. Guard so a refactor can't
-    silently re-list a model that can't run. (Fable 5 was re-listed 2026-07-02
-    after its ban lifted, so it left this list.)"""
+    """Models with no working lane stay pulled from the picker. Guard so a
+    refactor can't silently re-list a model that can't run. Gemini 3.1 Pro: AG
+    can't serve it, AI Studio key 429s pro-preview. gpt-5.5 (subscription):
+    cx/gpt-5.5 404s on the pinned 9Router 0.3.60, so picking it broke codex
+    entirely; gpt-5.5-api stays (that lane works). (Fable 5 was re-listed
+    2026-07-02 after its ban lifted, so it left this list.)"""
     from backend.apps.agents.providers.registry import BUILTIN_MODELS
     all_values = {m["value"] for models in BUILTIN_MODELS.values() for m in models}
-    for dead in ("gemini-3.1-pro", "gemini-3.1-pro-api"):
+    for dead in ("gemini-3.1-pro", "gemini-3.1-pro-api", "gpt-5.5"):
         assert dead not in all_values, f"{dead} is back in the picker"
+    assert "gpt-5.5-api" in all_values  # the working API-key lane must survive the pull
+    # No dead cx/gpt-5.5 router id survives either (a renamed entry would dodge the value check).
+    all_router_ids = {m.get("router_model_id") for models in BUILTIN_MODELS.values() for m in models}
+    assert "cx/gpt-5.5" not in all_router_ids
     # No '3.1 pro' label survives in any provider group either.
     all_labels = " | ".join(m["label"].lower() for models in BUILTIN_MODELS.values() for m in models)
     assert "3.1 pro" not in all_labels

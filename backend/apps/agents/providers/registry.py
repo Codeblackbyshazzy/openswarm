@@ -85,10 +85,7 @@ BUILTIN_MODELS: dict[str, list[dict[str, Any]]] = {
     ],
 
     "OpenAI": [
-        # GPT-5.5 cx/ entry 404s on 9Router 0.3.60 (our pin); API-key route below works.
-        {"value": "gpt-5.5", "label": "GPT-5.5",
-         "context_window": 1_000_000, "router_model_id": "cx/gpt-5.5",
-         "api": "codex", "subscription_only": True, "reasoning": True},
+        # GPT-5.5 subscription entry PULLED: cx/gpt-5.5 404s on 9Router 0.3.60 (our pin), so a Codex user who picked it (the newest, top OpenAI option) 404'd every turn = "codex is broken". Same treatment as gemini-3.1-pro (no working lane = not offered). The API-key route (gpt-5.5-api below) works; restore a cx entry only after the pin moves and cx/gpt-5.5 resolves.
         {"value": "gpt-5.4", "label": "GPT-5.4",
          "context_window": 1_000_000, "router_model_id": "cx/gpt-5.4",
          "api": "codex", "subscription_only": True, "reasoning": True},
