@@ -53,6 +53,7 @@ const path = require('path');
 const { spawn, execFileSync } = require('child_process');
 const os = require('os');
 const fs = require('fs');
+const hiddenBrowser = require('./hiddenBrowser');
 const getPort = require('get-port');
 const http = require('http');
 const affiliateTracking = require('./affiliateTracking');
@@ -2148,6 +2149,7 @@ app.on('web-contents-created', (_event, contents) => {
   if (
     contents.getType() === 'window' &&
     !isCreatingMainWindow &&
+    !global.__osHiddenBrowserCreating &&
     mainWindow &&
     contents !== mainWindow.webContents
   ) {
@@ -2818,8 +2820,17 @@ function connectMainBridge() {
     try { msg = JSON.parse(typeof ev.data === 'string' ? ev.data : ''); } catch (_) { return; }
     if (!msg || msg.event !== 'browser:command') return;
     const cmd = msg.data || {};
-    if (cmd.action !== 'get_session_cookies') return;
-    const result = await readPartitionCookies((cmd.params && cmd.params.domain) || '');
+    const p = cmd.params || {};
+    let result;
+    if (cmd.action === 'get_session_cookies') {
+      result = await readPartitionCookies(p.domain || '');
+    } else if (cmd.action === 'browser_fetch') {
+      result = await hiddenBrowser.hiddenFetch(BROWSER_PARTITION, p.url || '').catch((e) => ({ error: String(e).slice(0, 200) }));
+    } else if (cmd.action === 'browser_search') {
+      result = await hiddenBrowser.hiddenSearch(BROWSER_PARTITION, p.query || '', p.num_results || 5).catch((e) => ({ error: String(e).slice(0, 200) }));
+    } else {
+      return;
+    }
     try { ws.send(JSON.stringify({ event: 'browser:result', data: { request_id: cmd.request_id, ...result } })); } catch (_) {}
   });
   const retry = () => { p_mainBridgeWs = null; if (!p_mainBridgeStopped) setTimeout(connectMainBridge, 3000); };

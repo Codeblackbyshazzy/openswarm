@@ -15,6 +15,8 @@ BROWSER_CMD_TIMEOUTS = {
     "replay_route": 20.0, # an API fetch can be slow
     "wait": 12.0,         # smart-wait already caps itself well under this
     "perform_action": 35.0, # session-borrow shims pack navigate + wait + scrape into ONE command, so it needs more than navigate alone
+    "browser_fetch": 32.0,  # offscreen window: load + settle + DOM read on an arbitrary (maybe slow/JS-heavy) page
+    "browser_search": 45.0, # tries up to 3 engines sequentially, each a full load + settle
 }
 BROWSER_CMD_REBROADCAST_S = 3.0
 # A CPU-starved renderer can briefly drop its WS (a missed heartbeat) and the frontend auto-reconnects a beat later; bridge that gap instead of hard-failing a live run into it. Short enough that a genuinely-closed window still fails quickly (and no LLM turns are ever burned waiting); long enough to ride out a reconnect even on a loaded machine.

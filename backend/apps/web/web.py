@@ -71,6 +71,19 @@ P_DDG_ATTEMPT_TIMEOUT = 6.0       # DDG answers <1s; >6s is a network hang, fall
 P_GROUNDED_ATTEMPT_TIMEOUT = 48.0  # just above the providers' own 45s httpx timeout
 # Local httpx + trafilatura fetch of a real page; the fast path for /fetch (normal pages return in <2s). Set just above WebFetchTool's own 30s httpx ceiling so a valid-but-slow page still completes locally instead of being clipped down to a grounded summary; only a truly hung server gets cut.
 P_LOCAL_FETCH_TIMEOUT = 32.0
+P_BROWSER_TIER_TIMEOUT = 46.0  # main-bridge send has its own per-action timeout; this outer wait_for is just a backstop above it
+
+# Drive the packaged app's offscreen Chromium (main-process hidden window) for a fetch/search. Returns the bridge result dict, or None when no Electron main bridge is connected (dev/headless/backend-only) so the cascade just skips this tier. This is the real "browser reachable" gate, OPENSWARM_BROWSER_OK is effectively always "1" and not trustworthy for this.
+async def p_browser_bridge(action: str, params: dict) -> dict | None:
+    from backend.apps.agents.core.ws_manager import ws_manager
+    from uuid import uuid4
+    if ws_manager.main_connection is None:
+        return None
+    res = await ws_manager.send_main_command(uuid4().hex, action, params)
+    if not res or res.get("error"):
+        return None
+    return res
+
 
 # When every search backend fails, point the model at the in-product browser (always-on CreateBrowserAgent tool) instead of telling it to "wait and retry", which it can't do and just relays as a dead end. The real Chromium renders pages and isn't subject to the DDG scrape throttle.
 def p_browser_fallback_nudge(query: str) -> str:
@@ -439,7 +452,14 @@ async def search(body: SearchBody) -> dict:
             return None
         return {"query": body.query, "results": text, "backend": "ddg"}
 
-    # Fast-first cascade: DDG leads (~1s = human speed); the 30-42s LLM-grounded backends are the reliable fallback when DDG is throttled or empty. The primary hint only reorders the grounded tier (native key before the same-provider subscription). Every attempt is wait_for-bounded so a slow or hung provider fails over fast instead of stalling the whole request.
+    async def try_browser_search():
+        # Packaged-app tier: a real Chromium's fingerprint isn't subject to the httpx DDG 202 throttle (proven: browser-DDG returns hits where our headless client 202s), and it can scrape Google/Bing directly. Skipped (None) when no Electron main bridge is connected.
+        res = await p_browser_bridge("browser_search", {"query": body.query, "num_results": body.num_results})
+        if not res or not res.get("results"):
+            return None
+        return {"query": body.query, "results": res["results"], "backend": f"browser_{res.get('engine', 'search')}"}
+
+    # Fast-first cascade: DDG leads (~1s = human speed); then the packaged browser (real fingerprint, throttle-immune, no LLM cost); then the 30-42s LLM-grounded backends. The primary hint only reorders the grounded tier. Every attempt is wait_for-bounded so a slow/hung provider fails over fast.
     grounded = [
         ("gemini_native", try_gemini),
         ("gemini_subscription", try_gemini_subscription),
@@ -449,7 +469,10 @@ async def search(body: SearchBody) -> dict:
     if primary == "openai":
         grounded = grounded[2:] + grounded[:2]
 
-    cascade = [("ddg", try_ddg, P_DDG_ATTEMPT_TIMEOUT)] + [
+    cascade = [
+        ("ddg", try_ddg, P_DDG_ATTEMPT_TIMEOUT),
+        ("browser_search", try_browser_search, P_BROWSER_TIER_TIMEOUT),
+    ] + [
         (name, fn, P_GROUNDED_ATTEMPT_TIMEOUT) for name, fn in grounded
     ]
 
@@ -577,6 +600,13 @@ async def fetch(body: FetchBody) -> dict:
             return None
         return {"url": body.url, "content": text, "backend": "local"}
 
+    async def try_browser_fetch():
+        # Packaged-app tier: renders the page in a real offscreen Chromium and returns its visible text, so JS-only / SPA / soft-paywall pages that give httpx nothing (the try_local thin-read case) actually resolve. Shares the user's browser cookies, so pages they're logged into fetch authed. Skipped (None) with no Electron main bridge.
+        res = await p_browser_bridge("browser_fetch", {"url": body.url})
+        if not res or not res.get("text"):
+            return None
+        return {"url": body.url, "content": f"Contents of {body.url}:\n\n{res['text']}", "backend": "browser"}
+
     grounded = [
         ("gemini_native", try_gemini),
         ("gemini_subscription", try_gemini_subscription),
@@ -586,7 +616,10 @@ async def fetch(body: FetchBody) -> dict:
     if primary == "openai":
         grounded = grounded[2:] + grounded[:2]
 
-    cascade = [("local", try_local, P_LOCAL_FETCH_TIMEOUT)] + [
+    cascade = [
+        ("local", try_local, P_LOCAL_FETCH_TIMEOUT),
+        ("browser", try_browser_fetch, P_BROWSER_TIER_TIMEOUT),
+    ] + [
         (name, fn, P_GROUNDED_ATTEMPT_TIMEOUT) for name, fn in grounded
     ]
 

@@ -215,3 +215,56 @@ async def test_fetch_local_error_returned_as_last_resort(monkeypatch):
     res = await fetch(FetchBody(url="https://blocked.example"))
     assert res["backend"] == "local"
     assert "HTTP error 403" in res["content"]
+
+
+# --- packaged-browser tier: fires when DDG throttles, skipped when no bridge ---
+
+def p_browser_bridge(monkeypatch, result):
+    """Patch the offscreen-browser bridge helper; result=None simulates 'no Electron main bridge connected'."""
+    async def p_f(action, params):
+        return result
+    monkeypatch.setattr(W, "p_browser_bridge", p_f)
+
+
+@pytest.mark.asyncio
+async def test_browser_search_tier_fires_when_ddg_throttled(monkeypatch):
+    p_ddg_throttled(monkeypatch)
+    p_browser_bridge(monkeypatch, {"engine": "ddg", "results": "[1] Real\n    https://real.example", "count": 1})
+
+    async def p_boom(*a, **k):
+        raise AssertionError("grounded should not be reached once the browser tier answers")
+    monkeypatch.setattr(W, "p_gemini_grounded_call", p_boom)
+
+    res = await search(SearchBody(query="q"))
+    assert res["backend"] == "browser_ddg"
+    assert "real.example" in res["results"]
+
+
+@pytest.mark.asyncio
+async def test_browser_search_skipped_when_no_bridge(monkeypatch):
+    # DDG throttled, no browser bridge -> must fall THROUGH to grounded, not crash.
+    p_ddg_throttled(monkeypatch)
+    p_browser_bridge(monkeypatch, None)
+    monkeypatch.setattr(W, "p_resolve_openai_api_key", lambda: "okey")
+
+    async def p_openai(api_key, query):
+        return {"text": "grounded", "chunks": [("T", "https://u.example")]}
+    monkeypatch.setattr(W, "p_openai_websearch", p_openai)
+
+    res = await search(SearchBody(query="q"))
+    assert res["backend"] == "openai_native"
+
+
+@pytest.mark.asyncio
+async def test_browser_fetch_tier_fires_when_local_thin(monkeypatch):
+    from backend.apps.web.web import fetch, FetchBody
+    from backend.apps.agents.tools.web import WebFetchTool
+
+    async def p_thin(self, input_data, context):
+        return [{"type": "text", "text": "Contents of x:\n\ntiny"}]  # <200 chars -> try_local returns None
+    monkeypatch.setattr(WebFetchTool, "execute", p_thin)
+    p_browser_bridge(monkeypatch, {"title": "T", "text": "the full rendered article body " * 20, "url": "https://x.example"})
+
+    res = await fetch(FetchBody(url="https://x.example"))
+    assert res["backend"] == "browser"
+    assert "rendered article" in res["content"]
