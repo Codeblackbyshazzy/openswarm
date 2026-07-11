@@ -297,6 +297,56 @@ test("filename parser keeps hyphens inside base64url affiliate hash", () => {
   );
 });
 
+test("filename parser covers every stamped artifact shape (mac/win/linux)", () => {
+  const h = "abcDEF1234567890_hash";
+  for (const name of [
+    `OpenSwarm-arm64-${h}.dmg`,          // mac Apple Silicon
+    `OpenSwarm-x64-${h}.dmg`,            // mac Intel
+    `OpenSwarm-Setup-x64-${h}.exe`,      // windows squirrel setup
+    `OpenSwarm-x64-${h}.AppImage`,       // linux x64
+    `OpenSwarm-arm64-${h}.AppImage`,     // linux arm64
+  ]) {
+    assert.equal(affiliateTracking._hashFromInstallerBasename(name), h, name);
+  }
+  // Unstamped artifacts must NOT parse as carrying a hash.
+  for (const name of ["OpenSwarm-arm64.dmg", "OpenSwarm-Setup-x64.exe", "OpenSwarm-x64.AppImage"]) {
+    assert.equal(affiliateTracking._hashFromInstallerBasename(name), null, name);
+  }
+});
+
+test("first launch (win32): stamped setup exe in Downloads binds before welcome URL", async () => {
+  const cloud = await makeMockCloud();
+  try {
+    const userDataDir = makeTempUserDataDir();
+    const shell = makeFakeShell();
+    const hash = "abcDEF1234567890_hash";
+    cloud.filenameHashes.set(hash, "windows-affiliate");
+
+    const downloads = path.join(userDataDir, "Downloads");
+    fs.mkdirSync(downloads, { recursive: true });
+    fs.writeFileSync(path.join(downloads, `OpenSwarm-Setup-x64-${hash}.exe`), "");
+
+    process.env.OPENSWARM_AFFILIATE_LANDING_URL = "https://landing.test";
+    process.env.OPENSWARM_AFFILIATE_CLOUD_URL = cloud.url;
+
+    await affiliateTracking.maybeRunFirstLaunchHandshake({
+      shell,
+      userDataDir,
+      isDev: false,
+      isPackaged: true,
+      platform: "win32",
+      homeDir: userDataDir,
+    });
+
+    assert.equal(shell.opened.length, 0, "filename hash bind skips welcome URL");
+    const state = readJson(path.join(userDataDir, "install.json"));
+    assert.equal(state.ref, "windows-affiliate");
+    assert.equal(state.ref_bind_method, "affiliate_filename_hash");
+  } finally {
+    await cloud.close();
+  }
+});
+
 test("download scan refuses ambiguous stamped installers", () => {
   const userDataDir = makeTempUserDataDir();
   const downloads = path.join(userDataDir, "Downloads");

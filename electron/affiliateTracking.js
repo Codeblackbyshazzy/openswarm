@@ -41,6 +41,10 @@ const FILENAME_ATTRIBUTION_WINDOW_MS =
   Number(process.env.OPENSWARM_AFFILIATE_FILENAME_WINDOW_MS) || 30 * 24 * 60 * 60 * 1000;
 const INSTALLER_HASH_RE =
   /^OpenSwarm(?:-Setup)?-(?:arm64|x64)-([A-Za-z0-9_-]{16,32})(?: \([0-9]+\))?\.(dmg|exe|AppImage)$/i;
+// A file whose mtime is slightly in the future is NOT suspicious: APFS/NTFS
+// keep sub-ms timestamps, and NTP can step the clock backwards between the
+// download and first launch. Only skip files more than a minute ahead.
+const FUTURE_MTIME_TOLERANCE_MS = 60 * 1000;
 
 function getStateFilePath(userDataDir) {
   return path.join(userDataDir, "install.json");
@@ -214,7 +218,7 @@ function recentInstallerHashesInDir(dir, nowMs) {
     try {
       const st = fs.statSync(fullPath);
       const ageMs = nowMs - st.mtimeMs;
-      if (ageMs < 0 || ageMs > FILENAME_ATTRIBUTION_WINDOW_MS) continue;
+      if (ageMs < -FUTURE_MTIME_TOLERANCE_MS || ageMs > FILENAME_ATTRIBUTION_WINDOW_MS) continue;
       out.push({ hash, path: fullPath, mtimeMs: st.mtimeMs });
     } catch (_) {}
   }
