@@ -208,8 +208,8 @@ def build_app_runtime_contract(workspace_path: Optional[str]) -> str:
     log = os.path.join(root, ".openswarm", "terminal.log")
     return (
         "<app_runtime_contract>\n"
-        "Your app is already running. Its terminal — backend stdout/stderr, runtime events, and the\n"
-        "browser console — is tee'd to a file you can read directly. This is the ONLY way you can see\n"
+        "Your app is already running. Its terminal (backend stdout/stderr, runtime events, and the\n"
+        "browser console) is tee'd to a file you can read directly. This is the ONLY way you can see\n"
         "what the app actually does; editing files tells you nothing about whether it runs.\n\n"
         "Read it with exactly this, every time:\n\n"
         f'    tail -50 {log} 2>/dev/null || echo "Terminal log not yet available"\n\n'

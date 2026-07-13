@@ -312,8 +312,8 @@ async function maybeRunFirstLaunchHandshake({
 module.exports = {
   maybeRunFirstLaunchHandshake,
   resolveInstallId,
-  p_readState: readState,
-  p_writeState: writeState,
-  p_hashFromInstallerBasename: hashFromInstallerBasename,
-  p_findAffiliateHashFromInstaller: findAffiliateHashFromInstaller,
+  readState,
+  writeState,
+  hashFromInstallerBasename,
+  findAffiliateHashFromInstaller,
 };

@@ -285,14 +285,14 @@ test("first launch: stamped AppImage hash binds before opening welcome URL", asy
 
 test("filename parser accepts browser duplicate suffix", () => {
   assert.equal(
-    affiliateTracking.p_hashFromInstallerBasename("OpenSwarm-arm64-abcDEF1234567890_hash (1).dmg"),
+    affiliateTracking.hashFromInstallerBasename("OpenSwarm-arm64-abcDEF1234567890_hash (1).dmg"),
     "abcDEF1234567890_hash",
   );
 });
 
 test("filename parser keeps hyphens inside base64url affiliate hash", () => {
   assert.equal(
-    affiliateTracking.p_hashFromInstallerBasename("OpenSwarm-arm64-abcDEF1234567890-hash.dmg"),
+    affiliateTracking.hashFromInstallerBasename("OpenSwarm-arm64-abcDEF1234567890-hash.dmg"),
     "abcDEF1234567890-hash",
   );
 });
@@ -306,10 +306,10 @@ test("filename parser covers every stamped artifact shape (mac/win/linux)", () =
     `OpenSwarm-x64-${h}.AppImage`,
     `OpenSwarm-arm64-${h}.AppImage`,
   ]) {
-    assert.equal(affiliateTracking.p_hashFromInstallerBasename(name), h, name);
+    assert.equal(affiliateTracking.hashFromInstallerBasename(name), h, name);
   }
   for (const name of ["OpenSwarm-arm64.dmg", "OpenSwarm-Setup-x64.exe", "OpenSwarm-x64.AppImage"]) {
-    assert.equal(affiliateTracking.p_hashFromInstallerBasename(name), null, name);
+    assert.equal(affiliateTracking.hashFromInstallerBasename(name), null, name);
   }
 });
 
@@ -353,7 +353,7 @@ test("download scan refuses ambiguous stamped installers", () => {
   fs.writeFileSync(path.join(downloads, "OpenSwarm-arm64-abcDEF1234567890_a.dmg"), "");
   fs.writeFileSync(path.join(downloads, "OpenSwarm-arm64-abcDEF1234567890_b.dmg"), "");
 
-  const hash = affiliateTracking.p_findAffiliateHashFromInstaller({
+  const hash = affiliateTracking.findAffiliateHashFromInstaller({
     platform: "darwin",
     homeDir: userDataDir,
     nowMs: Date.now(),
@@ -363,7 +363,7 @@ test("download scan refuses ambiguous stamped installers", () => {
 
 test("resolveInstallId: reuses install.json app_install_id", () => {
   const userDataDir = makeTempUserDataDir();
-  affiliateTracking.p_writeState(userDataDir, { app_install_id: "existing-id-12345" });
+  affiliateTracking.writeState(userDataDir, { app_install_id: "existing-id-12345" });
   const id = affiliateTracking.resolveInstallId({
     userDataDir, isPackaged: true, projectRoot: userDataDir, homeDir: userDataDir,
   });
@@ -595,7 +595,7 @@ test("dev mode: skipped unless OPENSWARM_AFFILIATE_FORCE=1", async () => {
 
 test("install.json write is atomic-ish (temp + rename)", async () => {
   const userDataDir = makeTempUserDataDir();
-  affiliateTracking.p_writeState(userDataDir, { app_install_id: "atomic-test-1234567890", ref: "x" });
+  affiliateTracking.writeState(userDataDir, { app_install_id: "atomic-test-1234567890", ref: "x" });
   // After write, the temp file shouldn't be left behind.
   const files = fs.readdirSync(userDataDir);
   assert.ok(files.includes("install.json"));
@@ -604,14 +604,14 @@ test("install.json write is atomic-ish (temp + rename)", async () => {
 
 test("readState returns {} when no install.json exists", () => {
   const userDataDir = makeTempUserDataDir();
-  const state = affiliateTracking.p_readState(userDataDir);
+  const state = affiliateTracking.readState(userDataDir);
   assert.deepEqual(state, {});
 });
 
 test("readState returns {} when install.json is corrupt", () => {
   const userDataDir = makeTempUserDataDir();
   fs.writeFileSync(path.join(userDataDir, "install.json"), "{ not json");
-  const state = affiliateTracking.p_readState(userDataDir);
+  const state = affiliateTracking.readState(userDataDir);
   assert.deepEqual(state, {});
 });
 

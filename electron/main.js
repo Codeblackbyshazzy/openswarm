@@ -3020,7 +3020,7 @@ ipcMain.handle('open-external', (_event, url) => {
 // (Stripe checkout, sign-in events) for downstream attribution.
 ipcMain.handle('get-install-state', () => {
   try {
-    return affiliateTracking.p_readState(app.getPath('userData'));
+    return affiliateTracking.readState(app.getPath('userData'));
   } catch (_) {
     return {};
   }
