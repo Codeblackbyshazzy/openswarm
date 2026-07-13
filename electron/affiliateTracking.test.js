@@ -32,6 +32,7 @@ process.env.OPENSWARM_AFFILIATE_POLL_INTERVAL_MS = "20";
 process.env.OPENSWARM_AFFILIATE_POLL_MAX_ATTEMPTS = "30";
 
 const affiliateTracking = require("./affiliateTracking");
+const installerFilenameAttribution = require("./installerFilenameAttribution");
 
 // --- in-memory mock cloud --------------------------------------------------
 
@@ -285,14 +286,14 @@ test("first launch: stamped AppImage hash binds before opening welcome URL", asy
 
 test("filename parser accepts browser duplicate suffix", () => {
   assert.equal(
-    affiliateTracking.hashFromInstallerBasename("OpenSwarm-arm64-abcDEF1234567890_hash (1).dmg"),
+    installerFilenameAttribution.hashFromInstallerBasename("OpenSwarm-arm64-abcDEF1234567890_hash (1).dmg"),
     "abcDEF1234567890_hash",
   );
 });
 
 test("filename parser keeps hyphens inside base64url affiliate hash", () => {
   assert.equal(
-    affiliateTracking.hashFromInstallerBasename("OpenSwarm-arm64-abcDEF1234567890-hash.dmg"),
+    installerFilenameAttribution.hashFromInstallerBasename("OpenSwarm-arm64-abcDEF1234567890-hash.dmg"),
     "abcDEF1234567890-hash",
   );
 });
@@ -306,10 +307,10 @@ test("filename parser covers every stamped artifact shape (mac/win/linux)", () =
     `OpenSwarm-x64-${h}.AppImage`,
     `OpenSwarm-arm64-${h}.AppImage`,
   ]) {
-    assert.equal(affiliateTracking.hashFromInstallerBasename(name), h, name);
+    assert.equal(installerFilenameAttribution.hashFromInstallerBasename(name), h, name);
   }
   for (const name of ["OpenSwarm-arm64.dmg", "OpenSwarm-Setup-x64.exe", "OpenSwarm-x64.AppImage"]) {
-    assert.equal(affiliateTracking.hashFromInstallerBasename(name), null, name);
+    assert.equal(installerFilenameAttribution.hashFromInstallerBasename(name), null, name);
   }
 });
 
@@ -353,7 +354,7 @@ test("download scan refuses ambiguous stamped installers", () => {
   fs.writeFileSync(path.join(downloads, "OpenSwarm-arm64-abcDEF1234567890_a.dmg"), "");
   fs.writeFileSync(path.join(downloads, "OpenSwarm-arm64-abcDEF1234567890_b.dmg"), "");
 
-  const hash = affiliateTracking.findAffiliateHashFromInstaller({
+  const hash = installerFilenameAttribution.findAffiliateHashFromInstaller({
     platform: "darwin",
     homeDir: userDataDir,
     nowMs: Date.now(),
